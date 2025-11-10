@@ -1,4 +1,4 @@
-# 🎬 VETRA Frontend
+# VETRA Frontend
 
 Interface React moderna para organização e descoberta de filmes e séries.
 
@@ -54,7 +54,7 @@ app/
 └── tsconfig.json
 ```
 
-## 🚀 Início Rápido
+##  Início Rápido
 
 ### Instalação
 
@@ -77,7 +77,7 @@ Acesse `http://localhost:5173`
 npm run build
 ```
 
-## 🏗️ Arquitetura
+##  Arquitetura
 
 ### Componentes Principais
 
@@ -99,13 +99,13 @@ O estado é gerenciado principalmente no `App.tsx` usando React hooks:
 - `/person/:id` - Detalhes de pessoa
 - Rotas internas gerenciadas por tabs (home, favorites, lists, etc)
 
-## 🎨 Estilização
+##  Estilização
 
 - **Tailwind CSS**: Framework de utilitários
 - **Dark Mode**: Suportado nativamente
 - **Responsivo**: Mobile-first design
 
-## 📦 Dependências Principais
+##  Dependências Principais
 
 - React 18
 - React Router DOM
@@ -113,7 +113,7 @@ O estado é gerenciado principalmente no `App.tsx` usando React hooks:
 - Tailwind CSS
 - TypeScript
 
-## 🔧 Desenvolvimento
+##  Desenvolvimento
 
 ### Adicionar Nova Funcionalidade
 
