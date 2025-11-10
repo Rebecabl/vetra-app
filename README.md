@@ -1,6 +1,5 @@
-# VETRA
+# 🎬 VETRA
 
-[colocar imagem: Logo do projeto VETRA]
 
 Plataforma moderna para organização, descoberta e compartilhamento de filmes e séries, desenvolvida como solução full-stack integrada com a API do TMDB.
 
