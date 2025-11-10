@@ -88,9 +88,7 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 
 ## Arquitetura e Módulos
 
-### Diagrama Lógico (Alto Nível)
-
-[colocar imagem: Diagrama visual de arquitetura mostrando Frontend → Backend → TMDB API e Firebase]
+### Diagrama Lógico
 
 ```
 Frontend (React/TS) → API (Express) → TMDB API
@@ -101,8 +99,6 @@ Frontend (React/TS) → API (Express) → TMDB API
 **Fluxo:** O frontend consome preferencialmente o backend. Pode haver fallback direto ao TMDB no cliente para contingência.
 
 ### Estrutura de Pastas
-
-[colocar imagem: Árvore de diretórios visual mostrando a estrutura completa do projeto]
 
 ```
 Vetra/
