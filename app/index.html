@@ -6,12 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VETRA</title>
 
-    <!-- Força dark antes do hydration (padrão: dark) -->
+
     <script>
       (function () {
         try {
           var t = localStorage.getItem('vetra:theme');
-          // Se já estava salvo "light", não aplicamos nada agora (landing continua escura).
+        
           if (t === 'light') return;
           document.documentElement.classList.add('dark');
         } catch (e) {
