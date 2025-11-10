@@ -1,4 +1,4 @@
-# 🎬 VETRA API
+#  VETRA API
 
 API backend para a plataforma VETRA - sistema de organização e descoberta de filmes e séries.
 
@@ -47,7 +47,7 @@ api/
 └── .env                     # Variáveis de ambiente (não versionado)
 ```
 
-## 🚀 Início Rápido
+##  Início Rápido
 
 ### Pré-requisitos
 
@@ -124,7 +124,7 @@ npm start
 - `POST /api/share` - Criar link compartilhável
 - `GET /api/share/:slug` - Acessar conteúdo compartilhado
 
-## 🏗️ Arquitetura
+##  Arquitetura
 
 O projeto segue uma arquitetura em camadas:
 
@@ -177,14 +177,14 @@ export default router;
 2. Exporte funções bem documentadas
 3. Use tratamento de erros consistente
 
-## 📝 Notas
+##  Notas
 
 - O projeto usa ES Modules (`import/export`)
 - Firebase é inicializado de forma assíncrona no startup
 - Alguns dados são armazenados em memória (Map) para desenvolvimento
 - Em produção, considere usar Redis ou similar para cache
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### Firebase não inicializa
 
