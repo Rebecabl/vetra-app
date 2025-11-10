@@ -1,0 +1,7 @@
+# Garantir que arquivos sensíveis não sejam commitados acidentalmente
+*.env filter=git-crypt diff=git-crypt
+*.key filter=git-crypt diff=git-crypt
+*.pem filter=git-crypt diff=git-crypt
+service-account*.json filter=git-crypt diff=git-crypt
+credentials.json filter=git-crypt diff=git-crypt
+

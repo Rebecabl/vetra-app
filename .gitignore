@@ -1,0 +1,117 @@
+# Dependências
+node_modules/
+**/node_modules/
+package-lock.json
+**/package-lock.json
+
+# Variáveis de ambiente e dados sensíveis
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+**/.env
+**/.env.*
+.env.*
+!.env.example
+!ENV_EXAMPLE.md
+
+# Credenciais e chaves
+service-account.json
+*-service-account.json
+*.key
+*.pem
+*.p12
+*.pfx
+credentials.json
+firebase-service-account.json
+firebase-adminsdk*.json
+*-credentials.json
+*.json.key
+firebase-config.json
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+**/logs/
+
+# Arquivos de backup
+*.zip
+*.tar
+*.tar.gz
+backup_*
+*_backup
+backup_app_src.zip
+backup*.zip
+
+# Build e dist
+dist/
+build/
+**/dist/
+**/build/
+.next/
+out/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testes
+coverage/
+.nyc_output/
+**/coverage/
+
+# Arquivos temporários
+*.tmp
+*.temp
+.cache/
+
+# Documentação técnica interna (manter apenas README.md principais)
+api/ATUALIZAR_API_KEY.md
+api/AUTENTICACAO_FIREBASE.md
+api/COMO_OBTER_FIREBASE_API_KEY.md
+api/CORRIGIR_PERMISSOES_SERVICE_ACCOUNT.md
+api/CRITERIOS_SENHA.md
+api/DEBUG_LOGIN.md
+api/DIAGNOSTICAR_CONFIGURACAO.md
+api/ENV_EXAMPLE.md
+api/HABILITAR_IDENTITY_TOOLKIT.md
+api/INICIAR_SERVIDOR.md
+api/ONDE_ENCONTRAR_API_KEY.md
+api/REINICIAR_BACKEND.md
+api/SEGURANCA_AUTENTICACAO.md
+api/SOLUCAO_RAPIDA.md
+api/VERIFICAR_API_KEY.md
+README_TESTES.md
+RESUMO_IMPLEMENTACAO.md
+SOLUCAO_BACKEND.md
+SUGESTOES_MELHORIAS.md
+VERIFICACAO_REQUISITOS.md
+ORGANIZACAO_PROJETO.md
+
+# Guias pessoais de desenvolvimento (não necessários para avaliação)
+DEPLOY.md
+COMANDOS_GITHUB.md
+CHECK_BEFORE_COMMIT.md
+BACKUP_INSTRUCOES.md
+verify-before-commit.ps1
+
+# Scripts de inicialização locais
+api/iniciar-backend.bat
+api/iniciar-backend.ps1
+api/dev.js
+api/test-server.js
+api/test-simple-server.js
+
+# Arquivos do sistema
+Thumbs.db
+Desktop.ini
+
