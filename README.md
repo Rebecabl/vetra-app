@@ -211,7 +211,7 @@ VITE_TMDB_LANG=pt-BR
 
 **Nota:** O frontend funciona principalmente através do backend. As variáveis do TMDB no frontend são opcionais e usadas apenas como fallback.
 
-## 🚀 Executando o Projeto
+##  Executando o Projeto
 
 ### Modo Desenvolvimento
 
@@ -255,7 +255,7 @@ cd api
 npm start
 ```
 
-## 🌐 Deploy
+##  Deploy
 
 ### Deploy no Vercel
 
