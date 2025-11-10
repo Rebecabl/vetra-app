@@ -26,18 +26,13 @@ export function buildShareUrl(slug: string, baseUrl?: string): string {
   return `${base}/share/${slug}`;
 }
 
-/**
- * Copia texto para a área de transferência
- * @param {string} text - Texto a copiar
- * @returns {Promise<boolean>} true se sucesso
- */
 export async function copyToClipboard(text: string): Promise<boolean> {
   try {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(text);
       return true;
     }
-    // Fallback para navegadores antigos
+
     const textArea = document.createElement('textarea');
     textArea.value = text;
     textArea.style.position = 'fixed';
