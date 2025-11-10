@@ -3,6 +3,9 @@
   "private": true,
   "scripts": {
     "dev:api": "node api/dev.js",
-    "start:api": "node api/dev.js"
+    "start:api": "node api/dev.js",
+    "install:api": "cd api && npm install",
+    "install:app": "cd app && npm install",
+    "install:all": "npm run install:api && npm run install:app"
   }
 }
