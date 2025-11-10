@@ -104,6 +104,7 @@ CHECK_BEFORE_COMMIT.md
 BACKUP_INSTRUCOES.md
 PROXIMOS_PASSOS.md
 CONECTAR_GITHUB.md
+GUIA_COMPLETO.md
 verify-before-commit.ps1
 
 # Scripts de inicialização locais
