@@ -4,16 +4,14 @@ export type ToastTone = "ok" | "err" | "warn" | "info";
 export type Toast = { id: string; message: string; tone?: ToastTone; timeoutMs?: number };
 
 function genId() {
-  // fallback pra ambientes sem crypto.randomUUID
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
+
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function useToast() {
   const [toasts, setToasts] = React.useState<Toast[]>([]);
-  // mapa de timers por id
+
   const timersRef = React.useRef<Record<string, number>>({});
 
   const clearTimer = React.useCallback((id: string) => {
@@ -35,7 +33,7 @@ export function useToast() {
       const toast: Toast = { id, tone: "info", timeoutMs: 3500, ...t };
       setToasts((prev) => [...prev, toast]);
 
-      // auto-close
+    
       if (toast.timeoutMs && toast.timeoutMs > 0) {
         timersRef.current[id] = window.setTimeout(() => removeToast(id), toast.timeoutMs);
       }
@@ -45,7 +43,7 @@ export function useToast() {
   );
 
   React.useEffect(() => {
-    // cleanup global ao desmontar
+   
     return () => {
       Object.values(timersRef.current).forEach((t) => clearTimeout(t));
       timersRef.current = {};
@@ -55,7 +53,7 @@ export function useToast() {
   return { toasts, pushToast, removeToast };
 }
 
-// Componente visual simples dos toasts
+
 export const ToastHost: React.FC<{
   toasts: Toast[];
   onClose: (id: string) => void;
