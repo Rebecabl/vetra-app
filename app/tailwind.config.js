@@ -10,10 +10,10 @@ export default {
   ],
   theme: {
     extend: {
-      // personalize aqui (cores, fontes, etc.) se quiser
+      
     },
   },
   plugins: [
-    // require("tailwindcss-animate"), // descomente se usar shadcn/ui animations
+    
   ],
 };
