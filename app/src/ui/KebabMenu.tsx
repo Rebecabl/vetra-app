@@ -20,7 +20,6 @@ export const KebabMenu: React.FC<{
 
   useEffect(() => {
     if (open) {
-      // foca o primeiro item habilitado
       const idx = items.findIndex((it) => !it.disabled);
       const el = itemRefs.current[idx] || itemRefs.current[0];
       el?.focus();
