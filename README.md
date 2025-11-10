@@ -8,11 +8,11 @@ Plataforma moderna e completa para organização, descoberta e compartilhamento 
 ![Firebase](https://img.shields.io/badge/Firebase-FFCA28?logo=firebase)
 ![Vercel](https://img.shields.io/badge/Vercel-Ready-000000?logo=vercel)
 
-## 📋 Sobre o Projeto
+##  Sobre o Projeto
 
-VETRA é uma aplicação web full-stack que permite aos usuários descobrir, organizar e compartilhar seus filmes e séries favoritos. O projeto foi desenvolvido como solução completa para um desafio técnico, implementando todos os requisitos funcionais e não funcionais solicitados, além de diversas funcionalidades extras.
+VETRA é uma aplicação web full-stack que permite aos usuários descobrir, organizar e compartilhar seus filmes e séries favoritos. O projeto foi desenvolvido  implementando requisitos funcionais e não funcionais, além de diversas funcionalidades extras.
 
-### 🎯 Funcionalidades Principais
+###  Funcionalidades Principais
 
 #### Requisitos Obrigatórios (100% Implementados)
 - ✅ **Busca de Filmes**: Interface completa de busca com filtros avançados
@@ -38,7 +38,7 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 - 🔐 **Autenticação Completa**: Sistema de login/cadastro com Firebase Auth
 - 👤 **Perfil Editável**: Personalize seu perfil com nome e avatar
 
-## 🏗️ Estrutura do Projeto
+##  Estrutura do Projeto
 
 ```
 Vetra/
@@ -70,7 +70,7 @@ Vetra/
 └── vercel.json             # Configuração de deploy
 ```
 
-## 🚀 Tecnologias
+##  Tecnologias
 
 ### Frontend
 - **React 18.3.1** - Biblioteca UI
@@ -93,7 +93,7 @@ Vetra/
 - **Firebase Authentication** - Autenticação de usuários
 - **Firebase Firestore** - Armazenamento de dados
 
-## 📦 Pré-requisitos
+##  Pré-requisitos
 
 Antes de começar, você precisará ter instalado:
 
@@ -102,7 +102,7 @@ Antes de começar, você precisará ter instalado:
 - **Conta no Firebase** - [Criar conta](https://console.firebase.google.com/)
 - **API Key do TMDB** - [Obter chave](https://www.themoviedb.org/settings/api)
 
-## 🔧 Instalação
+##  Instalação
 
 ### 1. Clone o repositório
 
@@ -125,7 +125,7 @@ cd ../app
 npm install
 ```
 
-## ⚙️ Configuração
+##  Configuração
 
 ### Configuração do Backend
 
@@ -162,29 +162,6 @@ API_PORT=4001
 SHARE_BASE_URL=http://localhost:5173
 ```
 
-#### Como obter as credenciais do Firebase:
-
-1. Acesse o [Firebase Console](https://console.firebase.google.com/)
-2. Crie um novo projeto ou selecione um existente
-3. Vá em **Configurações do Projeto** (ícone de engrenagem)
-4. Acesse a aba **Contas de Serviço**
-5. Clique em **Gerar nova chave privada**
-6. Baixe o arquivo JSON
-7. Extraia os campos:
-   - `project_id` → `FIREBASE_PROJECT_ID`
-   - `client_email` → `FIREBASE_CLIENT_EMAIL`
-   - `private_key` → `FIREBASE_PRIVATE_KEY` (mantenha as quebras de linha `\n`)
-
-**Importante:** O `FIREBASE_PRIVATE_KEY` deve estar entre aspas e manter as quebras de linha `\n`.
-
-#### Como obter a API Key do TMDB:
-
-1. Acesse [The Movie Database](https://www.themoviedb.org/)
-2. Crie uma conta ou faça login
-3. Vá em **Configurações** → **API**
-4. Clique em **Criar** para gerar uma nova chave de API
-5. Copie a chave e cole em `TMDB_V3_API_KEY`
-
 ### Configuração do Frontend
 
 1. **Crie o arquivo `.env` na pasta `app/`:**
@@ -211,7 +188,7 @@ VITE_TMDB_LANG=pt-BR
 
 **Nota:** O frontend funciona principalmente através do backend. As variáveis do TMDB no frontend são opcionais e usadas apenas como fallback.
 
-## 🚀 Executando o Projeto
+##  Executando o Projeto
 
 ### Modo Desenvolvimento
 
@@ -255,7 +232,7 @@ cd api
 npm start
 ```
 
-## 🌐 Deploy
+##  Deploy
 
 ### Deploy no Vercel
 
@@ -327,7 +304,7 @@ vercel
 - `PUT /api/comments/:id/reaction` - Reagir ao comentário
 - `DELETE /api/comments/:id` - Deletar comentário
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### Erro: Firebase não inicializa
 
@@ -389,7 +366,7 @@ lsof -ti:4001 | xargs kill
 2. Execute `npm install` novamente
 3. Verifique se está usando Node.js 18+
 
-## 📝 Estrutura de Arquivos Detalhada
+##  Estrutura de Arquivos Detalhada
 
 ### Backend (`api/`)
 
@@ -459,7 +436,7 @@ app/
 └── .env                            # Variáveis de ambiente
 ```
 
-## 🎨 Funcionalidades Visuais
+##  Funcionalidades Visuais
 
 - **Interface Moderna**: Design limpo e responsivo
 - **Dark Mode**: Suporte completo a tema escuro
@@ -467,7 +444,7 @@ app/
 - **Responsivo**: Funciona perfeitamente em mobile, tablet e desktop
 - **Acessibilidade**: Componentes acessíveis e navegação por teclado
 
-## 📊 Arquitetura
+##  Arquitetura
 
 O projeto segue uma arquitetura em camadas:
 
@@ -486,7 +463,7 @@ API Backend (Express)
 Firebase (Auth + Firestore) + TMDB API
 ```
 
-## 🔒 Segurança
+## Segurança
 
 - Autenticação via Firebase Auth
 - Validação de dados no backend
@@ -496,13 +473,13 @@ Firebase (Auth + Firestore) + TMDB API
 - Validação de senhas fortes
 - Proteção contra ataques de força bruta
 
-## 📚 Documentação Adicional
+##  Documentação Adicional
 
 - [README do Backend](api/README.md) - Documentação detalhada da API
 - [README do Frontend](app/README.md) - Documentação do frontend
 - [Exemplo de Variáveis de Ambiente](api/ENV_EXAMPLE.md) - Guia de configuração
 
-## 🚧 Melhorias Futuras
+##  Melhorias Futuras
 
 - [ ] Testes automatizados (Jest/Vitest)
 - [ ] Cache com Redis
@@ -512,13 +489,7 @@ Firebase (Auth + Firestore) + TMDB API
 - [ ] Integração com mais serviços de streaming
 - [ ] Sistema de reviews e ratings próprios
 
-## 📄 Licença
 
-Este projeto é privado e foi desenvolvido para fins educacionais e de avaliação técnica.
-
-## 👤 Autor
-
-Desenvolvido como solução completa para desafio técnico.
 
 ---
 
