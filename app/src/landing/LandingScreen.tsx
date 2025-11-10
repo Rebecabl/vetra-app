@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import type { Lang } from "../i18n";
 import { getTrending, getCategory, type ApiMovie } from "../api";
 import { poster } from "../lib/media.utils";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 type Props = {
   onSignIn: () => void;
@@ -12,21 +13,22 @@ type Props = {
 };
 
 const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp, t }) => {
-  const [trending, setTrending] = useState<ApiMovie[]>([]);
   const [popularMovies, setPopularMovies] = useState<ApiMovie[]>([]);
   const [popularTv, setPopularTv] = useState<ApiMovie[]>([]);
   const [topRated, setTopRated] = useState<ApiMovie[]>([]);
-  const [backgroundMovies, setBackgroundMovies] = useState<ApiMovie[]>([]);
   const [ctaBackgroundMovies, setCtaBackgroundMovies] = useState<ApiMovie[]>([]);
   const [loading, setLoading] = useState(true);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  
+  const moviesScrollRef = useRef<HTMLDivElement>(null);
+  const tvScrollRef = useRef<HTMLDivElement>(null);
+  const topRatedScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const [trend, movies, tv, top, movies2, tv2, top2, movies3, tv3, top3] = await Promise.all([
-          getTrending("day", 1),
+        const [movies, tv, top, movies2, tv2, top2, movies3, tv3, top3] = await Promise.all([
           getCategory("movie", "popular", 1),
           getCategory("tv", "popular", 1),
           getCategory("movie", "top_rated", 1),
@@ -40,16 +42,7 @@ const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp, t }) => {
 
         if (!mounted) return;
 
-        const allMovies = [
-          ...(trend?.results || []),
-          ...(movies?.results || []),
-          ...(tv?.results || []),
-          ...(top?.results || []),
-        ].filter((m) => m.poster_path).slice(0, 10);
-
-        // Para a collage da seção CTA, usar mais filmes
         const ctaMovies = [
-          ...(trend?.results || []),
           ...(movies?.results || []),
           ...(tv?.results || []),
           ...(top?.results || []),
@@ -61,24 +54,20 @@ const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp, t }) => {
           ...(top3?.results || []),
         ].filter((m) => m.poster_path);
 
-        // Remover duplicatas por ID e garantir que temos filmes suficientes
         const uniqueCtaMovies = Array.from(
           new Map(ctaMovies.map((m) => [m.id, m])).values()
         );
         
-        // Usar mais filmes para preencher melhor (60-80 filmes)
         const finalCtaMovies = uniqueCtaMovies.length >= 80 
           ? uniqueCtaMovies.slice(0, 80)
           : uniqueCtaMovies.length >= 60
           ? uniqueCtaMovies.slice(0, 60)
           : [...uniqueCtaMovies, ...uniqueCtaMovies.slice(0, 60 - uniqueCtaMovies.length)].slice(0, 60);
 
-        setBackgroundMovies(allMovies);
         setCtaBackgroundMovies(finalCtaMovies);
-        setTrending((trend?.results || []).slice(0, 10));
-        setPopularMovies((movies?.results || []).slice(0, 10));
-        setPopularTv((tv?.results || []).slice(0, 10));
-        setTopRated((top?.results || []).slice(0, 10));
+        setPopularMovies((movies?.results || []).slice(0, 20));
+        setPopularTv((tv?.results || []).slice(0, 20));
+        setTopRated((top?.results || []).slice(0, 20));
       } catch (error) {
         // Silenciosamente trata erros - a landing page funciona mesmo sem backend
         // (usa TMDB diretamente como fallback)
@@ -156,7 +145,7 @@ const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp, t }) => {
         <div className="relative z-30 w-full px-3 sm:px-4 lg:px-6 pt-8 sm:pt-12 lg:pt-16 pb-6 lg:pb-8">
           <div className="text-center max-w-5xl mx-auto">
             {/* Título Principal */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-[75px] font-bold tracking-tight mb-4 lg:mb-5 leading-tight opacity-0 animate-fade-in" style={{ animationDelay: '0.1s', animationFillMode: 'forwards' }}>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-[75px] font-bold tracking-tight mb-4 lg:mb-5 leading-tight">
               <div className="block mb-2">
                 <span>Descubra, </span>
                 <span>Organize,</span>
@@ -168,13 +157,11 @@ const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp, t }) => {
               </div>
             </h1>
 
-            {/* Subtítulo */}
-            <p className="text-base sm:text-lg lg:text-xl text-white/90 mb-8 lg:mb-10 max-w-2xl mx-auto leading-relaxed opacity-0 animate-fade-in px-4 font-light" style={{ animationDelay: '0.3s', animationFillMode: 'forwards' }}>
+            <p className="text-base sm:text-lg lg:text-xl text-white/90 mb-8 lg:mb-10 max-w-2xl mx-auto leading-relaxed px-4 font-light">
               A forma mais inteligente de organizar seus filmes e séries favoritos. Explore, salve e compartilhe com quem você ama.
             </p>
 
-            {/* CTAs - Ação principal no final do fluxo visual - Estilo Paramount+ */}
-            <div className="flex flex-col sm:flex-row gap-3 justify-center items-center opacity-0 animate-fade-in" style={{ animationDelay: '0.5s', animationFillMode: 'forwards' }}>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
               <button
                 onClick={onSignUp}
                 className="px-6 py-2.5 bg-white text-[#0a0e27] font-semibold text-sm rounded-md hover:bg-white/90 transition-all duration-200 shadow-sm hover:shadow-md"
@@ -192,9 +179,7 @@ const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp, t }) => {
         </div>
       </main>
 
-      {/* Seções de Conteúdo - Carrosséis de Filmes */}
       <div className="relative z-10 w-full px-3 sm:px-4 lg:px-6 pb-8 space-y-6 lg:space-y-8">
-          {/* Loading State */}
           {loading && (
             <div className="flex items-center justify-center py-20">
               <div className="flex flex-col items-center gap-4">
@@ -204,153 +189,78 @@ const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp, t }) => {
             </div>
           )}
 
-          {/* Em Alta */}
-          {!loading && trending.length > 0 && (
-            <section className="opacity-0 animate-fade-in-up" style={{ animationDelay: '0.2s', animationFillMode: 'forwards' }}>
-              <div className="mb-5 lg:mb-7 flex items-center gap-3">
-                <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white tracking-tight">
-                  Em alta hoje
-                </h2>
-                <div className="flex-1 h-px bg-gradient-to-r from-white/20 to-transparent"></div>
-              </div>
-              <div className="relative overflow-hidden -mx-3 sm:-mx-4 lg:-mx-6">
-                <div className="flex gap-3 sm:gap-4 lg:gap-6 animate-slide will-change-transform px-3 sm:px-4 lg:px-6">
-                  {[...trending, ...trending].map((item, index) => (
-                    <div
-                      key={`${item.id}-${index}`}
-                      className="group cursor-pointer flex-shrink-0 w-[140px] sm:w-[160px] md:w-[200px] lg:w-[220px]"
-                      onClick={onSignUp}
-                    >
-                      <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-slate-800/50 shadow-xl group-hover:shadow-2xl group-hover:shadow-cyan-500/30 transition-all duration-500 group-hover:scale-105 border border-white/5 group-hover:border-white/20">
-                        {item.poster_path ? (
-                          <img
-                            src={poster(item.poster_path, "w500")}
-                            alt={item.title || item.name || ""}
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                            loading="lazy"
-                            decoding="async"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-white/30 bg-slate-800">
-                            <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                        <div className="absolute bottom-0 left-0 right-0 p-4 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                          <p className="text-white text-sm font-semibold line-clamp-2">{item.title || item.name}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* Features Grid - Entre Em alta hoje e Filmes populares */}
-          {!loading && (
-            <section className="opacity-0 animate-fade-in-up mt-10 lg:mt-14" style={{ animationDelay: '0.35s', animationFillMode: 'forwards' }}>
-              <div className="max-w-7xl mx-auto">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-7 max-w-5xl mx-auto">
-                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 lg:p-8 hover:bg-white/10 hover:border-cyan-500/30 transition-all duration-300 group relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/0 to-cyan-500/0 group-hover:from-cyan-500/10 group-hover:to-transparent transition-all duration-300" />
-                    <div className="relative z-10">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                        <svg className="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                      </div>
-                      <h3 className="text-lg font-semibold mb-2 group-hover:text-cyan-300 transition-colors">Catálogo Completo</h3>
-                      <p className="text-white/70 text-sm leading-relaxed">
-                        Milhares de filmes e séries com informações atualizadas do TMDB.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 lg:p-8 hover:bg-white/10 hover:border-purple-500/30 transition-all duration-300 group relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-purple-500/0 to-purple-500/0 group-hover:from-purple-500/10 group-hover:to-transparent transition-all duration-300" />
-                    <div className="relative z-10">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/20 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                        <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                      </div>
-                      <h3 className="text-lg font-semibold mb-2 group-hover:text-purple-300 transition-colors">Listas Personalizadas</h3>
-                      <p className="text-white/70 text-sm leading-relaxed">
-                        Crie listas temáticas e compartilhe com quem você quiser.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 lg:p-8 hover:bg-white/10 hover:border-lime-400/30 transition-all duration-300 group relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-lime-400/0 to-lime-400/0 group-hover:from-lime-400/10 group-hover:to-transparent transition-all duration-300" />
-                    <div className="relative z-10">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-lime-500/20 to-lime-600/20 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                        <svg className="w-6 h-6 text-lime-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                        </svg>
-                      </div>
-                      <h3 className="text-lg font-semibold mb-2 group-hover:text-lime-300 transition-colors">Favoritos Ilimitados</h3>
-                      <p className="text-white/70 text-sm leading-relaxed">
-                        Salve quantos quiser e acesse de qualquer lugar.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* Filmes Populares */}
-          {popularMovies.length > 0 && (
-            <section className="opacity-0 animate-fade-in-up mt-8 lg:mt-12" style={{ animationDelay: '0.3s', animationFillMode: 'forwards' }}>
-              <div className="mb-5 lg:mb-7 flex items-center gap-3">
-                <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white tracking-tight">
+          {!loading && popularMovies.length > 0 && (
+            <section className="mt-6 sm:mt-8 lg:mt-12">
+              <div className="mb-4 sm:mb-5 lg:mb-7 flex items-center gap-2 sm:gap-3">
+                <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white tracking-tight">
                   Filmes populares
                 </h2>
                 <div className="flex-1 h-px bg-gradient-to-r from-white/20 to-transparent"></div>
               </div>
-              <div className="relative overflow-hidden -mx-3 sm:-mx-4 lg:-mx-6">
-                <div className="flex gap-3 sm:gap-4 lg:gap-6 animate-slide-reverse will-change-transform px-3 sm:px-4 lg:px-6">
-                  {[...popularMovies, ...popularMovies].map((item, index) => (
+              <div className="relative group">
+                <div 
+                  ref={moviesScrollRef}
+                  className="flex gap-2 sm:gap-3 md:gap-4 lg:gap-6 overflow-x-auto scroll-smooth px-2 sm:px-3 md:px-4 lg:px-6 -mx-2 sm:-mx-3 md:-mx-4 lg:-mx-6"
+                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
+                >
+                  {popularMovies.map((item) => (
                     <div
-                      key={`${item.id}-${index}`}
-                      className="group cursor-pointer flex-shrink-0 w-[140px] sm:w-[160px] md:w-[200px] lg:w-[220px]"
+                      key={item.id}
+                      className="group/item cursor-pointer flex-shrink-0 w-[120px] xs:w-[140px] sm:w-[160px] md:w-[200px] lg:w-[220px]"
                       onClick={onSignUp}
                     >
-                      <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-slate-800/50 shadow-xl group-hover:shadow-2xl group-hover:shadow-cyan-500/30 transition-all duration-500 group-hover:scale-105 border border-white/5 group-hover:border-white/20">
+                      <div className="relative aspect-[2/3] rounded-lg sm:rounded-xl overflow-hidden bg-slate-800/50 shadow-xl group-active/item:shadow-2xl group-active/item:shadow-cyan-500/30 transition-all duration-500 group-active/item:scale-105 border border-white/5 group-active/item:border-white/20">
                         {item.poster_path ? (
                           <img
                             src={poster(item.poster_path, "w500")}
                             alt={item.title || item.name || ""}
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                            className="w-full h-full object-cover transition-transform duration-700 group-active/item:scale-110"
                             loading="lazy"
                             decoding="async"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-white/30 bg-slate-800">
-                            <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-10 h-10 sm:w-12 sm:h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                           </div>
                         )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                        <div className="absolute bottom-0 left-0 right-0 p-4 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                          <p className="text-white text-sm font-semibold line-clamp-2">{item.title || item.name}</p>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-active/item:opacity-100 transition-opacity duration-300" />
+                        <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-4 transform translate-y-full group-active/item:translate-y-0 transition-transform duration-300">
+                          <p className="text-white text-xs sm:text-sm font-semibold line-clamp-2">{item.title || item.name}</p>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
+                <button
+                  onClick={() => {
+                    if (moviesScrollRef.current) {
+                      moviesScrollRef.current.scrollBy({ left: 250, behavior: 'smooth' });
+                    }
+                  }}
+                  className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-black/70 active:bg-black/90 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white transition-all shadow-lg touch-manipulation"
+                  aria-label="Próximo"
+                >
+                  <ChevronRight size={16} className="sm:w-5 sm:h-5" />
+                </button>
+                <button
+                  onClick={() => {
+                    if (moviesScrollRef.current) {
+                      moviesScrollRef.current.scrollBy({ left: -250, behavior: 'smooth' });
+                    }
+                  }}
+                  className="absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-black/70 active:bg-black/90 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white transition-all shadow-lg touch-manipulation"
+                  aria-label="Anterior"
+                >
+                  <ChevronLeft size={16} className="sm:w-5 sm:h-5" />
+                </button>
               </div>
             </section>
           )}
 
-          {/* Estatísticas - Entre Filmes Populares e Séries Populares */}
           {!loading && (
-            <div className="my-10 lg:my-14 py-6 lg:py-8 opacity-0 animate-fade-in-up" style={{ animationDelay: '0.5s', animationFillMode: 'forwards' }}>
+            <div className="my-10 lg:my-14 py-6 lg:py-8">
               <div className="max-w-5xl mx-auto">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 lg:gap-8">
                   {/* 10K+ Filmes e Séries */}
@@ -398,112 +308,157 @@ const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp, t }) => {
             </div>
           )}
 
-          {/* Séries Populares */}
           {!loading && popularTv.length > 0 && (
-            <section className="opacity-0 animate-fade-in-up mt-8 lg:mt-12" style={{ animationDelay: '0.6s', animationFillMode: 'forwards' }}>
-              <div className="mb-5 lg:mb-7 flex items-center gap-3">
-                <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white tracking-tight">
+            <section className="mt-6 sm:mt-8 lg:mt-12">
+              <div className="mb-4 sm:mb-5 lg:mb-7 flex items-center gap-2 sm:gap-3">
+                <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white tracking-tight">
                   Séries populares
                 </h2>
                 <div className="flex-1 h-px bg-gradient-to-r from-white/20 to-transparent"></div>
               </div>
-              <div className="relative overflow-hidden -mx-3 sm:-mx-4 lg:-mx-6">
-                <div className="flex gap-3 sm:gap-4 lg:gap-6 animate-slide will-change-transform px-3 sm:px-4 lg:px-6">
-                  {[...popularTv, ...popularTv].map((item, index) => (
+              <div className="relative group">
+                <div 
+                  ref={tvScrollRef}
+                  className="flex gap-2 sm:gap-3 md:gap-4 lg:gap-6 overflow-x-auto scroll-smooth px-2 sm:px-3 md:px-4 lg:px-6 -mx-2 sm:-mx-3 md:-mx-4 lg:-mx-6"
+                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
+                >
+                  {popularTv.map((item) => (
                     <div
-                      key={`${item.id}-${index}`}
-                      className="group cursor-pointer flex-shrink-0 w-[140px] sm:w-[160px] md:w-[200px] lg:w-[220px]"
+                      key={item.id}
+                      className="group/item cursor-pointer flex-shrink-0 w-[120px] xs:w-[140px] sm:w-[160px] md:w-[200px] lg:w-[220px]"
                       onClick={onSignUp}
                     >
-                      <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-slate-800/50 shadow-xl group-hover:shadow-2xl group-hover:shadow-cyan-500/30 transition-all duration-500 group-hover:scale-105 border border-white/5 group-hover:border-white/20">
+                      <div className="relative aspect-[2/3] rounded-lg sm:rounded-xl overflow-hidden bg-slate-800/50 shadow-xl group-active/item:shadow-2xl group-active/item:shadow-cyan-500/30 transition-all duration-500 group-active/item:scale-105 border border-white/5 group-active/item:border-white/20">
                         {item.poster_path ? (
                           <img
                             src={poster(item.poster_path, "w500")}
                             alt={item.title || item.name || ""}
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                            className="w-full h-full object-cover transition-transform duration-700 group-active/item:scale-110"
                             loading="lazy"
                             decoding="async"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-white/30 bg-slate-800">
-                            <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-10 h-10 sm:w-12 sm:h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                           </div>
                         )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                        <div className="absolute bottom-0 left-0 right-0 p-4 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                          <p className="text-white text-sm font-semibold line-clamp-2">{item.title || item.name}</p>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-active/item:opacity-100 transition-opacity duration-300" />
+                        <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-4 transform translate-y-full group-active/item:translate-y-0 transition-transform duration-300">
+                          <p className="text-white text-xs sm:text-sm font-semibold line-clamp-2">{item.title || item.name}</p>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
+                <button
+                  onClick={() => {
+                    if (tvScrollRef.current) {
+                      tvScrollRef.current.scrollBy({ left: -250, behavior: 'smooth' });
+                    }
+                  }}
+                  className="absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-black/70 active:bg-black/90 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white transition-all shadow-lg touch-manipulation"
+                  aria-label="Anterior"
+                >
+                  <ChevronLeft size={16} className="sm:w-5 sm:h-5" />
+                </button>
+                <button
+                  onClick={() => {
+                    if (tvScrollRef.current) {
+                      tvScrollRef.current.scrollBy({ left: 250, behavior: 'smooth' });
+                    }
+                  }}
+                  className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-black/70 active:bg-black/90 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white transition-all shadow-lg touch-manipulation"
+                  aria-label="Próximo"
+                >
+                  <ChevronRight size={16} className="sm:w-5 sm:h-5" />
+                </button>
               </div>
             </section>
           )}
 
-          {/* Mais Bem Avaliados */}
           {!loading && topRated.length > 0 && (
-            <section className="opacity-0 animate-fade-in-up mt-8 lg:mt-12" style={{ animationDelay: '0.8s', animationFillMode: 'forwards' }}>
-              <div className="mb-5 lg:mb-7 flex items-center gap-3">
-                <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white tracking-tight">
+            <section className="mt-6 sm:mt-8 lg:mt-12">
+              <div className="mb-4 sm:mb-5 lg:mb-7 flex items-center gap-2 sm:gap-3">
+                <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white tracking-tight">
                   Mais bem avaliados
                 </h2>
                 <div className="flex-1 h-px bg-gradient-to-r from-white/20 to-transparent"></div>
               </div>
-              <div className="relative overflow-hidden -mx-3 sm:-mx-4 lg:-mx-6">
-                <div className="flex gap-3 sm:gap-4 lg:gap-6 animate-slide-reverse will-change-transform px-3 sm:px-4 lg:px-6">
-                  {[...topRated, ...topRated].map((item, index) => (
+              <div className="relative group">
+                <div 
+                  ref={topRatedScrollRef}
+                  className="flex gap-2 sm:gap-3 md:gap-4 lg:gap-6 overflow-x-auto scroll-smooth px-2 sm:px-3 md:px-4 lg:px-6 -mx-2 sm:-mx-3 md:-mx-4 lg:-mx-6"
+                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
+                >
+                  {topRated.map((item) => (
                     <div
-                      key={`${item.id}-${index}`}
-                      className="group cursor-pointer flex-shrink-0 w-[140px] sm:w-[160px] md:w-[200px] lg:w-[220px]"
+                      key={item.id}
+                      className="group/item cursor-pointer flex-shrink-0 w-[120px] xs:w-[140px] sm:w-[160px] md:w-[200px] lg:w-[220px]"
                       onClick={onSignUp}
                     >
-                      <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-slate-800/50 shadow-xl group-hover:shadow-2xl group-hover:shadow-cyan-500/30 transition-all duration-500 group-hover:scale-105 border border-white/5 group-hover:border-white/20">
+                      <div className="relative aspect-[2/3] rounded-lg sm:rounded-xl overflow-hidden bg-slate-800/50 shadow-xl group-active/item:shadow-2xl group-active/item:shadow-cyan-500/30 transition-all duration-500 group-active/item:scale-105 border border-white/5 group-active/item:border-white/20">
                         {item.poster_path ? (
                           <img
                             src={poster(item.poster_path, "w500")}
                             alt={item.title || item.name || ""}
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                            className="w-full h-full object-cover transition-transform duration-700 group-active/item:scale-110"
                             loading="lazy"
                             decoding="async"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-white/30 bg-slate-800">
-                            <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-10 h-10 sm:w-12 sm:h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                           </div>
                         )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                        <div className="absolute bottom-0 left-0 right-0 p-4 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                          <p className="text-white text-sm font-semibold line-clamp-2">{item.title || item.name}</p>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-active/item:opacity-100 transition-opacity duration-300" />
+                        <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-4 transform translate-y-full group-active/item:translate-y-0 transition-transform duration-300">
+                          <p className="text-white text-xs sm:text-sm font-semibold line-clamp-2">{item.title || item.name}</p>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
+                <button
+                  onClick={() => {
+                    if (topRatedScrollRef.current) {
+                      topRatedScrollRef.current.scrollBy({ left: 250, behavior: 'smooth' });
+                    }
+                  }}
+                  className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-black/70 active:bg-black/90 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white transition-all shadow-lg touch-manipulation"
+                  aria-label="Próximo"
+                >
+                  <ChevronRight size={16} className="sm:w-5 sm:h-5" />
+                </button>
+                <button
+                  onClick={() => {
+                    if (topRatedScrollRef.current) {
+                      topRatedScrollRef.current.scrollBy({ left: -250, behavior: 'smooth' });
+                    }
+                  }}
+                  className="absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-black/70 active:bg-black/90 backdrop-blur-sm border border-white/30 flex items-center justify-center text-white transition-all shadow-lg touch-manipulation"
+                  aria-label="Anterior"
+                >
+                  <ChevronLeft size={16} className="sm:w-5 sm:h-5" />
+                </button>
               </div>
             </section>
           )}
 
-          {/* Seção Final CTA com Collage de Filmes */}
-          <section className="relative text-center py-16 lg:py-24 overflow-hidden min-h-[400px]">
-            {/* Background com collage de filmes */}
+          <section className="relative text-center py-12 sm:py-16 md:py-20 lg:py-24 overflow-hidden min-h-[300px] sm:min-h-[400px]">
             <div className="absolute inset-0 z-0">
-              {/* Base escura */}
               <div className="absolute inset-0 bg-[#0a0e27]" />
               
-              {/* Grid de posters desaturados e escurecidos - estilo Paramount+ */}
               {ctaBackgroundMovies.length > 0 && (
-                <div className="absolute inset-0 grid grid-cols-8 sm:grid-cols-10 md:grid-cols-14 lg:grid-cols-18 xl:grid-cols-22 2xl:grid-cols-24 gap-0 p-0 overflow-hidden">
+                <div className="absolute inset-0 grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-14 xl:grid-cols-18 2xl:grid-cols-24 gap-0 p-0 overflow-hidden">
                   {ctaBackgroundMovies.map((movie, index) => {
-                    // Rotação e escala aleatórias para cada poster
-                    const rotation = (Math.random() - 0.5) * 3; // -1.5 a +1.5 graus
-                    const scale = 0.95 + Math.random() * 0.1; // 0.95 a 1.05
-                    const xOffset = (Math.random() - 0.5) * 8; // pequeno deslocamento horizontal
-                    const yOffset = (Math.random() - 0.5) * 8; // pequeno deslocamento vertical
+                    const rotation = (Math.random() - 0.5) * 3;
+                    const scale = 0.95 + Math.random() * 0.1;
+                    const xOffset = (Math.random() - 0.5) * 8;
+                    const yOffset = (Math.random() - 0.5) * 8;
                     
                     return (
                       <div
@@ -530,59 +485,51 @@ const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp, t }) => {
                 </div>
               )}
               
-              {/* Gradientes estilo fumaça nas bordas - aplicado em todos os lados */}
-              {/* Topo - fade gradual */}
-              <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-[#0a0e27] via-[#0a0e27]/90 via-[#0a0e27]/70 via-[#0a0e27]/40 via-[#0a0e27]/20 to-transparent h-32 pointer-events-none z-10" />
-              <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-[#0a0e27]/15 to-transparent h-48 pointer-events-none z-10" />
+              <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-[#0a0e27] via-[#0a0e27]/90 via-[#0a0e27]/70 via-[#0a0e27]/40 via-[#0a0e27]/20 to-transparent h-24 sm:h-32 pointer-events-none z-10" />
+              <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-[#0a0e27]/15 to-transparent h-32 sm:h-48 pointer-events-none z-10" />
               
-              {/* Lado esquerdo - fade gradual */}
-              <div className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-[#0a0e27] via-[#0a0e27]/90 via-[#0a0e27]/70 via-[#0a0e27]/40 via-[#0a0e27]/20 to-transparent w-32 pointer-events-none z-10" />
-              <div className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-[#0a0e27]/15 to-transparent w-48 pointer-events-none z-10" />
+              <div className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-[#0a0e27] via-[#0a0e27]/90 via-[#0a0e27]/70 via-[#0a0e27]/40 via-[#0a0e27]/20 to-transparent w-16 sm:w-32 pointer-events-none z-10" />
+              <div className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-[#0a0e27]/15 to-transparent w-24 sm:w-48 pointer-events-none z-10" />
               
-              {/* Lado direito - fade gradual */}
-              <div className="absolute top-0 bottom-0 right-0 bg-gradient-to-l from-[#0a0e27] via-[#0a0e27]/90 via-[#0a0e27]/70 via-[#0a0e27]/40 via-[#0a0e27]/20 to-transparent w-32 pointer-events-none z-10" />
-              <div className="absolute top-0 bottom-0 right-0 bg-gradient-to-l from-[#0a0e27]/15 to-transparent w-48 pointer-events-none z-10" />
+              <div className="absolute top-0 bottom-0 right-0 bg-gradient-to-l from-[#0a0e27] via-[#0a0e27]/90 via-[#0a0e27]/70 via-[#0a0e27]/40 via-[#0a0e27]/20 to-transparent w-16 sm:w-32 pointer-events-none z-10" />
+              <div className="absolute top-0 bottom-0 right-0 bg-gradient-to-l from-[#0a0e27]/15 to-transparent w-24 sm:w-48 pointer-events-none z-10" />
               
-              {/* Parte inferior - fade gradual */}
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#0a0e27] via-[#0a0e27]/90 via-[#0a0e27]/70 via-[#0a0e27]/40 via-[#0a0e27]/20 to-transparent h-32 pointer-events-none z-10" />
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#0a0e27]/15 to-transparent h-48 pointer-events-none z-10" />
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#0a0e27] via-[#0a0e27]/90 via-[#0a0e27]/70 via-[#0a0e27]/40 via-[#0a0e27]/20 to-transparent h-24 sm:h-32 pointer-events-none z-10" />
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#0a0e27]/15 to-transparent h-32 sm:h-48 pointer-events-none z-10" />
               
-              {/* Overlay central suave para destacar o conteúdo */}
               <div className="absolute inset-0 pointer-events-none z-10" 
                 style={{
                   background: 'radial-gradient(ellipse 60% 45% at center, transparent 0%, transparent 30%, rgba(10, 14, 39, 0.25) 50%, rgba(10, 14, 39, 0.4) 100%)'
                 }}
               />
               
-              {/* Overlay geral muito suave */}
               <div className="absolute inset-0 bg-[#0a0e27]/15 pointer-events-none z-10" />
           </div>
 
-            {/* Conteúdo - perfeitamente centralizado */}
-            <div className="relative z-20 flex items-center justify-center min-h-[450px] px-4 sm:px-6">
+            <div className="relative z-20 flex items-center justify-center min-h-[300px] sm:min-h-[400px] md:min-h-[450px] px-3 sm:px-4 md:px-6">
               <div className="w-full max-w-3xl">
-                <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-10 md:p-14 border border-white/30 shadow-2xl">
-                  <div className="text-center mb-6">
-                    <h2 className="text-3xl lg:text-4xl xl:text-5xl font-bold mb-4 text-center text-white tracking-tight">
+                <div className="bg-white/10 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-10 lg:p-14 border border-white/30 shadow-2xl mx-2 sm:mx-0">
+                  <div className="text-center mb-4 sm:mb-6">
+                    <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 text-center text-white tracking-tight">
                       Pronto para começar?
                     </h2>
-                    <p className="text-lg lg:text-xl text-white/95 mb-2 text-center leading-relaxed font-light">
+                    <p className="text-base sm:text-lg md:text-xl text-white/95 mb-2 text-center leading-relaxed font-light px-2">
                       Junte-se a milhares de usuários organizando seus favoritos.
                     </p>
-                    <p className="text-sm text-white/70 mb-6">
+                    <p className="text-xs sm:text-sm text-white/70 mb-4 sm:mb-6 px-2">
                       Cadastro rápido • Sem anúncios • 100% gratuito
                     </p>
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center px-2">
                     <button
                       onClick={onSignUp}
-                      className="w-full sm:w-auto px-8 py-4 bg-white text-[#0a0e27] font-bold text-base rounded-xl hover:bg-white/95 transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:scale-105 active:scale-100"
+                      className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-white text-[#0a0e27] font-bold text-sm sm:text-base rounded-xl hover:bg-white/95 transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:scale-105 active:scale-100"
                     >
                       Criar conta gratuita
                     </button>
                     <button
                       onClick={onSignIn}
-                      className="w-full sm:w-auto px-8 py-4 bg-transparent border-2 border-white/50 text-white font-semibold text-base rounded-xl hover:border-white/70 hover:bg-white/15 transition-all duration-200"
+                      className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-transparent border-2 border-white/50 text-white font-semibold text-sm sm:text-base rounded-xl hover:border-white/70 hover:bg-white/15 transition-all duration-200"
                     >
                       Já tenho uma conta
                     </button>

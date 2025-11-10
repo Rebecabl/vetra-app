@@ -34,11 +34,23 @@ async function tmdbFetch(path, params = {}, retries = 3) {
     ? { Authorization: `Bearer ${V4_BEARER}` } 
     : {};
 
+  // node-fetch v2 não suporta timeout diretamente
+  // Usar AbortController para timeout
+  const controller = new AbortController();
+  let timeoutId = null;
+
   try {
+    timeoutId = setTimeout(() => controller.abort(), 15000);
+    
     const response = await fetch(url, { 
       headers,
-      timeout: 15000,
+      signal: controller.signal,
     });
+    
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
     
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
@@ -49,14 +61,28 @@ async function tmdbFetch(path, params = {}, retries = 3) {
     
     return response.json();
   } catch (error) {
+    // Limpar timeout se ainda estiver ativo
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    
+    // Tratar erro de abort (timeout)
+    if (error.name === 'AbortError') {
+      error.code = 'ETIMEDOUT';
+      error.type = 'timeout';
+    }
+    
     // Retry apenas para erros de conectividade
     const isRetryableError = 
+      error.name === 'AbortError' ||
       error.code === 'ENOTFOUND' || 
       error.code === 'ETIMEDOUT' || 
       error.code === 'ECONNREFUSED' ||
       error.message?.includes('getaddrinfo') ||
       error.message?.includes('ENOTFOUND') ||
-      error.type === 'system';
+      error.type === 'system' ||
+      error.type === 'timeout';
     
     if (retries > 0 && isRetryableError) {
       const delay = 1000 * (4 - retries);
@@ -68,6 +94,7 @@ async function tmdbFetch(path, params = {}, retries = 3) {
     console.error(`[tmdbFetch] Erro ao acessar ${url}:`, {
       code: error.code,
       type: error.type,
+      name: error.name,
       message: error.message,
     });
     throw error;
@@ -570,8 +597,32 @@ export async function getWatchProviders(region = "BR") {
 
 export async function getPopularPeople(page = 1, lang = "pt-BR") {
   const data = await tmdbFetch("/person/popular", { page, language: lang });
+  
+  let results = (data.results || []).filter((person) => {
+    if (!person.name || !person.name.trim()) {
+      return false;
+    }
+    return true;
+  });
+  
+  results.sort((a, b) => {
+    const aHasPhoto = !!(a.profile_path && a.profile_path.trim());
+    const bHasPhoto = !!(b.profile_path && b.profile_path.trim());
+    if (aHasPhoto && !bHasPhoto) return -1;
+    if (!aHasPhoto && bHasPhoto) return 1;
+    
+    const aIsActor = a.known_for_department === "Acting";
+    const bIsActor = b.known_for_department === "Acting";
+    if (aIsActor && !bIsActor) return -1;
+    if (!aIsActor && bIsActor) return 1;
+    
+    const aPopularity = a.popularity || 0;
+    const bPopularity = b.popularity || 0;
+    return bPopularity - aPopularity;
+  });
+  
   return {
-    results: data.results || [],
+    results: results,
     page: data.page || page,
     total_pages: data.total_pages || 1,
     total_results: data.total_results || 0,
@@ -591,7 +642,22 @@ export async function searchPerson(query, page = 1, lang = "pt-BR") {
     page: page,
   };
 
-  return tmdbFetch("/search/person", params);
+  const data = await tmdbFetch("/search/person", params);
+  
+  if (data.results && Array.isArray(data.results)) {
+    data.results.sort((a, b) => {
+      const aHasPhoto = !!(a.profile_path && a.profile_path.trim());
+      const bHasPhoto = !!(b.profile_path && b.profile_path.trim());
+      if (aHasPhoto && !bHasPhoto) return -1;
+      if (!aHasPhoto && bHasPhoto) return 1;
+      
+      const aPopularity = a.popularity || 0;
+      const bPopularity = b.popularity || 0;
+      return bPopularity - aPopularity;
+    });
+  }
+
+  return data;
 }
 
 export async function getPersonDetails(id, lang = "pt-BR") {
@@ -661,4 +727,22 @@ export async function getPersonDetails(id, lang = "pt-BR") {
       })),
     },
   };
+}
+
+// Funções auxiliares para compatibilidade com código legado
+export function tmdbLang() {
+  return DEFAULT_LANG;
+}
+
+export function tmdbAuthInfo() {
+  return {
+    hasV3: !!V3_KEY,
+    hasV4: !!V4_BEARER,
+    apiBase: API_BASE,
+  };
+}
+
+// Função genérica tmdbGet para compatibilidade (usa tmdbFetch internamente)
+export async function tmdbGet(path, params = {}) {
+  return tmdbFetch(path, params);
 }

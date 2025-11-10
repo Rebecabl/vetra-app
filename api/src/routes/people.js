@@ -36,9 +36,32 @@ router.get("/search", async (req, res) => {
     }
 
     const data = await searchPerson(query, page, lang);
+    
+    let results = (data.results || []).filter((person) => {
+      if (!person.name || !person.name.trim()) {
+        return false;
+      }
+      return true;
+    });
+
+    results.sort((a, b) => {
+      const aHasPhoto = !!(a.profile_path && a.profile_path.trim());
+      const bHasPhoto = !!(b.profile_path && b.profile_path.trim());
+      if (aHasPhoto && !bHasPhoto) return -1;
+      if (!aHasPhoto && bHasPhoto) return 1;
+      
+      const aIsActor = a.known_for_department === "Acting";
+      const bIsActor = b.known_for_department === "Acting";
+      if (aIsActor && !bIsActor) return -1;
+      if (!aIsActor && bIsActor) return 1;
+      
+      const aPopularity = a.popularity || 0;
+      const bPopularity = b.popularity || 0;
+      return bPopularity - aPopularity;
+    });
 
     res.json({
-      results: data.results || [],
+      results: results,
       page: data.page || page,
       total_pages: data.total_pages || 1,
       total_results: data.total_results || 0,
@@ -67,7 +90,6 @@ router.get("/:id", async (req, res) => {
   } catch (error) {
     console.error("[People] Erro ao buscar detalhes da pessoa:", error);
     
-    // Trata erros específicos do TMDB
     if (error.message.includes("404") || error.message.includes("not found")) {
       return res.status(404).json({ error: "pessoa_nao_encontrada" });
     }

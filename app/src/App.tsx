@@ -4,7 +4,7 @@ import {
   List as ListIcon, Share2, Pencil, Trash2, Home, ChevronDown, Settings, LogOut,
   BarChart3, Clock, TrendingUp, Film, Users, Calendar, Globe, DollarSign, Building2,
   PenTool, Video, Music, Scissors, Award, Tag, Tv, Link as LinkIcon, ThumbsUp,
-  MessageCircle, Smile, Send, Bookmark, ChevronLeft, ChevronRight
+  MessageCircle, Smile, Send, Bookmark, ChevronLeft, ChevronRight, Menu
 } from "lucide-react";
 import {
   Routes, Route, useLocation, useNavigate, Link, useParams
@@ -846,6 +846,7 @@ const AppShell: React.FC = () => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileMenuRef, setProfileMenuRef] = useState<HTMLDivElement | null>(null);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   
   // Modais modernos
   const [renameModal, setRenameModal] = useState<{ show: boolean; listId: string | null; currentName: string }>({ show: false, listId: null, currentName: "" });
@@ -4115,22 +4116,22 @@ const AppShell: React.FC = () => {
 
 
   const MobileFooter: React.FC = () => (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-slate-300 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/90 dark:supports-[backdrop-filter]:bg-slate-900/90 safe-area-inset-bottom" aria-label="Navegação inferior" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-      <div className="grid grid-cols-5 h-16">
-          <button onClick={() => setActiveTab("home")} className={`flex flex-col items-center justify-center gap-1 min-h-[44px] touch-manipulation ${activeTab === "home" ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-gray-400"}`} title={t("home")}>
-            <Home size={20} /><span className="text-[10px] font-medium">{t("home")}</span>
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-slate-300 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/90 dark:supports-[backdrop-filter]:bg-slate-900/90 safe-area-inset-bottom" aria-label="Navegação inferior" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 8px)' }}>
+      <div className="grid grid-cols-5 h-14 sm:h-16 gap-0.5">
+          <button onClick={() => setActiveTab("home")} className={`flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-h-[44px] touch-manipulation active:bg-slate-100 dark:active:bg-slate-800 transition-colors ${activeTab === "home" ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-gray-400"}`} title={t("home")}>
+            <Home size={18} className="sm:w-5 sm:h-5" /><span className="text-[9px] sm:text-[10px] font-medium leading-tight px-1 text-center">{t("home")}</span>
           </button>
-          <button onClick={() => setActiveTab("favorites")} className={`flex flex-col items-center justify-center gap-1 min-h-[44px] touch-manipulation ${activeTab === "favorites" ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-gray-400"}`} title={t("favorites")}>
-            <Heart size={20} /><span className="text-[10px] font-medium">{t("favorites")}</span>
+          <button onClick={() => setActiveTab("favorites")} className={`flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-h-[44px] touch-manipulation active:bg-slate-100 dark:active:bg-slate-800 transition-colors ${activeTab === "favorites" ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-gray-400"}`} title={t("favorites")}>
+            <Heart size={18} className="sm:w-5 sm:h-5" /><span className="text-[9px] sm:text-[10px] font-medium leading-tight px-1 text-center">{t("favorites")}</span>
           </button>
-          <button onClick={() => { setActiveListId(null); setActiveTab("lists"); }} className={`flex flex-col items-center justify-center gap-1 min-h-[44px] touch-manipulation ${activeTab === "lists" ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-gray-400"}`} title={t("lists")}>
-            <ListIcon size={20} /><span className="text-[10px] font-medium">{t("lists")}</span>
+          <button onClick={() => { setActiveListId(null); setActiveTab("lists"); }} className={`flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-h-[44px] touch-manipulation active:bg-slate-100 dark:active:bg-slate-800 transition-colors ${activeTab === "lists" ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-gray-400"}`} title={t("lists")}>
+            <ListIcon size={18} className="sm:w-5 sm:h-5" /><span className="text-[9px] sm:text-[10px] font-medium leading-tight px-1 text-center">{t("lists")}</span>
           </button>
-            <button onClick={() => setActiveTab("watchlist")} className={`flex flex-col items-center justify-center gap-1 min-h-[44px] touch-manipulation ${activeTab === "watchlist" || activeTab.startsWith("watchlist-") ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-gray-400"}`} title={t("collections")}>
-            <Bookmark size={20} /><span className="text-[10px] font-medium">{t("collections")}</span>
+            <button onClick={() => setActiveTab("watchlist")} className={`flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-h-[44px] touch-manipulation active:bg-slate-100 dark:active:bg-slate-800 transition-colors ${activeTab === "watchlist" || activeTab.startsWith("watchlist-") ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-gray-400"}`} title={t("collections")}>
+            <Bookmark size={18} className="sm:w-5 sm:h-5" /><span className="text-[9px] sm:text-[10px] font-medium leading-tight px-1 text-center">{t("collections")}</span>
           </button>
-          <button onClick={() => setActiveTab("people")} className={`flex flex-col items-center justify-center gap-1 min-h-[44px] touch-manipulation ${activeTab === "people" ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-gray-400"}`} title={t("people")}>
-            <Users size={20} /><span className="text-[10px] font-medium">{t("people")}</span>
+          <button onClick={() => setActiveTab("people")} className={`flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-h-[44px] touch-manipulation active:bg-slate-100 dark:active:bg-slate-800 transition-colors ${activeTab === "people" ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-gray-400"}`} title={t("people")}>
+            <Users size={18} className="sm:w-5 sm:h-5" /><span className="text-[9px] sm:text-[10px] font-medium leading-tight px-1 text-center">{t("people")}</span>
           </button>
       </div>
     </nav>
@@ -4518,12 +4519,31 @@ const AppShell: React.FC = () => {
         }
         
 
-        const peopleResults = allResults.filter((x: any) => {
+        let peopleResults = allResults.filter((x: any) => {
           const hasName = x.name && x.name.trim() !== "";
           return hasName;
         });
         
-        console.log("[PeopleSearch] Pessoas encontradas após filtro:", peopleResults.length, "de", allResults.length);
+        peopleResults.sort((a: any, b: any) => {
+          const aHasPhoto = !!(a.profile_path && a.profile_path.trim());
+          const bHasPhoto = !!(b.profile_path && b.profile_path.trim());
+          if (aHasPhoto && !bHasPhoto) return -1;
+          if (!aHasPhoto && bHasPhoto) return 1;
+          
+          const aIsActor = a.known_for_department === "Acting";
+          const bIsActor = b.known_for_department === "Acting";
+          if (aIsActor && !bIsActor) return -1;
+          if (!aIsActor && bIsActor) return 1;
+          
+          const aPopularity = a.popularity || 0;
+          const bPopularity = b.popularity || 0;
+          if (bPopularity !== aPopularity) {
+            return bPopularity - aPopularity;
+          }
+          
+          return 0;
+        });
+        
         setSearchedPeople(peopleResults);
       } catch (e: any) {
         console.error("[PeopleSearch] Erro ao buscar pessoas:", e);
@@ -4611,21 +4631,21 @@ const AppShell: React.FC = () => {
 
   const PeopleContent = (
     <section>
-      <div className="mb-8">
-        <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 dark:text-white mb-2">{t("people")}</h2>
-        <div className="h-1 w-20 bg-gradient-to-r from-cyan-500 via-purple-500 to-lime-400 rounded-full" />
+      <div className="mb-4 sm:mb-6 md:mb-8">
+        <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">{t("people")}</h2>
+        <div className="h-1 w-16 sm:w-20 bg-gradient-to-r from-cyan-500 via-purple-500 to-lime-400 rounded-full" />
       </div>
       
-      <div className="mb-6">
-        <div className="relative max-w-md">
-          <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10 pointer-events-none">
-            <Search className="text-slate-400 dark:text-slate-500" size={20} />
+      <div className="mb-4 sm:mb-6">
+        <div className="relative">
+          <div className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 z-10 pointer-events-none">
+            <Search className="text-slate-400 dark:text-slate-500 w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <input
             value={peopleSearchTerm}
             onChange={(e) => setPeopleSearchTerm(e.target.value)}
             placeholder={t("search_by_name")}
-            className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 pl-12 pr-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 transition-all duration-200 text-base font-normal"
+            className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 pl-10 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 transition-all duration-200 text-sm sm:text-base font-normal"
           />
         </div>
       </div>
@@ -4655,39 +4675,39 @@ const AppShell: React.FC = () => {
         </div>
       ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
               {filteredPeople.map((person: any) => (
               <Link
                 key={person.id}
                 to={`/person/${person.id}`}
                 className="group bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 transition-all duration-300 shadow-lg hover:shadow-xl"
               >
-                <div className="flex flex-row gap-4 p-4">
-                  <div className="flex-shrink-0">
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 p-3 sm:p-4">
+                  <div className="flex-shrink-0 mx-auto sm:mx-0">
                   {person.profile_path ? (
                     <img
                         src={`https://image.tmdb.org/t/p/w300${person.profile_path}`}
                       alt={person.name}
-                        className="w-24 h-32 md:w-28 md:h-40 rounded-lg object-cover object-center shadow-md group-hover:scale-105 transition-transform duration-300"
+                        className="w-20 h-28 sm:w-24 sm:h-32 md:w-28 md:h-40 rounded-lg object-cover object-center shadow-md group-hover:scale-105 transition-transform duration-300"
                       style={{ aspectRatio: "2/3" }}
                       onError={(e) => {
                           (e.target as HTMLImageElement).src = "https://via.placeholder.com/300x450?text=No+Image";
                       }}
                     />
                   ) : (
-                      <div className="w-24 h-32 md:w-28 md:h-40 bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 rounded-lg flex items-center justify-center shadow-md" style={{ aspectRatio: "2/3" }}>
-                        <User size={32} className="text-slate-400 dark:text-gray-600" />
+                      <div className="w-20 h-28 sm:w-24 sm:h-32 md:w-28 md:h-40 bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 rounded-lg flex items-center justify-center shadow-md" style={{ aspectRatio: "2/3" }}>
+                        <User size={28} className="sm:w-8 sm:h-8 text-slate-400 dark:text-gray-600" />
                     </div>
                   )}
                 </div>
                   
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors line-clamp-2">
+                  <div className="flex-1 min-w-0 text-center sm:text-left">
+                    <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mb-2 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors line-clamp-2">
                   {person.name}
                     </h3>
                     
                     {person.known_for_department && (
-                      <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                      <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mb-2">
                         <span className="font-semibold">Departamento:</span> {person.known_for_department}
                       </p>
                     )}
@@ -4695,15 +4715,15 @@ const AppShell: React.FC = () => {
                 {person.known_for && person.known_for.length > 0 && (
                       <div className="mb-2">
                         <p className="text-xs font-semibold text-slate-500 dark:text-slate-500 mb-1">Conhecido por:</p>
-                        <p className="text-sm text-slate-700 dark:text-slate-300 line-clamp-3">
+                        <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 line-clamp-2 sm:line-clamp-3">
                     {person.known_for.map((kf: any) => kf.title || kf.name).join(", ")}
                         </p>
                   </div>
                 )}
                     
                     {person.popularity && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <TrendingUp size={14} className="text-cyan-500" />
+                      <div className="flex items-center justify-center sm:justify-start gap-2 mt-2">
+                        <TrendingUp size={12} className="sm:w-3.5 sm:h-3.5 text-cyan-500" />
                         <span className="text-xs text-slate-600 dark:text-slate-400">
                           Popularidade: {Math.round(person.popularity)}
                         </span>
@@ -6121,7 +6141,7 @@ const AppShell: React.FC = () => {
 
   const FavoritesContent = (
     <section>
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <div>
           <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">{viewingShared ? t("shared_list") : t("my_favorites")}</h2>
         </div>
@@ -6167,15 +6187,17 @@ const AppShell: React.FC = () => {
                 pushToast({ message: errorMsg, tone: "err" }); 
               }
             }}
-            className="inline-flex items-center gap-2 bg-slate-800/80 backdrop-blur-sm hover:bg-slate-700 border border-slate-600/50 px-5 py-2.5 rounded-xl text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 text-white"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-slate-800/80 backdrop-blur-sm hover:bg-slate-700 border border-slate-600/50 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95 sm:hover:scale-105 text-white whitespace-nowrap"
             title="Compartilhar meus favoritos">
-            <Clipboard size={16} />Compartilhar meus favoritos
+            <Clipboard size={14} className="sm:w-4 sm:h-4" />
+            <span className="hidden xs:inline">Compartilhar meus favoritos</span>
+            <span className="xs:hidden">Compartilhar</span>
           </button>
         )}
       </div>
 
       {favorites.length > 0 ? (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-2 md:gap-3">
+        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2 sm:gap-3">
           {favorites.map((m, idx) => (
             <div key={`${m.media}-${m.id}`} className="animate-fade-in-up" style={{ animationDelay: `${idx * 50}ms` }}>
               <MovieCard movie={m} />
@@ -6198,21 +6220,21 @@ const AppShell: React.FC = () => {
 
   const ListsContent = (
     <section>
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <div>
           <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">
             {viewingShared && sharedList ? sharedList.listName : t("lists")}
           </h2>
         </div>
         {!viewingShared && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <button
             onClick={() => {
               const defaultName = `Minha lista ${lists.length + 1}`;
               const id = createList(defaultName); setActiveListId(id);
             }}
-            className="inline-flex items-center gap-2 bg-slate-700 dark:bg-slate-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-600 dark:hover:bg-slate-500 shadow-md hover:shadow-lg border border-slate-600 dark:border-slate-500 hover:border-slate-500 dark:hover:border-slate-400 transition-all duration-200">
-            <Plus size={18} />{t("new_list")}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-slate-700 dark:bg-slate-600 text-white px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold hover:bg-slate-600 dark:hover:bg-slate-500 shadow-md hover:shadow-lg border border-slate-600 dark:border-slate-500 hover:border-slate-500 dark:hover:border-slate-400 transition-all duration-200 active:scale-95 sm:hover:scale-105">
+            <Plus size={16} className="sm:w-4.5 sm:h-4.5" />{t("new_list")}
           </button>
         </div>
         )}
@@ -6227,7 +6249,7 @@ const AppShell: React.FC = () => {
         return <ListDetail lst={lst} />;
       })() : (
         lists.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             {lists.map((l) => {
               const shareList = async () => {
                 try {
@@ -6427,18 +6449,27 @@ const AppShell: React.FC = () => {
     <div className="min-h-screen bg-white text-slate-900 dark:bg-gradient-to-b dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-white">
       {/* HEADER */}
       <header className="fixed top-0 left-0 right-0 z-40 backdrop-blur-xl bg-white/95 dark:bg-slate-950/95 border-b border-slate-200 dark:border-white/10 shadow-lg safe-area-inset-top" style={{ paddingTop: 'max(env(safe-area-inset-top), 0px)' }}>
-        <div className="container mx-auto px-3 sm:px-4 md:px-6 py-3 md:py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-8">
-              <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setActiveTab("home"); setActiveCategory("home"); }}>
-                <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <div className="container mx-auto px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 md:py-4">
+          <div className="flex items-center justify-between gap-2 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 md:gap-8 min-w-0 flex-1">
+              {isLoggedIn && (
+                <button
+                  onClick={() => setShowMobileMenu(!showMobileMenu)}
+                  className="md:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
+                  aria-label="Menu"
+                >
+                  <Menu size={24} className="text-slate-900 dark:text-white" />
+                </button>
+              )}
+              <div className="flex items-center gap-2 sm:gap-3 cursor-pointer flex-shrink-0" onClick={() => { setActiveTab("home"); setActiveCategory("home"); setShowMobileMenu(false); }}>
+                <svg width="32" height="32" className="sm:w-10 sm:h-10" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M8 8 L8 32 L20 20 Z" fill="#00BCD4" />
                   <path d="M12 12 L12 28 L24 20 Z" fill="#7B3FF2" />
                   <path d="M16 8 L32 20 L16 32 Z" fill="#C6D800" />
                 </svg>
-                <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 bg-clip-text text-transparent">VETRA</h1>
+                <h1 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 bg-clip-text text-transparent whitespace-nowrap">VETRA</h1>
                 <span
-                  className={`ml-4 text-xs px-2 py-1 rounded border ${
+                  className={`hidden sm:inline-block ml-2 md:ml-4 text-xs px-2 py-1 rounded border flex-shrink-0 ${
                     apiStatus === "ok"
                       ? "bg-emerald-600/10 text-emerald-700 border-emerald-500/30 dark:bg-emerald-600/20 dark:text-emerald-200 dark:border-emerald-500/40"
                       : apiStatus === "falhou"
@@ -6531,30 +6562,30 @@ const AppShell: React.FC = () => {
               </nav>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 flex-shrink-0">
               <LanguageMenu lang={lang as Lang} onChange={(l) => setLang(l)} />
               {isLoggedIn && <ThemeButton enabled={darkEnabled} onToggle={toggleDark} />}
               {isLoggedIn && !viewingShared && (
                 <div className="relative" ref={setProfileMenuRef}>
                   <button
                     onClick={() => setShowProfileMenu(!showProfileMenu)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-300 dark:border-slate-700"
+                    className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-300 dark:border-slate-700"
                   >
                     {user?.avatar_url ? (
                       <img
                         src={user.avatar_url}
                         alt={user.name || "Usuário"}
-                        className="w-8 h-8 rounded-full object-cover"
+                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-400 via-purple-500 to-lime-400 flex items-center justify-center text-white font-semibold text-sm">
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-cyan-400 via-purple-500 to-lime-400 flex items-center justify-center text-white font-semibold text-xs sm:text-sm">
                         {user?.name?.charAt(0)?.toUpperCase() || "U"}
                       </div>
                     )}
-                    <ChevronDown size={16} className={`transition-transform ${showProfileMenu ? "rotate-180" : ""}`} />
+                    <ChevronDown size={14} className={`hidden sm:block transition-transform ${showProfileMenu ? "rotate-180" : ""}`} />
                   </button>
                   {showProfileMenu && (
-                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-300 dark:border-slate-700 py-2 z-50">
+                    <div className="absolute right-0 mt-2 w-48 sm:w-56 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-300 dark:border-slate-700 py-2 z-50">
                       <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
                         <div className="flex items-center gap-3">
                           {user?.avatar_url ? (
@@ -6630,11 +6661,160 @@ const AppShell: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {isLoggedIn && showMobileMenu && (
+          <div className="md:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={() => setShowMobileMenu(false)}>
+            <div className="fixed left-0 top-0 bottom-0 w-64 bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Menu</h2>
+                <button
+                  onClick={() => setShowMobileMenu(false)}
+                  className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  aria-label="Fechar menu"
+                >
+                  <X size={20} className="text-slate-900 dark:text-white" />
+                </button>
+              </div>
+              <nav className="p-2">
+                <button
+                  onClick={() => { setActiveTab("home"); setActiveCategory("home"); setShowMobileMenu(false); }}
+                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                    activeTab === "home" && activeCategory === "home"
+                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <Home size={20} />
+                  <span>{t("home")}</span>
+                </button>
+                <button
+                  onClick={() => { setActiveTab("home"); setActiveCategory("movies"); setShowMobileMenu(false); }}
+                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                    activeTab === "home" && activeCategory === "movies"
+                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <Film size={20} />
+                  <span>{t("movies")}</span>
+                </button>
+                <button
+                  onClick={() => { setActiveTab("home"); setActiveCategory("tv"); setShowMobileMenu(false); }}
+                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                    activeTab === "home" && activeCategory === "tv"
+                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <Tv size={20} />
+                  <span>{t("tv_series")}</span>
+                </button>
+                <button
+                  onClick={() => { setActiveTab("favorites"); setShowMobileMenu(false); }}
+                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                    activeTab === "favorites"
+                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <Heart size={20} />
+                  <span>{viewingShared ? t("shared_list") : t("favorites")}</span>
+                </button>
+                <button
+                  onClick={() => { setActiveListId(null); setActiveTab("lists"); setShowMobileMenu(false); }}
+                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                    activeTab === "lists"
+                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <ListIcon size={20} />
+                  <span>{t("lists")}</span>
+                </button>
+                <button
+                  onClick={() => { setActiveTab("watchlist"); setShowMobileMenu(false); }}
+                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                    activeTab === "watchlist" || activeTab.startsWith("watchlist-")
+                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <Bookmark size={20} />
+                  <span>Coleções</span>
+                </button>
+                <button
+                  onClick={() => { setActiveTab("people"); setShowMobileMenu(false); }}
+                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                    activeTab === "people"
+                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <Users size={20} />
+                  <span>{t("people")}</span>
+                </button>
+                <div className="border-t border-slate-200 dark:border-slate-700 my-2"></div>
+                <button
+                  onClick={() => { setActiveTab("history"); setShowMobileMenu(false); }}
+                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                    activeTab === "history"
+                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <Clock size={20} />
+                  <span>Histórico</span>
+                  {watchHistory.length > 0 && (
+                    <span className="ml-auto text-xs bg-cyan-500/20 text-cyan-400 px-2 py-1 rounded-full">
+                      {watchHistory.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => { setActiveTab("stats"); setShowMobileMenu(false); }}
+                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                    activeTab === "stats"
+                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <BarChart3 size={20} />
+                  <span>Estatísticas</span>
+                </button>
+                <div className="border-t border-slate-200 dark:border-slate-700 my-2"></div>
+                <button
+                  onClick={() => {
+                    setShowProfileModal(true);
+                    setShowMobileMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  <Settings size={20} />
+                  <span>Editar Perfil</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setIsLoggedIn(false);
+                    setViewingShared(false);
+                    setSharedList(null);
+                    setSharedCollection(null);
+                    setUser(null);
+                    setShowMobileMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 text-red-600 dark:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  <LogOut size={20} />
+                  <span>{t("signout")}</span>
+                </button>
+              </nav>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* MAIN */}
       {/* Padding-top para header fixo, padding-bottom para navegação mobile */}
-      <main className={`pt-20 md:pt-24 ${isLoggedIn ? "pb-20 md:pb-24" : "pb-12"}`}>
+      <main className={`pt-16 sm:pt-20 md:pt-24 ${isLoggedIn ? "pb-16 sm:pb-20 md:pb-24" : "pb-12"}`}>
         {/* Conteúdo compartilhado é sempre exibido, mesmo sem login */}
         {!isLoggedIn && !viewingShared && !hasShareSlug ? (
           <div className="container mx-auto px-3 sm:px-4 md:px-6 text-center py-12 md:py-16 pt-20 sm:pt-24 px-4">
@@ -6651,9 +6831,9 @@ const AppShell: React.FC = () => {
           <>
               {activeTab === "home" && activeCategory === "home" && HomeContent}
               {activeTab === "home" && activeCategory !== "home" && (
-                <div className="container mx-auto px-3 sm:px-4 md:px-6 pt-20 sm:pt-24">
+                <div className="container mx-auto px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8">
                 {activeTab === "home" && activeCategory === "movies" && (
-                  <div className="flex flex-col md:flex-row gap-4 md:gap-6">
+                  <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
                     {/* Filtros Laterais */}
                     <DiscoverFiltersPanel
                       media="movie"
@@ -6664,28 +6844,28 @@ const AppShell: React.FC = () => {
                     
                     {/* Grid de Resultados */}
                     <div className="flex-1 min-w-0">
-                      <div className="mb-6">
-                        <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-2">{t("movies")}</h2>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                      <div className="mb-4 sm:mb-6">
+                        <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">{t("movies")}</h2>
+                        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                           {discoverMovies.loading ? t("loading") : discoverMovies.items.length > 0 ? t("movies_found", { count: discoverMovies.items.length }) : t("no_movies_found")}
                         </p>
                       </div>
 
                       {discoverMovies.loading && discoverMovies.items.length === 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
                           {[...Array(12)].map((_, i) => (
                             <div key={i} className="aspect-[2/3] bg-slate-200 dark:bg-slate-800 animate-pulse rounded-lg" />
                           ))}
                         </div>
                       ) : discoverMovies.items.length > 0 ? (
                         <>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                          <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
                             {discoverMovies.items.map((movie) => (
                               <MovieCard key={mediaKey(movie)} movie={movie} />
                             ))}
                           </div>
                           {discoverMovies.totalPages > 1 && discoverMovies.page < discoverMovies.totalPages && (
-                            <div className="mt-6 text-center">
+                            <div className="mt-4 sm:mt-6 text-center">
                               <button
                                 onClick={() => {
                                   const nextPage = discoverMovies.page + 1;
@@ -6717,7 +6897,7 @@ const AppShell: React.FC = () => {
                                     });
                                 }}
                                 disabled={discoverMovies.loading}
-                                className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-purple-500 text-white font-semibold rounded-lg hover:from-cyan-600 hover:to-purple-600 transition-all disabled:opacity-50"
+                                className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-cyan-500 to-purple-500 text-white text-sm sm:text-base font-semibold rounded-lg hover:from-cyan-600 hover:to-purple-600 transition-all disabled:opacity-50 active:scale-95 sm:hover:scale-105"
                               >
                                 {discoverMovies.loading ? "Carregando..." : "Carregar Mais"}
                               </button>
@@ -6738,7 +6918,7 @@ const AppShell: React.FC = () => {
                   </div>
                 )}
                 {activeTab === "home" && activeCategory === "tv" && (
-                  <div className="flex flex-col md:flex-row gap-4 md:gap-6">
+                  <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
                     {/* Filtros Laterais */}
                     <DiscoverFiltersPanel
                       media="tv"
@@ -6749,28 +6929,28 @@ const AppShell: React.FC = () => {
                     
                     {/* Grid de Resultados */}
                     <div className="flex-1 min-w-0">
-                      <div className="mb-6">
-                        <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-2">{t("tv_series")}</h2>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                      <div className="mb-4 sm:mb-6">
+                        <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">{t("tv_series")}</h2>
+                        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                           {discoverTv.loading ? t("loading") : discoverTv.items.length > 0 ? t("series_found", { count: discoverTv.items.length }) : t("no_series_found")}
                         </p>
                       </div>
 
                       {discoverTv.loading && discoverTv.items.length === 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
                           {[...Array(12)].map((_, i) => (
                             <div key={i} className="aspect-[2/3] bg-slate-200 dark:bg-slate-800 animate-pulse rounded-lg" />
                           ))}
                         </div>
                       ) : discoverTv.items.length > 0 ? (
                         <>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                          <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
                             {discoverTv.items.map((series) => (
                               <MovieCard key={mediaKey(series)} movie={series} />
                             ))}
                           </div>
                           {discoverTv.totalPages > 1 && discoverTv.page < discoverTv.totalPages && (
-                            <div className="mt-6 text-center">
+                            <div className="mt-4 sm:mt-6 text-center">
                               <button
                                 onClick={() => {
                                   const nextPage = discoverTv.page + 1;
@@ -6802,7 +6982,7 @@ const AppShell: React.FC = () => {
                                     });
                                 }}
                                 disabled={discoverTv.loading}
-                                className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-purple-500 text-white font-semibold rounded-lg hover:from-cyan-600 hover:to-purple-600 transition-all disabled:opacity-50"
+                                className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-cyan-500 to-purple-500 text-white text-sm sm:text-base font-semibold rounded-lg hover:from-cyan-600 hover:to-purple-600 transition-all disabled:opacity-50 active:scale-95 sm:hover:scale-105"
                               >
                                 {discoverTv.loading ? "Carregando..." : "Carregar Mais"}
                               </button>
@@ -6824,13 +7004,13 @@ const AppShell: React.FC = () => {
                 )}
                 </div>
               )}
-            {activeTab === "favorites" && FavoritesContent}
-            {activeTab === "lists" && ListsContent}
-            {activeTab === "people" && PeopleContent}
-            {activeTab === "history" && HistoryContent}
-            {activeTab === "watchlist" && WatchlistContent}
-            {(activeTab.startsWith("watchlist-")) && WatchlistContent}
-            {activeTab === "stats" && StatsContent}
+            {activeTab === "favorites" && <div className="container mx-auto px-3 sm:px-4 md:px-6">{FavoritesContent}</div>}
+            {activeTab === "lists" && <div className="container mx-auto px-3 sm:px-4 md:px-6">{ListsContent}</div>}
+            {activeTab === "people" && <div className="container mx-auto px-3 sm:px-4 md:px-6">{PeopleContent}</div>}
+            {activeTab === "history" && <div className="container mx-auto px-3 sm:px-4 md:px-6">{HistoryContent}</div>}
+            {activeTab === "watchlist" && <div className="container mx-auto px-3 sm:px-4 md:px-6">{WatchlistContent}</div>}
+            {(activeTab.startsWith("watchlist-")) && <div className="container mx-auto px-3 sm:px-4 md:px-6">{WatchlistContent}</div>}
+            {activeTab === "stats" && <div className="container mx-auto px-3 sm:px-4 md:px-6">{StatsContent}</div>}
           </>
         )}
       </main>

@@ -110,11 +110,18 @@ verify-before-commit.ps1
 # Scripts de inicialização locais
 api/iniciar-backend.bat
 api/iniciar-backend.ps1
-api/dev.js
 api/test-server.js
 api/test-simple-server.js
 
 # Arquivos do sistema
 Thumbs.db
 Desktop.ini
+
+# Arquivos .txt (exceto se necessário para o projeto)
+*.txt
+!*.txt.example
+
+# README e arquivos .md (exceto README.md principal na raiz)
+*.md
+!README.md
 
