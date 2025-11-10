@@ -760,12 +760,12 @@ const AppShell: React.FC = () => {
     try { return JSON.parse(localStorage.getItem(KEY_STATES) || "{}"); } catch { return {}; }
   });
   
-  // Histórico de visualização
+ 
   const [watchHistory, setWatchHistory] = useState<Array<{ movie: MovieT; watchedAt: string }>>(() => {
     try { return JSON.parse(localStorage.getItem(KEY_HISTORY) || "[]"); } catch { return []; }
   });
   
-  // Estatísticas do usuário
+ 
   const [userStats, setUserStats] = useState(() => {
     try { return JSON.parse(localStorage.getItem(KEY_STATS) || "{}"); } catch { return {}; }
   });
@@ -860,7 +860,7 @@ const AppShell: React.FC = () => {
     try {
       setProfileLoading(true);
       const data: UserProfile = await api.profileGet(email);
-      // Garantir que o nome seja atualizado se existir no perfil
+   
       if (data?.name && data.name.trim() && data.name !== "Usuário") {
         setUser({ 
           name: data.name.trim(), 
@@ -869,7 +869,7 @@ const AppShell: React.FC = () => {
           updatedAt: data?.updatedAt ?? null 
         });
       } else if (data?.name) {
-        // Mesmo se for "Usuário", atualizar para manter consistência
+        
         setUser({ 
           name: data.name, 
           email: data?.email ?? email, 
@@ -905,7 +905,7 @@ const AppShell: React.FC = () => {
     }
   };
 
-  // Fechar menu ao clicar fora
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (profileMenuRef && !profileMenuRef.contains(event.target as Node)) {
@@ -941,7 +941,7 @@ const AppShell: React.FC = () => {
     return () => { alive = false; };
   }, []);
 
-  // normalização das imagens salvas
+
   useEffect(() => {
     setFavorites((prev) => prev.map((m) => {
       const path = m.poster_path ?? toPosterPath(m.image);
@@ -966,12 +966,12 @@ const AppShell: React.FC = () => {
     const usp = new URLSearchParams(window.location.search);
     let slug = usp.get("share");
     
-    // Se não encontrar na query string, verificar na rota
+ 
     if (!slug) {
       const pathMatch = window.location.pathname.match(/\/share\/([^\/]+)/);
       if (pathMatch) {
         slug = pathMatch[1];
-        // Atualizar URL para usar query string
+      
         const newUrl = new URL(window.location.href);
         newUrl.searchParams.set("share", slug);
         newUrl.pathname = newUrl.pathname.replace(/\/share\/[^\/]+/, "");
@@ -1003,7 +1003,7 @@ const AppShell: React.FC = () => {
                 description: m.user_description || null,
               }
             }));
-            // Extrair a categoria do nome da lista (ex: "Não assisti" de "Minha coleção 'Não assisti'")
+            
             const categoryName = data.listName || "Coleção Compartilhada";
             setSharedCollection({ items: mapped, listName: categoryName, category: categoryName });
             setActiveTab("watchlist");
@@ -1045,9 +1045,9 @@ const AppShell: React.FC = () => {
         }
       } catch { pushToast({ message: t("share_fail"), tone: "err" }); }
     })();
-  }, []); // não re-carrega com idioma
+  }, []);
 
-  // map util
+  
   const mapRows = (rows: ApiMovie[]): MovieT[] =>
     rows.map((m) => ({
       id: m.id,
@@ -1063,14 +1063,14 @@ const AppShell: React.FC = () => {
       poster_path: (m as any).poster_path ?? null,
     }));
 
-  // Carregar trending com window específico
+ 
   const loadTrending = async (window: "day" | "week", page: number = 1) => {
     setCats((s) => ({ ...s, trending: { ...s.trending, loading: true, error: undefined } }));
     try {
       const data = await api.getTrending(window, page) as BrowseResp;
       const rows = (data?.results || []) as ApiMovie[];
       
-      // Filtrar apenas filmes/séries com foto e informações completas
+   
       const filteredRows = rows.filter((x: any) => {
         const hasImage = (x.poster_path && x.poster_path.trim() !== "") || 
                         (x.backdrop_path && x.backdrop_path.trim() !== "");
@@ -1111,17 +1111,17 @@ const AppShell: React.FC = () => {
       const data = (await (api as any).browse(key, page)) as BrowseResp;
       const rows = (data?.results || []) as ApiMovie[];
       
-      // Filtrar apenas filmes/séries com foto e informações completas
+
       const filteredRows = rows.filter((x: any) => {
-        // Deve ter pelo menos poster_path ou backdrop_path
+     
         const hasImage = (x.poster_path && x.poster_path.trim() !== "") || 
                         (x.backdrop_path && x.backdrop_path.trim() !== "");
         
-        // Deve ter título ou nome
+      
         const hasTitle = (x.title && x.title.trim() !== "") || 
                         (x.name && x.name.trim() !== "");
         
-        // Deve ter overview ou pelo menos alguma informação relevante
+   
         const hasInfo = (x.overview && x.overview.trim() !== "") || 
                        x.release_date || 
                        x.first_air_date ||
@@ -1135,7 +1135,7 @@ const AppShell: React.FC = () => {
       setCats((s) => ({
         ...s,
         [key]: {
-          // Se for página 2+, adiciona aos itens existentes; senão, substitui
+        
           items: page > 1 ? [...(s[key].items || []), ...mapped] : mapped,
           page,
           totalPages: (data as any)?.total_pages ?? s[key].totalPages ?? 1,
@@ -1152,33 +1152,33 @@ const AppShell: React.FC = () => {
     }
   };
 
-  // inicial: categorias (recarrega em mudança de idioma) - carrega mais páginas inicialmente
+ 
   useEffect(() => {
     loadTrending(trendingWindow, 1);
     (["popular", "top_rated", "now_playing", "upcoming"] as CatKey[]).forEach((k) => {
       loadCategory(k, 1);
-      // Carrega página 2 também para ter mais filmes no início
+     
       setTimeout(() => loadCategory(k, 2), 500);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, [lang]);
 
-  // Recarregar trending quando window mudar
+ 
   useEffect(() => {
     if (cats.trending.initialized) {
       loadTrending(trendingWindow, 1);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [trendingWindow]);
 
-  // Carregar filmes populares filtrados
+ 
   const loadFilteredPopular = async (filter: "streaming" | "tv" | "rent" | "cinema", page: number = 1) => {
     setFilteredPopular((s) => ({ ...s, loading: true }));
     try {
       const data = await api.browsePopularWithFilter(filter, page) as BrowseResp;
       const rows = (data?.results || []) as ApiMovie[];
       
-      // Filtrar apenas filmes/séries com foto e informações completas
+      
       const filteredRows = rows.filter((x: any) => {
         const hasImage = (x.poster_path && x.poster_path.trim() !== "") || 
                         (x.backdrop_path && x.backdrop_path.trim() !== "");
@@ -1205,20 +1205,19 @@ const AppShell: React.FC = () => {
     }
   };
 
-  // Recarregar filmes populares quando o filtro mudar
   useEffect(() => {
     loadFilteredPopular(popularFilter, 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [popularFilter]);
 
-  // Lógica de navegação por categoria
+
   useEffect(() => {
     if (activeCategory !== "home" && activeTab === "home") {
-      // Quando muda a categoria, mantém na home mas atualiza a visualização
+
     }
   }, [activeCategory, activeTab]);
 
-  // Carregar pessoas populares quando a aba for selecionada
+
   useEffect(() => {
     if (activeTab === "people" && !peopleLoading) {
       setPeopleLoading(true);
@@ -1229,7 +1228,7 @@ const AppShell: React.FC = () => {
           const results = (data as any).results || [];
           console.log("[PeopleContent] Total de resultados:", results.length);
           
-          // Filtrar apenas pessoas com nome (foto é opcional)
+         
           const filteredResults = results.filter((person: any) => {
             const hasName = person.name && person.name.trim() !== "";
             return hasName;
@@ -1237,7 +1236,7 @@ const AppShell: React.FC = () => {
           
           console.log("[PeopleContent] Após filtro:", filteredResults.length);
           
-          // Ordenar: primeiro as que têm foto, depois as que não têm
+      
           const sortedResults = filteredResults.sort((a: any, b: any) => {
             const aHasPhoto = a.profile_path && a.profile_path.trim() !== "";
             const bHasPhoto = b.profile_path && b.profile_path.trim() !== "";
@@ -1255,10 +1254,9 @@ const AppShell: React.FC = () => {
         })
         .finally(() => setPeopleLoading(false));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, [activeTab]);
   
-  // Carregar mais pessoas quando a página mudar
   useEffect(() => {
     if (activeTab === "people" && peoplePage > 1 && !peopleLoading) {
       setPeopleLoading(true);
@@ -1287,10 +1285,10 @@ const AppShell: React.FC = () => {
         })
         .finally(() => setPeopleLoading(false));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+ 
   }, [peoplePage]);
 
-  // Carregar filmes quando a categoria "movies" estiver ativa
+  
   useEffect(() => {
     if (activeCategory === "movies" && activeTab === "home") {
       setDiscoverMovies({ items: [], loading: true, page: 1, totalPages: 1 });
@@ -1322,10 +1320,10 @@ const AppShell: React.FC = () => {
                                       pushToast({ message: t("error_load_movies"), tone: "err" });
         });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, [activeCategory, activeTab, moviesFilters]);
 
-  // Carregar séries quando a categoria "tv" estiver ativa
+
   useEffect(() => {
     if (activeCategory === "tv" && activeTab === "home") {
       setDiscoverTv({ items: [], loading: true, page: 1, totalPages: 1 });
@@ -1357,10 +1355,10 @@ const AppShell: React.FC = () => {
                                       pushToast({ message: t("error_load_series"), tone: "err" });
         });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [activeCategory, activeTab, tvFilters]);
 
-  // busca com filtros
+
   const runSearch = async (query: string) => {
     if (!query.trim()) {
       setMovies([]); setPeople([]); return;
@@ -1382,23 +1380,22 @@ const AppShell: React.FC = () => {
         people: mixed.filter((x: any) => (x.media_type || x.media) === 'person').length,
       });
 
-      // Filtrar filmes e séries - aceitar todos que são claramente filmes ou séries
+
       let moviesPart = mixed.filter((x: any) => {
         const mediaType = x.media_type || x.media;
         
-        // Deve ser filme ou série - verificar primeiro pelo media_type explícito
+
         if (mediaType === "movie" || mediaType === "tv") {
-          // Se o filtro de pôster estiver ativo, verificar se tem pôster
+
         if (searchOnlyWithPoster && !x.poster_path) return false;
-        // Deve ter título ou nome
+
         const hasTitle = (x.title && x.title.trim() !== "") || 
                         (x.name && x.name.trim() !== "");
-          // Aceitar se tiver título (filmes/séries sempre têm título)
+    
           return hasTitle;
         }
         
-        // Fallback: verificar por características
-        // Se tem poster_path mas não profile_path, provavelmente é filme/série
+        
         if (x.poster_path && !x.profile_path) {
           const hasTitle = (x.title && x.title.trim() !== "") || 
                           (x.name && x.name.trim() !== "");
@@ -1406,13 +1403,12 @@ const AppShell: React.FC = () => {
           return hasTitle;
         }
         
-        // Se tem título e data de lançamento, é filme
+
         if (x.title && x.release_date) {
           if (searchOnlyWithPoster && !x.poster_path) return false;
           return true;
         }
-        
-        // Se tem nome e data de primeira exibição, é série
+
         if (x.name && x.first_air_date) {
           if (searchOnlyWithPoster && !x.poster_path) return false;
           return true;
@@ -1421,7 +1417,7 @@ const AppShell: React.FC = () => {
         return false;
       });
       
-      // Filtro de intervalo de ano
+
       if (searchYear || searchYearTo) {
         moviesPart = moviesPart.filter((x: any) => {
           const releaseYear = x.release_date || x.first_air_date;
@@ -1433,24 +1429,24 @@ const AppShell: React.FC = () => {
         });
       }
       
-      // Filtro de mínimo de votos
+      
       if (searchMinVotes) {
         const minVotes = parseInt(searchMinVotes);
         moviesPart = moviesPart.filter((x: any) => (x.vote_count || 0) >= minVotes);
       }
       
-      // Filtrar pessoas - apenas as que têm foto e informações completas
+
       const peoplePart = mixed.filter((x: any) => {
         const mediaType = x.media_type || x.media;
         
-        // Deve ser pessoa
+    
         const isPerson = mediaType === "person" || 
                         (x.profile_path && !x.poster_path) ||
                         (x.known_for_department && !x.title && !x.name);
         
         if (!isPerson) return false;
         
-        // Deve ter profile_path
+     
         const hasProfileImage = x.profile_path && x.profile_path.trim() !== "";
         
         // Deve ter nome
@@ -1466,8 +1462,7 @@ const AppShell: React.FC = () => {
       });
 
       let mapped = mapRows(moviesPart);
-      
-      // Filtros adicionais no frontend (backup caso backend não aplique)
+     
       if (searchYear && !filters.year) {
         const year = parseInt(searchYear);
         mapped = mapped.filter((m) => m.year && parseInt(m.year) === year);
@@ -1496,9 +1491,7 @@ const AppShell: React.FC = () => {
     } finally { setLoading(false); }
   };
 
-  // debounce busca - permite busca mesmo sem login
-  // IMPORTANTE: busca sempre tudo (filmes, séries, pessoas) independente do searchType
-  // O searchType é usado apenas para filtrar a visualização, não a busca em si
+
   useEffect(() => {
     const tmo = setTimeout(() => {
       if (searchTerm.trim()) runSearch(searchTerm);
@@ -1506,7 +1499,6 @@ const AppShell: React.FC = () => {
     return () => clearTimeout(tmo);
   }, [searchTerm, lang, searchSort, searchYear, searchYearTo, searchMinRating, searchMinVotes, searchOnlyWithPoster]);
 
-  // Handler para "Esqueceu a senha" - Passo 1: Verificar email
   const handleForgotPasswordCheckEmail = async (e?: React.MouseEvent) => {
     e?.preventDefault();
     
@@ -1520,7 +1512,6 @@ const AppShell: React.FC = () => {
     setForgotPasswordMessage("");
     
     try {
-      // Verificar se o email existe usando o endpoint de reset
       const result = await api.checkEmailExists(forgotPasswordEmail);
       
       if (result.ok && result.exists) {
@@ -1529,7 +1520,7 @@ const AppShell: React.FC = () => {
         setForgotPasswordError("");
         setForgotPasswordMessage("");
       } else {
-        // Se result.exists é false, significa que o email não foi encontrado
+
         if (result.exists === false) {
           setForgotPasswordError("Email não encontrado. Verifique se o email está correto.");
         } else {
@@ -1546,7 +1537,6 @@ const AppShell: React.FC = () => {
     }
   };
 
-  // Handler para "Esqueceu a senha" - Passo 2: Redefinir senha
   const handleForgotPasswordReset = async (e?: React.MouseEvent) => {
     e?.preventDefault();
     
@@ -1570,7 +1560,7 @@ const AppShell: React.FC = () => {
       if (result.ok) {
         setForgotPasswordMessage(result.message || "Senha alterada com sucesso! Faça login com sua nova senha.");
         setForgotPasswordError("");
-        // Limpar campos após 2 segundos e voltar ao login
+ 
         setTimeout(() => {
           setShowForgotPassword(false);
           setForgotPasswordEmail("");
@@ -1594,21 +1584,21 @@ const AppShell: React.FC = () => {
     }
   };
 
-  // persist
+
   useEffect(() => { try { localStorage.setItem(KEY_FAVS, JSON.stringify(favorites)); } catch {} }, [favorites]);
   useEffect(() => { try { localStorage.setItem(KEY_LISTS, JSON.stringify(lists)); } catch {} }, [lists]);
   useEffect(() => { try { localStorage.setItem(KEY_STATES, JSON.stringify(userStates)); } catch {} }, [userStates]);
   useEffect(() => { try { localStorage.setItem(KEY_HISTORY, JSON.stringify(watchHistory)); } catch {} }, [watchHistory]);
   useEffect(() => { try { localStorage.setItem(KEY_STATS, JSON.stringify(userStats)); } catch {} }, [userStats]);
 
-  // favoritos
+
   const toggleFavorite = (movie: MovieT, skipConfirm = false) => {
     if (viewingShared) return;
     if (!isLoggedIn) { setShowLogin(true); return; }
     const wasFav = favorites.some((f) => f.id === movie.id && (f.media || "movie") === (movie.media || "movie"));
     
     if (wasFav && !skipConfirm) {
-      // Se está tentando remover, pedir confirmação
+
       const movieTitle = movie.title || "este item";
       setConfirmModal({
         show: true,
@@ -1624,7 +1614,7 @@ const AppShell: React.FC = () => {
       return;
     }
     
-    // Adicionar favorito (sem confirmação necessária)
+   
     setFavorites((prev) =>
       wasFav
         ? prev.filter((f) => !(f.id === movie.id && (f.media || "movie") === (movie.media || "movie")))
@@ -1634,17 +1624,13 @@ const AppShell: React.FC = () => {
   };
   const isFavorite = (m: MovieT) => favorites.some((f) => f.id === m.id && (f.media || "movie") === (m.media || "movie"));
 
-  // estados do usuário
-  // Obter gêneros favoritos baseado no histórico e favoritos
   const getFavoriteGenres = (): string[] => {
     const genreCount: Record<string, number> = {};
     const allItems = [...favorites, ...watchHistory.map(h => h.movie)];
-    
-    // Por enquanto retornamos array vazio - precisa de dados de gênero dos filmes
+
     return [];
   };
 
-  // Atualizar estatísticas do usuário
   const updateUserStats = useCallback(() => {
     const stats = {
       totalWatched: watchHistory.length,
@@ -1661,7 +1647,7 @@ const AppShell: React.FC = () => {
     setUserStats(stats);
   }, [watchHistory, favorites, lists]);
 
-  // Adicionar ao histórico quando marcar como assistido
+
   const addToWatchHistory = useCallback((movie: MovieT) => {
     const key = mediaKey(movie);
     setWatchHistory(prev => {
@@ -1673,20 +1659,19 @@ const AppShell: React.FC = () => {
     });
   }, []);
 
-  // Remover do histórico
+
   const removeFromWatchHistory = useCallback((movie: MovieT) => {
     const key = mediaKey(movie);
     setWatchHistory(prev => prev.filter(h => mediaKey(h.movie) !== key));
   }, []);
 
-  // Atualizar stats quando histórico mudar
+
   useEffect(() => {
     updateUserStats();
   }, [watchHistory, favorites, lists, updateUserStats]);
 
-  // Recomendações personalizadas baseadas no histórico e favoritos
   const getPersonalizedRecommendations = (): MovieT[] => {
-    // Por enquanto retorna trending, mas pode ser melhorado com algoritmo
+ 
     return cats.trending?.items?.slice(0, 10) || [];
   };
 
@@ -1698,16 +1683,15 @@ const AppShell: React.FC = () => {
       }
       const k = mediaKey(m);
       const prevState = userStates[k]?.state;
-      
-    // Se marcou como assistido, adicionar ao histórico
+   
     if (state === "watched") {
       addToWatchHistory(m);
       } else if (prevState === "watched") {
-      // Se mudou de "assistido" para outro estado, remover do histórico
+  
       removeFromWatchHistory(m);
     }
       
-      // Salvar cache básico do filme para garantir que apareça na página de coleções
+   
       const movieCache = {
         title: m.title,
         poster_path: m.poster_path,
@@ -1740,7 +1724,7 @@ const AppShell: React.FC = () => {
   };
   const getUserMeta = (m: MovieT) => userStates[mediaKey(m)] || {};
 
-  // listas
+
   const createList = (name: string): string => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     setLists((prev) => [...prev, { id, name, items: [] }]);
@@ -1799,7 +1783,6 @@ const AppShell: React.FC = () => {
   const passwordErrorsRef = useRef(passwordErrors);
   const loginTypeRef = useRef(loginType);
   
-  // Sincronizar refs com estados
   useEffect(() => {
     emailErrorRef.current = emailError;
     passwordErrorRef.current = passwordError;
@@ -1807,16 +1790,13 @@ const AppShell: React.FC = () => {
     passwordErrorsRef.current = passwordErrors;
     loginTypeRef.current = loginType;
   }, [emailError, passwordError, loginError, passwordErrors, loginType]);
-  
-  // Função de input change - usando useCallback com refs para evitar dependências
+
   const formDataRef = useRef(formData);
   useEffect(() => {
     formDataRef.current = formData;
   }, [formData]);
   
-  // Função de input change - ULTRA SIMPLIFICADA
-  // Apenas atualiza o estado, sem validação durante digitação
-  // Usar useCallback SEM dependências para garantir estabilidade
+
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     const newValue = type === "checkbox" ? checked : value;
@@ -1828,7 +1808,7 @@ const AppShell: React.FC = () => {
       return updated;
     });
     
-    // Limpar erros quando começar a digitar (usar refs para não causar re-render)
+  
     if (name === "email") {
       if (emailErrorRef.current) setEmailError("");
       if (loginTypeRef.current === "signin" && loginErrorRef.current) setLoginError("");
@@ -1838,13 +1818,11 @@ const AppShell: React.FC = () => {
       if (passwordErrorsRef.current.length > 0) setPasswordErrors([]);
       if (loginTypeRef.current === "signin" && loginErrorRef.current) setLoginError("");
     }
-  }, []); // SEM dependências - função completamente estável
-  
-  // Validação apenas no blur (não durante digitação)
+  }, []); 
+
   const handleInputBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
     const { name } = e.target;
-    
-    // Validar apenas quando sair do campo (apenas para cadastro)
+  
     if (loginTypeRef.current === "signup" && (name === "password" || name === "firstName" || name === "lastName" || name === "email")) {
       if (validationTimeoutRef.current) {
         clearTimeout(validationTimeoutRef.current);
@@ -1893,7 +1871,7 @@ const AppShell: React.FC = () => {
     }
   }, []);
   
-  // Limpar timeout ao desmontar
+ 
   useEffect(() => {
     return () => {
       if (validationTimeoutRef.current) {
@@ -1987,12 +1965,10 @@ const AppShell: React.FC = () => {
       }
     }
     
-    // Limpar erros anteriores apenas se não houver validação local
-    // (mantém erros de validação local até o usuário corrigir)
+ 
     
-    // Validações do login
     if (loginType === "signin") {
-      // Limpar erros anteriores antes de validar
+      
       setEmailError("");
       setPasswordError("");
       setLoginError("");
@@ -2005,14 +1981,14 @@ const AppShell: React.FC = () => {
         setPasswordError("Por favor, insira sua senha.");
         return;
       }
-      // Validação básica de formato de email
+ 
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(formData.email.trim())) {
         setEmailError("Por favor, insira um email válido.");
         return;
       }
     } else {
-      // Limpar erros no signup também
+   
       setEmailError("");
       setPasswordError("");
       setLoginError("");
@@ -2022,7 +1998,7 @@ const AppShell: React.FC = () => {
     try {
       let result;
       if (loginType === "signup") {
-        // Combinar nome e sobrenome
+    
         const fullName = formData.lastName?.trim() 
           ? `${formData.firstName.trim()} ${formData.lastName.trim()}`
           : formData.firstName.trim();
@@ -2033,11 +2009,10 @@ const AppShell: React.FC = () => {
           formData.password
         );
       } else {
-        // IMPORTANTE: Não fazer trim na senha no login - pode remover espaços intencionais
-        // O backend fará o trim se necessário
+      
         result = await api.authSignin(
           formData.email.trim().toLowerCase(),
-          formData.password.trim() // Apenas trim de espaços nas extremidades
+          formData.password.trim() 
         );
       }
 
@@ -2049,12 +2024,10 @@ const AppShell: React.FC = () => {
         let errorMsg = "Erro ao fazer login";
         let actualError = result.error;
         let actualMessage = (result as any).message;
-        
-        // O erro pode vir como string JSON dentro de outra string
-        // Exemplo: "HTTP 401: {"ok":false,"error":"credenciais_invalidas","message":"Senha incorreta"}"
+       
         if (typeof result.error === "string" && result.error.includes("{")) {
           try {
-            // Tentar extrair o JSON da string
+           
             const jsonMatch = result.error.match(/\{.*\}/);
             if (jsonMatch) {
               const parsedError = JSON.parse(jsonMatch[0]);
@@ -2067,7 +2040,7 @@ const AppShell: React.FC = () => {
           }
         }
         
-        // Verificar se é erro de backend não disponível
+    
         if (actualError && String(actualError).includes("Backend não disponível")) {
           errorMsg = "Backend não está rodando. Por favor, inicie o servidor: cd api && npm run dev";
         pushToast({ message: errorMsg, tone: "err" });
@@ -2075,24 +2048,22 @@ const AppShell: React.FC = () => {
           console.error("[handleSubmit] Backend não disponível. Verifique se o servidor está rodando na porta 4001.");
           return;
         }
-        
-        // Tratar erro de credenciais inválidas (senha ou email incorreto)
+
         if (actualError === "credenciais_invalidas" || 
             actualError === "Credenciais inválidas" || 
             actualError === "INVALID_LOGIN_CREDENTIALS" ||
             String(actualError).includes("credenciais_invalidas") ||
             String(result.error).includes("credenciais_invalidas")) {
-          // Para erros de credenciais no login, mostrar abaixo do campo de senha (estilo Instagram)
+    
           if (loginType === "signin") {
-            // Mensagem estilo Instagram
+         
             errorMsg = actualMessage || "Sua senha está incorreta. Confira-a.";
             console.log("[handleSubmit] Definindo passwordError:", errorMsg);
             console.log("[handleSubmit] Estado passwordError antes:", passwordError);
             setPasswordError(errorMsg);
             console.log("[handleSubmit] passwordError definido, aguardando re-render...");
             setAuthLoading(false);
-            // Limpar campo de senha após erro (opcional, mas comum em apps)
-            // setFormData(prev => ({ ...prev, password: "" }));
+        
             return;
           } else {
             errorMsg = actualMessage || "Erro ao criar conta";
@@ -2101,8 +2072,7 @@ const AppShell: React.FC = () => {
             return;
           }
         }
-        
-        // Tratar email já cadastrado
+   
         if (result.error === "email_ja_cadastrado") {
           if (loginType === "signup") {
             setEmailError("Este email já está cadastrado. Use 'Esqueci minha senha' se necessário.");
@@ -2116,7 +2086,7 @@ const AppShell: React.FC = () => {
           }
         }
         
-        // Tratar senha fraca
+  
         if (result.error === "senha_fraca") {
           const errors = (result as any).errors || [];
           errorMsg = errors.length > 0 
@@ -2127,7 +2097,7 @@ const AppShell: React.FC = () => {
           return;
         }
         
-        // Tratar email inválido
+        
         if (result.error === "email_invalido") {
           if (loginType === "signin") {
             setEmailError((result as any).message || "Formato de email inválido");
@@ -2140,14 +2110,14 @@ const AppShell: React.FC = () => {
           }
         }
         
-        // Tratar nome obrigatório
+
         if (result.error === "nome_obrigatorio") {
           pushToast({ message: "Nome é obrigatório", tone: "err" });
           setAuthLoading(false);
           return;
         }
         
-        // Erro genérico
+
         if (result.error) {
           errorMsg = result.error;
           pushToast({ message: errorMsg, tone: "err" });
@@ -2161,7 +2131,7 @@ const AppShell: React.FC = () => {
         return;
       }
 
-      // Login bem-sucedido
+      
       if (result.user) {
         setIsLoggedIn(true);
         const userEmail = result.user.email || formData.email.trim().toLowerCase();
@@ -2178,9 +2148,9 @@ const AppShell: React.FC = () => {
         setFormData({ firstName: "", lastName: "", email: "", password: "", confirmPassword: "", acceptTerms: false });
         setPasswordErrors([]);
         setEmailError("");
-        setLoginError(""); // Limpar erro de login
+        setLoginError(""); 
         
-        // Salvar tokens do Firebase (idToken e refreshToken)
+       
         if (result.idToken) {
           try {
             console.log("[handleSubmit] Salvando idToken no localStorage");
@@ -2197,14 +2167,14 @@ const AppShell: React.FC = () => {
           console.warn("[handleSubmit] Result completo:", result);
         }
         
-        // Salvar último email usado para recuperar nome na landing page
+        
         if (userEmail) {
           try {
             localStorage.setItem('vetra:last_email', userEmail);
           } catch {}
         }
         
-        // Sempre carregar perfil completo do Firestore após login
+  
         if (userEmail) {
           loadProfile(userEmail);
         }
@@ -2218,11 +2188,11 @@ const AppShell: React.FC = () => {
       console.error("Erro na autenticação:", error);
       console.error("Erro completo:", JSON.stringify(error, null, 2));
       
-      // Verificar se o erro contém informações de credenciais inválidas
+
       const errorMessage = error?.message || error?.error || String(error);
       const errorString = JSON.stringify(error);
       
-      // Se for erro de credenciais, mostrar no campo de senha
+   
       if (errorMessage.includes("credenciais_invalidas") || 
           errorMessage.includes("Credenciais inválidas") ||
           errorMessage.includes("INVALID_LOGIN_CREDENTIALS") ||
@@ -2236,7 +2206,7 @@ const AppShell: React.FC = () => {
         }
       }
       
-      // Se for erro de email, mostrar no campo de email
+   
       if (errorMessage.includes("email") && (errorMessage.includes("inválido") || errorMessage.includes("inválido"))) {
         if (loginType === "signin") {
           setEmailError("Por favor, insira um email válido.");
@@ -2245,7 +2215,7 @@ const AppShell: React.FC = () => {
         }
       }
       
-      // Erro genérico
+
       pushToast({ message: error?.message || "Erro ao fazer login. Tente novamente.", tone: "err" });
       setAuthLoading(false);
     } finally {
@@ -2253,15 +2223,15 @@ const AppShell: React.FC = () => {
     }
   };
 
-  // carregar perfil quando logar (sempre recarregar para garantir dados atualizados)
+
   useEffect(() => {
     if (isLoggedIn && (user?.email || "").trim()) {
       loadProfile(user!.email!);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  
   }, [isLoggedIn, user?.email]);
 
-  // deep link helpers (abrir modal por rota)
+
   const openDetailsByRoute = useCallback(async (media: MediaT, id: number): Promise<void> => {
     try {
       const d: ApiDetails = await api.details(media, id);
@@ -2285,14 +2255,14 @@ const AppShell: React.FC = () => {
     }
   }, []);
 
-  // Footer navigation links
+
   const goToHomeCategory = (key: CatKey) => {
     setActiveTab("home");
     if (!cats[key]?.initialized && !cats[key]?.loading) loadCategory(key);
     requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   };
 
-  // ================= MovieCard =================
+
   const MovieCard: React.FC<{ movie: MovieT }> = ({ movie }) => {
     const openDetails = (e?: React.MouseEvent) => {
       e?.stopPropagation();
@@ -2357,7 +2327,7 @@ const AppShell: React.FC = () => {
                 )}
               </div>
               
-              {/* Tamanho mínimo 44x44px para touch */}
+              {}
               <div className="flex gap-2 sm:gap-1.5 justify-center">
                 {!viewingShared && (
                   <button
@@ -2414,7 +2384,7 @@ const AppShell: React.FC = () => {
     );
   };
 
-  // ======== MovieModal por rota ========
+
   const MovieRouteModal: React.FC = () => {
     const { id } = useParams();
     const location = useLocation();
@@ -2453,7 +2423,6 @@ const AppShell: React.FC = () => {
         return;
       }
       
-      // Se já tem o filme carregado com o mesmo ID, não recarrega
       if (selectedMovie && selectedMovie.id === movieId && (selectedMovie.media || selectedMovie._details?.media) === mediaType) {
         setLoading(false);
         return;
@@ -2473,20 +2442,19 @@ const AppShell: React.FC = () => {
         });
       
       return () => {
-        // Limpa apenas o loading quando desmonta ou muda de rota
-        // Não limpa selectedMovie aqui para evitar flickering
+       
         setLoading(false);
       };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+
     }, [id, mediaType, openDetailsByRoute]);
     
     const d: ApiDetails | undefined = selectedMovie?._details;
     const runtimeStr = d?.runtime ? `${Math.floor(d.runtime / 60)}h ${d.runtime % 60}min` : undefined;
 
-    // Definir tab padrão de mídia baseado no que está disponível
+  
     useEffect(() => {
       if (d) {
-        // Definir tab padrão baseado no que está disponível
+       
         if (d.allVideos && d.allVideos.length > 0) {
           setActiveMediaTab("videos");
         } else if (d.images?.backdrops && d.images.backdrops.length > 0) {
@@ -2497,7 +2465,7 @@ const AppShell: React.FC = () => {
       }
     }, [d?.id]);
 
-    // Carregar comentários quando o filme estiver carregado
+
     useEffect(() => {
       if (!selectedMovie || !mediaType || !id) return;
       const movieId = parseInt(id);
@@ -2516,14 +2484,14 @@ const AppShell: React.FC = () => {
         });
     }, [selectedMovie?.id, mediaType, id]);
 
-    // trava scroll do body enquanto o modal está aberto
+
     useEffect(() => {
       const prev = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       return () => { document.body.style.overflow = prev; };
     }, []);
 
-    // Funções para gerenciar comentários
+
     const handleCreateComment = async () => {
       if (!isLoggedIn) {
         pushToast({ message: "Você precisa estar logado para comentar", tone: "err" });
@@ -2587,10 +2555,8 @@ const AppShell: React.FC = () => {
       }
     };
 
-    // Renderiza o modal SEMPRE (mesmo durante loading ou erro)
-    // Isso garante que o modal apareça imediatamente quando a rota mudar
+  
     
-    // Estado de erro (prioridade máxima)
     if (error) {
       return (
         <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => navigate(-1)}>
@@ -2618,11 +2584,11 @@ const AppShell: React.FC = () => {
       );
     }
 
-    // Se tem filme selecionado, SEMPRE mostra as informações (ignora loading)
+
     if (selectedMovie) {
-      // Continua para o return final que mostra o modal completo
+
     } else if (loading) {
-      // Só mostra loading se NÃO tiver filme selecionado E estiver carregando
+     
       return (
         <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => navigate(-1)}>
           <div className="bg-gray-900 rounded-lg p-6 sm:p-8 text-center max-w-sm w-full mx-4">
@@ -2633,7 +2599,7 @@ const AppShell: React.FC = () => {
         </div>
       );
     } else {
-      // Se não tem filme e não está carregando, algo deu errado
+     
       return (
         <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => navigate(-1)}>
           <div className="bg-gray-900 rounded-lg p-6 sm:p-8 text-center max-w-sm w-full mx-4">
@@ -2748,11 +2714,10 @@ const AppShell: React.FC = () => {
 
             <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 mb-6">
               {(() => {
-                // Função helper para encontrar trailer em um array de vídeos
+ 
                 const findTrailerInVideos = (videos: any[]): string | null => {
                   if (!videos || videos.length === 0) return null;
-                  
-                  // Prioridade 1: Trailer oficial do YouTube
+         
                   const officialTrailer = videos.find((v: any) => 
                     v.site === "YouTube" && 
                     (v.type === "Trailer" || v.type === "Teaser") && 
@@ -2763,7 +2728,7 @@ const AppShell: React.FC = () => {
                     return `https://www.youtube.com/watch?v=${officialTrailer.key}`;
                   }
                   
-                  // Prioridade 2: Qualquer Trailer/Teaser do YouTube
+         
                   const anyTrailer = videos.find((v: any) => 
                     v.site === "YouTube" && 
                     (v.type === "Trailer" || v.type === "Teaser") && 
@@ -2773,7 +2738,7 @@ const AppShell: React.FC = () => {
                     return `https://www.youtube.com/watch?v=${anyTrailer.key}`;
                   }
                   
-                  // Prioridade 3: Qualquer vídeo do YouTube
+                
                   const anyYouTubeVideo = videos.find((v: any) => 
                     v.site === "YouTube" && v.key
                   );
@@ -2784,17 +2749,17 @@ const AppShell: React.FC = () => {
                   return null;
                 };
                 
-                // Função para encontrar trailer em array de trailers processados
+ 
                 const findTrailerInTrailers = (trailers: any[]): string | null => {
                   if (!trailers || trailers.length === 0) return null;
                   
-                  // Prioriza trailer oficial
+           
                   const officialTrailer = trailers.find((t: any) => t.official && t.key);
                   if (officialTrailer?.key) {
                     return `https://www.youtube.com/watch?v=${officialTrailer.key}`;
                   }
                   
-                  // Qualquer trailer com key
+
                   const anyTrailer = trailers.find((t: any) => t.key);
                   if (anyTrailer?.key) {
                     return `https://www.youtube.com/watch?v=${anyTrailer.key}`;
@@ -2803,27 +2768,26 @@ const AppShell: React.FC = () => {
                   return null;
                 };
                 
-                // Busca o trailer com prioridade:
+               
                 let trailerUrl: string | null = null;
                 
-                // 1. Verifica trailer_url direto (se existir e for válido)
                 if (d?.trailer_url && d.trailer_url.trim() !== "") {
                   trailerUrl = d.trailer_url;
                 }
-                // 2. Verifica trailers array (já processados, prioriza oficial)
+            
                 if (!trailerUrl && d?.trailers && d.trailers.length > 0) {
                   trailerUrl = findTrailerInTrailers(d.trailers);
                 }
-                // 3. Verifica allVideos (todos os vídeos disponíveis)
+         
                 if (!trailerUrl && d?.allVideos && d.allVideos.length > 0) {
                   trailerUrl = findTrailerInVideos(d.allVideos);
                 }
-                // 4. Verifica videos array (fallback)
+         
                 if (!trailerUrl && d?.videos && Array.isArray(d.videos) && d.videos.length > 0) {
                   trailerUrl = findTrailerInVideos(d.videos);
                 }
                 
-                // Renderiza o botão baseado na disponibilidade do trailer
+             
                 if (trailerUrl) {
                   return (
                     <a 
@@ -3685,7 +3649,7 @@ const AppShell: React.FC = () => {
       })();
     }, [id, lang]);
 
-    // trava scroll do body enquanto o modal está aberto
+
     useEffect(() => {
       const prev = document.body.style.overflow;
       document.body.style.overflow = "hidden";
@@ -3761,7 +3725,7 @@ const AppShell: React.FC = () => {
       .sort((a: any, b: any) => (b.vote_average || 0) - (a.vote_average || 0))
       .slice(0, 8);
 
-    // Componente para a seção "Conhecido(a) por" com scroll
+
     const KnownForSection: React.FC<{ items: any[] }> = ({ items }) => {
       const scrollContainerRef = useRef<HTMLDivElement>(null);
       const [showLeftArrow, setShowLeftArrow] = useState(false);
@@ -3987,8 +3951,7 @@ const AppShell: React.FC = () => {
                         <select 
                           onChange={(e) => {
                             const filter = e.target.value;
-                            // Filtrar por tipo (cast/crew)
-                            // Implementar filtro se necessário
+                           
                           }}
                           className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md px-3 py-1.5 text-sm"
                         >
@@ -4150,7 +4113,7 @@ const AppShell: React.FC = () => {
     );
   };
 
-  // ---------- Rodapés ----------
+
   const MobileFooter: React.FC = () => (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-slate-300 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/90 dark:supports-[backdrop-filter]:bg-slate-900/90 safe-area-inset-bottom" aria-label="Navegação inferior" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <div className="grid grid-cols-5 h-16">
@@ -4279,7 +4242,7 @@ const AppShell: React.FC = () => {
     </footer>
   );
 
-  // ---------- Export/Import ----------
+
   const exportJSON = () => {
     const data = { favorites, lists, userStates };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -4321,7 +4284,7 @@ const AppShell: React.FC = () => {
     } catch { pushToast({ message: "Falha ao importar", tone: "err" }); }
   };
 
-  // ---------- Drag & Drop nativo nas listas ----------
+
   const dragSrc = useRef<{ listId: string; idx: number } | null>(null);
   const onDragStart = (listId: string, idx: number) => (e: React.DragEvent) => {
     dragSrc.current = { listId, idx };
@@ -4343,7 +4306,7 @@ const AppShell: React.FC = () => {
     dragSrc.current = null;
   };
 
-  // ---------- Componente extraído: Detalhe da Lista ----------
+
   const ListDetail: React.FC<{ lst: UserList }> = ({ lst }) => {
     const [order, setOrder] = useState<"recent" | "year" | "rating">("recent");
 
@@ -4351,7 +4314,7 @@ const AppShell: React.FC = () => {
       const arr = [...lst.items];
       if (order === "year") return arr.sort((a, b) => parseInt(b.year || "0") - parseInt(a.year || "0"));
       if (order === "rating") return arr.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-      return arr; // “recentes” respeita a ordem atual (inclui DnD)
+      return arr; 
     }, [lst.items, order]);
 
     const cover = lst.items.find((m) => m.poster_path) || lst.items[0];
@@ -4472,7 +4435,7 @@ const AppShell: React.FC = () => {
     setPeoplePage(page);
   };
 
-  // Histórico de visualização
+
   const HistoryContent = (
     <section>
       <div className="mb-8">
@@ -4503,7 +4466,7 @@ const AppShell: React.FC = () => {
     </section>
   );
 
-  // Buscar pessoas na API quando houver termo de busca
+ 
   useEffect(() => {
     if (!peopleSearchTerm.trim()) {
       setSearchedPeople([]);
@@ -4516,7 +4479,7 @@ const AppShell: React.FC = () => {
       try {
         console.log("[PeopleSearch] Buscando pessoas:", peopleSearchTerm);
         
-        // Buscar primeira página
+
         const firstPageData = await api.searchPeople(peopleSearchTerm, 1, lang);
         let allResults = (firstPageData as any).results || [];
         const totalPages = (firstPageData as any).total_pages || 1;
@@ -4528,8 +4491,7 @@ const AppShell: React.FC = () => {
           totalResults
         });
         
-        // Buscar páginas adicionais (até 10 páginas ou todas se houver menos)
-        // Aumentado para 10 páginas para garantir que encontre mais resultados
+
         const maxPages = Math.min(totalPages, 10); 
         if (maxPages > 1) {
           const pagePromises = [];
@@ -4538,7 +4500,7 @@ const AppShell: React.FC = () => {
           }
           
           try {
-            // Usar Promise.allSettled para não falhar se alguma página der erro
+   
             const additionalPages = await Promise.allSettled(pagePromises);
             additionalPages.forEach((result: any) => {
               if (result.status === 'fulfilled') {
@@ -4555,7 +4517,7 @@ const AppShell: React.FC = () => {
           }
         }
         
-        // Filtrar apenas pessoas com nome válido
+
         const peopleResults = allResults.filter((x: any) => {
           const hasName = x.name && x.name.trim() !== "";
           return hasName;
@@ -4570,12 +4532,12 @@ const AppShell: React.FC = () => {
       } finally {
         setPeopleSearchLoading(false);
       }
-    }, 500); // Debounce de 500ms
+    }, 500);
 
     return () => clearTimeout(timeoutId);
   }, [peopleSearchTerm, lang]);
 
-  // Usar pessoas buscadas se houver termo, senão usar lista popular
+
   const filteredPeople = useMemo(() => {
     if (peopleSearchTerm.trim()) {
       return searchedPeople;
@@ -4583,7 +4545,7 @@ const AppShell: React.FC = () => {
     return popularPeopleList;
   }, [peopleSearchTerm, searchedPeople, popularPeopleList]);
 
-  // Estatísticas do usuário
+
   const StatsContent = (
     <section>
       <div className="mb-8">
@@ -4783,7 +4745,7 @@ const AppShell: React.FC = () => {
     const [showPasswords, setShowPasswords] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Atualizar valores quando o modal abrir ou o usuário mudar
+   
     useEffect(() => {
       if (showProfileModal) {
         const fullName = user?.name || "";
@@ -4868,7 +4830,7 @@ const AppShell: React.FC = () => {
           setNewPassword("");
           setConfirmPassword("");
           
-          // Logout após mudança de senha (tokens foram revogados)
+         
           setIsLoggedIn(false);
           setUser(null);
           localStorage.removeItem('vetra:idToken');
@@ -4876,8 +4838,7 @@ const AppShell: React.FC = () => {
         } else {
           const errorMsg = result.error || result.message || "Erro ao alterar senha";
           console.error("[handleChangePassword] Erro:", result);
-          
-          // Se token expirado, pedir para fazer login novamente
+      
           if (errorMsg.includes("Token") || errorMsg.includes("token") || errorMsg.includes("Reautentique")) {
             pushToast({ message: "Sua sessão expirou. Faça login novamente para alterar a senha.", tone: "err" });
           } else {
@@ -4892,7 +4853,7 @@ const AppShell: React.FC = () => {
       }
     };
 
-    // Estatísticas do usuário
+   
     const stats = {
       favorites: favorites.length,
       lists: lists.length,
@@ -4975,7 +4936,7 @@ const AppShell: React.FC = () => {
                   )}
                 </div>
 
-                {/* Estatísticas */}
+                {}
                 <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
                   <h3 className="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wide">Estatísticas</h3>
                   <div className="grid grid-cols-2 gap-3">
@@ -5026,7 +4987,7 @@ const AppShell: React.FC = () => {
                   />
                 </div>
 
-                {/* Email (readonly) */}
+                {}
                 <div>
                   <label className="block text-sm font-semibold text-gray-300 mb-2">Email</label>
                   <div className="relative">
@@ -5046,7 +5007,7 @@ const AppShell: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Mudança de Senha */}
+                {}
                 <div className="border-t border-slate-700/50 pt-5">
                   <div className="flex items-center justify-between mb-3">
                     <label className="block text-sm font-semibold text-gray-300">
@@ -5120,7 +5081,7 @@ const AppShell: React.FC = () => {
                   )}
                 </div>
 
-                {/* Botões */}
+                {}
                 <div className="flex gap-3 pt-4">
                   <button
                     onClick={() => setShowProfileModal(false)}
