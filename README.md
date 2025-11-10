@@ -10,7 +10,7 @@ Plataforma moderna e completa para organização, descoberta e compartilhamento 
 
 ##  Sobre o Projeto
 
-VETRA é uma aplicação web full-stack que permite aos usuários descobrir, organizar e compartilhar seus filmes e séries favoritos. O projeto foi desenvolvido  implementando requisitos funcionais e não funcionais, além de diversas funcionalidades extras.
+VETRA é uma aplicação web full-stack que permite aos usuários descobrir, organizar e compartilhar seus filmes e séries favoritos. O projeto foi desenvolvido implementando  requisitos funcionais e não funcionais, além de diversas funcionalidades extras.
 
 ###  Funcionalidades Principais
 
@@ -162,6 +162,29 @@ API_PORT=4001
 SHARE_BASE_URL=http://localhost:5173
 ```
 
+#### Como obter as credenciais do Firebase:
+
+1. Acesse o [Firebase Console](https://console.firebase.google.com/)
+2. Crie um novo projeto ou selecione um existente
+3. Vá em **Configurações do Projeto** (ícone de engrenagem)
+4. Acesse a aba **Contas de Serviço**
+5. Clique em **Gerar nova chave privada**
+6. Baixe o arquivo JSON
+7. Extraia os campos:
+   - `project_id` → `FIREBASE_PROJECT_ID`
+   - `client_email` → `FIREBASE_CLIENT_EMAIL`
+   - `private_key` → `FIREBASE_PRIVATE_KEY` (mantenha as quebras de linha `\n`)
+
+**Importante:** O `FIREBASE_PRIVATE_KEY` deve estar entre aspas e manter as quebras de linha `\n`.
+
+#### Como obter a API Key do TMDB:
+
+1. Acesse [The Movie Database](https://www.themoviedb.org/)
+2. Crie uma conta ou faça login
+3. Vá em **Configurações** → **API**
+4. Clique em **Criar** para gerar uma nova chave de API
+5. Copie a chave e cole em `TMDB_V3_API_KEY`
+
 ### Configuração do Frontend
 
 1. **Crie o arquivo `.env` na pasta `app/`:**
@@ -188,7 +211,7 @@ VITE_TMDB_LANG=pt-BR
 
 **Nota:** O frontend funciona principalmente através do backend. As variáveis do TMDB no frontend são opcionais e usadas apenas como fallback.
 
-##  Executando o Projeto
+## 🚀 Executando o Projeto
 
 ### Modo Desenvolvimento
 
@@ -232,7 +255,7 @@ cd api
 npm start
 ```
 
-##  Deploy
+## 🌐 Deploy
 
 ### Deploy no Vercel
 
@@ -366,7 +389,7 @@ lsof -ti:4001 | xargs kill
 2. Execute `npm install` novamente
 3. Verifique se está usando Node.js 18+
 
-##  Estrutura de Arquivos Detalhada
+## Estrutura de Arquivos Detalhada
 
 ### Backend (`api/`)
 
@@ -463,7 +486,7 @@ API Backend (Express)
 Firebase (Auth + Firestore) + TMDB API
 ```
 
-## Segurança
+##  Segurança
 
 - Autenticação via Firebase Auth
 - Validação de dados no backend
@@ -488,7 +511,6 @@ Firebase (Auth + Firestore) + TMDB API
 - [ ] Exportação de listas (PDF/CSV)
 - [ ] Integração com mais serviços de streaming
 - [ ] Sistema de reviews e ratings próprios
-
 
 
 ---
