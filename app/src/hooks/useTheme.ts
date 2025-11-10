@@ -11,7 +11,7 @@ export default function useTheme() {
     return saved ?? system();
   });
 
-  // aplica a classe .dark no <html> e persiste
+ 
   useEffect(() => {
     const root = document.documentElement;
     if (theme === "dark") root.classList.add("dark");
@@ -19,7 +19,7 @@ export default function useTheme() {
     localStorage.setItem("vetra:theme", theme);
   }, [theme]);
 
-  // se o sistema mudar e não houver preferência salva, ajusta
+ 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => {
