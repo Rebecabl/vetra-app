@@ -813,39 +813,44 @@ Acesse `http://localhost:5173` para ver a aplicação em funcionamento.
 
 ## Segurança
 
-Autenticação via Firebase Auth (tokens verificados no backend)
+🔹 Autenticação via Firebase Auth (tokens verificados no backend)
 
-Helmet, CORS restritivo, compression e rate limiting
+🔹 Helmet, CORS restritivo, compression e rate limiting
 
-Validação e sanitização de entrada (schemas)
+🔹 Validação e sanitização de entrada (schemas)
 
-Logs e tratamento padronizado de erros (sem vazar stack sensível em produção)
+🔹 Logs e tratamento padronizado de erros (sem vazar stack sensível em produção)
 
-Validação de senhas fortes e proteção contra força bruta
+🔹 Validação de senhas fortes e proteção contra força bruta
 
 ## Operação e Monitoramento
 
-Logs estruturados (níveis: info, warn, error)
+🔹 Logs estruturados (níveis: info, warn, error)
 
-Healthcheck do backend (/health, opcional, para verificação pelo frontend/infra)
+🔹 Healthcheck do backend (/health, opcional, para verificação pelo frontend/infra)
 
-Métricas e tracing (integrações futuras)
+🔹 Métricas e tracing (integrações futuras)
 
 ## Troubleshooting
 
 ### Firebase não inicializa
 
-Checar credenciais e formato da FIREBASE_PRIVATE_KEY com \n
+🔹 Checar credenciais e formato da FIREBASE_PRIVATE_KEY com \n
 
-Confirmar permissões da conta de serviço e projeto ativo no console
+🔹 Confirmar permissões da conta de serviço e projeto ativo no console
 
 ### TMDB retornando 401
 
-Verificar TMDB_V3_API_KEY e se a chave está ativa
+🔹 Verificar TMDB_V3_API_KEY e se a chave está ativa
 
-Checar espaços em branco; regerar chave se necessário
+🔹 Checar espaços em branco; regerar chave se necessário
 
 ### Porta em uso
+
+🔹 Identificar o processo ocupando a porta
+
+
+🔹 Finalizar o processo e tentar novamente
 
 **Windows:**
 ```bash
