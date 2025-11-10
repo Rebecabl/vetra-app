@@ -1,26 +1,12 @@
-/**
- * Utilitários de compartilhamento
- * 
- * Funções auxiliares para criar e gerenciar links compartilháveis.
- * 
- * @module utils/share
- */
 
-/**
- * Gera um slug único para compartilhamento
- * @returns {string} Slug aleatório
- */
+  @module utils/share
+ 
+
 export function generateShareSlug(): string {
   return Math.random().toString(36).substring(2, 15) + 
          Math.random().toString(36).substring(2, 15);
 }
 
-/**
- * Constrói URL de compartilhamento
- * @param {string} slug - Slug do compartilhamento
- * @param {string} baseUrl - URL base (opcional)
- * @returns {string} URL completa
- */
 export function buildShareUrl(slug: string, baseUrl?: string): string {
   const base = baseUrl || window.location.origin;
   return `${base}/share/${slug}`;
