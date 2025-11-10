@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 const env = import.meta.env as any;
 
-// API_BASE padrão para desenvolvimento - usa localhost:4001 se não configurado
+
 const API_BASE: string = (env.VITE_API_BASE || "").trim() || "http://localhost:4001";
 const TMDB_BEARER: string | undefined = (env.VITE_TMDB_BEARER || "").trim() || undefined; // v4
 const TMDB_V3: string | undefined = (env.VITE_TMDB_V3 || "").trim() || undefined;        // v3
@@ -35,7 +35,7 @@ export type ApiBrowseResp = {
 export type ApiDetails = {
   id: number;
   media: "movie" | "tv";
-  /** alias p/ o front que usa media_type */
+
   media_type?: "movie" | "tv";
   title: string;
   original_title?: string | null;
@@ -46,15 +46,15 @@ export type ApiDetails = {
   runtime?: number | null;
   vote_average: number | null;
   vote_count: number | null;
-  /** alias p/ o front que usa rating */
+
   rating?: number | null;
   genres?: string[];
   directors?: string[];
   cast?: Array<{ id: number; name: string; character?: string; profile_path?: string | null }>;
   recommendations?: ApiMovie[];
-  /** videos crus do TMDb */
+
   videos?: Array<{ key: string; site: string; type: string; name: string; official?: boolean; id?: string }>;
-  /** trailers já "limpos" (YouTube) p/ compat do front */
+
   trailers?: Array<{ id: string; name: string; key: string; official?: boolean }>;
   trailer_url?: string | null;
   release_date?: string | null;
@@ -72,7 +72,7 @@ export type ApiDetails = {
     rent?: Array<{ provider_id: number; provider_name: string; logo_path?: string | null }>;
     buy?: Array<{ provider_id: number; provider_name: string; logo_path?: string | null }>;
   };
-  // Novos campos adicionados
+
   writers?: Array<{ name: string; job: string }>;
   producers?: Array<{ name: string; job: string }>;
   cinematographers?: string[];
@@ -155,7 +155,7 @@ export type UserProfile = {
   updatedAt?: string | null;
 };
 
-// ---------- helpers ----------
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchJSON(url: string, opts: RequestInit = {}, timeoutMs = 12000): Promise<any> {
@@ -165,15 +165,15 @@ async function fetchJSON(url: string, opts: RequestInit = {}, timeoutMs = 12000)
     const resp = await fetch(url, { ...opts, signal: ac.signal });
     if (!resp.ok) {
       const errorText = await resp.text().catch(() => resp.statusText);
-      // Tentar fazer parse do JSON se possível
+
       try {
         const errorJson = JSON.parse(errorText);
-        // Se for um objeto JSON válido, retornar como erro estruturado
+
         if (errorJson && typeof errorJson === 'object') {
           return { ok: false, ...errorJson };
         }
       } catch {
-        // Se não for JSON, lançar erro como string
+
       }
       throw new Error(`HTTP ${resp.status}: ${errorText || resp.statusText}`);
     }
@@ -191,7 +191,7 @@ async function fetchJSON(url: string, opts: RequestInit = {}, timeoutMs = 12000)
 
 let backendOK: boolean | null = null;
 let lastHealthCheck: number = 0;
-const HEALTH_CHECK_CACHE_MS = 5000; // Cache por 5 segundos
+const HEALTH_CHECK_CACHE_MS = 5000;
 
 async function ensureBackendHealth(forceCheck = false): Promise<boolean> {
   if (!API_BASE || API_BASE.trim() === "") {
@@ -199,7 +199,7 @@ async function ensureBackendHealth(forceCheck = false): Promise<boolean> {
     return false;
   }
   
-  // Se já verificou recentemente e não for forçado, usa cache
+
   const now = Date.now();
   if (!forceCheck && backendOK !== null && (now - lastHealthCheck) < HEALTH_CHECK_CACHE_MS) {
     return backendOK;
@@ -207,8 +207,7 @@ async function ensureBackendHealth(forceCheck = false): Promise<boolean> {
   
   try {
     console.log("[ensureBackendHealth] Verificando backend em:", API_BASE);
-    // Tenta /health primeiro (server.js), depois /api/health (index.js)
-    // Timeout curto para não bloquear a UI
+
     let r;
     try {
       r = await fetchJSON(`${API_BASE}/health`, {}, 3000);
@@ -237,22 +236,21 @@ async function ensureBackendHealth(forceCheck = false): Promise<boolean> {
   }
 }
 
-// Função para resetar o cache (útil quando o backend é reiniciado)
+
 export function resetBackendHealthCache() {
   backendOK = null;
   lastHealthCheck = 0;
   console.log("[resetBackendHealthCache] Cache resetado");
 }
 
-// Resetar cache quando a página carregar (para detectar backend reiniciado)
+
 if (typeof window !== 'undefined') {
   window.addEventListener('focus', () => {
-    // Resetar cache quando a janela ganha foco (usuário voltou para a aba)
+
     resetBackendHealthCache();
   });
 }
 
-// prefer v4; se faltar, cai para v3
 function tmdbHeaders() {
   if (TMDB_BEARER) {
     return { headers: { Authorization: `Bearer ${TMDB_BEARER}` } };
@@ -268,7 +266,7 @@ function tmdbUrl(path: string, params: Record<string, any> = {}) {
   return `${TMDB_BASE}${path}?${usp.toString()}`;
 }
 
-// ---------- public API ----------
+
 
 export function tmdbAuthStatus() {
   const status = {
@@ -277,7 +275,7 @@ export function tmdbAuthStatus() {
     lang: LANG,
     apiBase: API_BASE || "",
   };
-  // Log para debug
+
   console.log("[TMDb] Status da API:", {
     hasBearer: status.hasBearer,
     hasV3: status.hasV3,
@@ -293,7 +291,7 @@ export function tmdbAuthStatus() {
 export async function health() {
   if (!API_BASE) return { ok: false, reason: "no-backend" };
   try {
-    // Tenta /health primeiro (server.js), depois /api/health (index.js)
+  
     let r;
     try {
       r = await fetchJSON(`${API_BASE}/health`, {}, 3000);
@@ -306,13 +304,13 @@ export async function health() {
   }
 }
 
-// ---- browse (categorias globais)
+
 export async function browse(cat: "trending" | "popular" | "top_rated" | "now_playing" | "upcoming", page = 1): Promise<ApiBrowseResp> {
   if (await ensureBackendHealth()) {
     return fetchJSON(`${API_BASE}/api/browse/${cat}?page=${page}&lang=${encodeURIComponent(LANG)}`, {}, 12000);
   }
 
-  // TMDb direto
+
   let path = "";
   switch (cat) {
     case "trending":
@@ -336,7 +334,7 @@ export async function browse(cat: "trending" | "popular" | "top_rated" | "now_pl
   return data;
 }
 
-// ---- browse com filtro de watch provider
+
 export async function browsePopularWithFilter(
   filter: "streaming" | "rent" | "cinema" | "tv", 
   page = 1
@@ -349,7 +347,7 @@ export async function browsePopularWithFilter(
     );
   }
 
-  // TMDb direto (fallback)
+
   let path = "";
   const params: any = { page };
   
@@ -380,7 +378,7 @@ export async function browsePopularWithFilter(
   return data;
 }
 
-// ---- search
+
 export async function search(query: string, page = 1, filters?: { year?: number; minRating?: number; genre?: string }): Promise<ApiBrowseResp> {
   if (await ensureBackendHealth()) {
     const params = new URLSearchParams();
@@ -397,27 +395,27 @@ export async function search(query: string, page = 1, filters?: { year?: number;
   return data;
 }
 
-// ---- details
+
 export async function details(media: "movie" | "tv", id: number, lang?: string): Promise<ApiDetails> {
   const language = (lang || LANG);
 
-  // backend
+
   if (await ensureBackendHealth()) {
     try {
       const d = await fetchJSON(`${API_BASE}/api/details/${media}/${id}?lang=${encodeURIComponent(language)}`, {}, 15000);
       return normalizeDetailsFromBackend(d);
     } catch (e: any) {
       console.warn("Backend falhou, tentando TMDb direto:", e?.message);
-      // Continua para TMDb direto
+    
     }
   }
 
-  // TMDb direto
+
   if (!TMDB_BEARER && !TMDB_V3) {
     throw new Error("TMDb API não configurada. Adicione VITE_TMDB_BEARER ou VITE_TMDB_V3 no arquivo .env");
   }
 
-  // append_to_response: videos,credits,recommendations
+
   const url = tmdbUrl(`/${media}/${id}`, {
     append_to_response: "videos,credits,recommendations",
     language,
