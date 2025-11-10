@@ -3,9 +3,9 @@ import React from "react";
 type Props = {
   children: React.ReactNode;
   fallback?: React.ReactNode;
-  /** Se qualquer chave mudar, o boundary é resetado */
+  
   resetKeys?: unknown[];
-  /** Callback quando usuário tenta resetar manualmente */
+  
   onReset?: () => void;
 };
 
@@ -22,11 +22,11 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(_error: Error, _info: React.ErrorInfo) {
-    // logue em algum serviço se quiser
+
   }
 
   componentDidUpdate(prevProps: Props) {
-    // Se resetKeys mudarem, limpa o erro
+   
     if (this.state.hasError) {
       const { resetKeys = [] } = this.props;
       const { resetKeys: prevResetKeys = [] } = prevProps;
