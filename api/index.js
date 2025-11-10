@@ -3,6 +3,8 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 
+import { initFirebase } from "./src/config/firebase.config.js";
+
 import profileRouter from "./src/routes/profile.js";
 import listsRouter from "./src/routes/lists.js";
 import browseRouter from "./src/routes/browse.js";
@@ -15,6 +17,27 @@ import peopleRouter from "./src/routes/people.js";
 import commentsRouter from "./src/routes/comments.js";
 import upcomingRouter from "./src/routes/upcoming.js";
 import { searchHandler } from "./src/routes/movies.js";
+
+try {
+  const hasServiceJson = !!process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const hasTriplet = !!(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY);
+  
+  if (hasServiceJson || hasTriplet) {
+    const result = initFirebase();
+    if (result) {
+      console.log("[api/index] Firebase inicializado com sucesso");
+    } else {
+      console.warn("[api/index] Firebase não inicializado (mas servidor continuará funcionando)");
+    }
+  } else {
+    console.log("[api/index] Credenciais Firebase não encontradas — pulando init (ok em dev)");
+  }
+} catch (error) {
+  console.error("[api/index] Erro ao inicializar Firebase:", error?.message || error);
+  if (process.env.NODE_ENV === 'production') {
+    console.warn("[api/index] Firebase não inicializado em produção. Algumas funcionalidades não estarão disponíveis.");
+  }
+}
 
 const app = express();
 
@@ -60,7 +83,8 @@ app.get("/health", (_req, res) => {
   res.json({
     ok: true,
     status: "ok",
-    tmdb: !!process.env.TMDB_TOKEN || !!process.env.TMDB_API_KEY || !!process.env.TMDB_V3,
+    tmdb: !!(process.env.TMDB_V3_API_KEY || process.env.TMDB_API_KEY || process.env.TMDB_API || process.env.TMDB_V4_TOKEN || process.env.TMDB_TOKEN),
+    firebase: !!(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY)),
     env: process.env.NODE_ENV || "development",
     ts: new Date().toISOString(),
   });
@@ -71,9 +95,23 @@ app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     status: "ok",
-    tmdb: !!process.env.TMDB_TOKEN || !!process.env.TMDB_API_KEY || !!process.env.TMDB_V3,
+    tmdb: !!(process.env.TMDB_V3_API_KEY || process.env.TMDB_API_KEY || process.env.TMDB_API || process.env.TMDB_V4_TOKEN || process.env.TMDB_TOKEN),
+    firebase: !!(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY)),
     env: process.env.NODE_ENV || "development",
     ts: new Date().toISOString(),
+  });
+});
+
+app.get("/", (_req, res) => {
+  res.json({
+    ok: true,
+    message: "VETRA API",
+    version: "1.0.0",
+    endpoints: {
+      health: "/health",
+      apiHealth: "/api/health",
+      docs: "https://github.com/Rebecabl/vetra-app"
+    }
   });
 });
 
