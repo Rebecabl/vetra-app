@@ -1,15 +1,33 @@
 {
-  "buildCommand": "cd app && npm install && npm run build",
-  "outputDirectory": "app/dist",
-  "installCommand": "cd api && npm install",
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/index.js"
+      "src": "api/index.js",
+      "use": "@vercel/node"
     },
     {
-      "source": "/health",
-      "destination": "/api/index.js"
+      "src": "app/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "api/index.js"
+    },
+    {
+      "src": "/health",
+      "dest": "api/index.js"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "app/dist/$1"
     }
   ]
 }

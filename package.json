@@ -6,7 +6,6 @@
     "start:api": "node api/dev.js",
     "install:api": "cd api && npm install",
     "install:app": "cd app && npm install",
-    "install:all": "npm run install:api && npm run install:app",
-    "postinstall": "cd api && npm install || true"
+    "install:all": "npm run install:api && npm run install:app"
   }
 }
