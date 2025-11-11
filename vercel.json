@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "installCommand": "npm run install:all",
+  "installCommand": "cd api && npm install && cd ../app && npm install",
   "builds": [
     {
       "src": "api/index.js",
