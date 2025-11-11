@@ -109,7 +109,7 @@ export function rateLimitMiddleware(keyPrefix, getKey, maxRequests = 5, windowMs
         return res.status(429).json({
           ok: false,
           error: "rate_limit_exceeded",
-          message: "Muitas requisições. Tente novamente mais tarde.",
+          message: "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
           resetAt: result.resetAt.toISOString(),
           resetIn: resetSeconds
         });

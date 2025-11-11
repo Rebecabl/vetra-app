@@ -20,61 +20,40 @@ export function validatePassword(password, email = "", name = "") {
 
   // Tamanho mínimo
   if (password.length < 8) {
-    errors.push("A senha deve ter no mínimo 8 caracteres");
+    errors.push("A senha precisa ter pelo menos 8 caracteres");
+    return { valid: false, errors };
   }
 
-  // Maiúscula
-  if (!/[A-Z]/.test(password)) {
-    errors.push("A senha deve conter pelo menos uma letra maiúscula");
+  // Verificar grupos: letras, dígitos, símbolos
+  const hasLetters = /[a-zA-Z]/.test(password);
+  const hasDigits = /\d/.test(password);
+  const hasSymbols = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+  const groupsCount = [hasLetters, hasDigits, hasSymbols].filter(Boolean).length;
+
+  // Deve conter pelo menos 2 dos 3 grupos
+  if (groupsCount < 2) {
+    errors.push("Use pelo menos dois tipos: letras, números ou símbolos");
+    return { valid: false, errors };
   }
 
-  // Minúscula
-  if (!/[a-z]/.test(password)) {
-    errors.push("A senha deve conter pelo menos uma letra minúscula");
-  }
-
-  // Dígito
-  if (!/\d/.test(password)) {
-    errors.push("A senha deve conter pelo menos um número");
-  }
-
-  // Caractere especial
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
-    errors.push("A senha deve conter pelo menos um caractere especial (!@#$%^&*...)");
-  }
-
-  // Verificar se contém partes do nome
+  // Verificar se contém nome completo (case-insensitive)
   if (name) {
-    const nameParts = name.toLowerCase().split(/\s+/).filter(p => p.length > 2);
+    const nameLower = name.trim().toLowerCase();
     const passwordLower = password.toLowerCase();
-    for (const part of nameParts) {
-      if (passwordLower.includes(part)) {
-        errors.push("A senha não deve conter partes do seu nome");
-        break;
-      }
+    if (nameLower && passwordLower.includes(nameLower)) {
+      errors.push("Sua senha não deve conter seu nome ou e-mail");
+      return { valid: false, errors };
     }
   }
 
-  // Verificar se contém partes do email
+  // Verificar se contém email completo (case-insensitive)
   if (email) {
-    const emailParts = email.toLowerCase().split("@")[0].split(/[._-]/).filter(p => p.length > 2);
+    const emailLower = email.trim().toLowerCase();
     const passwordLower = password.toLowerCase();
-    for (const part of emailParts) {
-      if (passwordLower.includes(part)) {
-        errors.push("A senha não deve conter partes do seu email");
-        break;
-      }
+    if (emailLower && passwordLower.includes(emailLower)) {
+      errors.push("Sua senha não deve conter seu nome ou e-mail");
+      return { valid: false, errors };
     }
-  }
-
-  // Verificar senhas comuns
-  const commonPasswords = [
-    "password", "12345678", "123456789", "1234567890",
-    "qwerty", "abc123", "password123", "admin123",
-    "senha123", "123456", "password1", "welcome123"
-  ];
-  if (commonPasswords.includes(password.toLowerCase())) {
-    errors.push("Esta senha é muito comum. Escolha uma senha mais segura");
   }
 
   return {

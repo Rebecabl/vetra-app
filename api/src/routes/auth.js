@@ -100,7 +100,9 @@ async function sendWelcomeEmail(email, name) {
 }
 
 // POST /api/auth/signup
-router.post("/signup", async (req, res) => {
+router.post("/signup", 
+  rateLimitMiddleware("signup", (req) => getClientIP(req), 5, 15 * 60 * 1000),
+  async (req, res) => {
   try {
     const { name, email, password } = req.body || {};
 
@@ -126,7 +128,7 @@ router.post("/signup", async (req, res) => {
         ok: false, 
         error: "senha_fraca", 
         errors: passwordValidation.errors,
-        message: "A senha não atende aos critérios de segurança"
+        message: "Não foi possível criar a conta. Verifique os dados e tente novamente."
       });
     }
 

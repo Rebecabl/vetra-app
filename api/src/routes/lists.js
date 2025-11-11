@@ -10,6 +10,7 @@
 import { Router } from "express";
 import { getFirestore } from "../config/firebase.config.js";
 import { FieldValue } from "firebase-admin/firestore";
+import { requireAuth } from "../middlewares/auth.js";
 
 const router = Router();
 
@@ -37,7 +38,7 @@ async function readUserLists(userId) {
  * 
  * @returns {Object} { lists: [...] }
  */
-router.get("/:userId", async (req, res) => {
+router.get("/lists/:userId", async (req, res) => {
   try {
     const userId = String(req.params.userId || "").trim();
     
@@ -67,7 +68,7 @@ router.get("/:userId", async (req, res) => {
  * 
  * @returns {Object} { ok: true }
  */
-router.post("/:userId", async (req, res) => {
+router.post("/lists/:userId", async (req, res) => {
   try {
     const userId = String(req.params.userId || "").trim();
     
@@ -131,6 +132,133 @@ router.post("/:userId", async (req, res) => {
 });
 
 /**
+ * PATCH /api/lists/:listId/cover
+ * 
+ * Define a capa de uma lista específica.
+ * Requer autenticação e verifica se o usuário é dono da lista.
+ * 
+ * IMPORTANTE: Esta rota deve vir ANTES das rotas genéricas /lists/:userId
+ * para evitar conflitos de roteamento.
+ * 
+ * @param {string} listId - ID da lista
+ * @param {Object} body - { itemId: string, itemType: "movie" | "tv" }
+ * 
+ * @returns {Object} { list: UserList }
+ */
+router.patch("/lists/:listId/cover", requireAuth, async (req, res) => {
+  try {
+    const listId = String(req.params.listId || "").trim();
+    const { itemId, itemType } = req.body || {};
+    const userId = req.user?.uid;
+
+    if (!userId) {
+      return res.status(401).json({ 
+        error: "nao_autenticado",
+        message: "Você precisa estar logado para definir a capa" 
+      });
+    }
+
+    if (!listId) {
+      return res.status(400).json({ error: "listId_obrigatorio" });
+    }
+
+    if (!itemId || !itemType) {
+      return res.status(400).json({ 
+        error: "parametros_invalidos",
+        message: "itemId e itemType são obrigatórios" 
+      });
+    }
+
+    if (itemType !== "movie" && itemType !== "tv") {
+      return res.status(400).json({ 
+        error: "itemType_invalido",
+        message: "itemType deve ser 'movie' ou 'tv'" 
+      });
+    }
+
+    // Buscar listas do usuário
+    const userLists = await readUserLists(userId);
+    const lists = userLists.lists || [];
+    
+    // Encontrar a lista
+    const targetList = lists.find(l => l.id === listId);
+    
+    if (!targetList) {
+      return res.status(404).json({ 
+        error: "lista_nao_encontrada",
+        message: "Lista não encontrada" 
+      });
+    }
+
+    // Verificar se o item existe na lista
+    const itemExists = targetList.items.some(item => {
+      const itemMediaKey = `${item.media || "movie"}:${item.id}`;
+      const requestedKey = `${itemType}:${itemId}`;
+      return itemMediaKey === requestedKey || String(item.id) === String(itemId);
+    });
+
+    if (!itemExists) {
+      return res.status(404).json({ 
+        error: "item_nao_encontrado",
+        message: "Este item não está nesta lista" 
+      });
+    }
+
+    // Atualizar a capa da lista
+    targetList.cover = {
+      type: "item",
+      itemId: `${itemType}:${itemId}`,
+    };
+    targetList.updatedAt = new Date().toISOString();
+
+    // Atualizar no banco
+    await getListsCollection().doc(userId).set({
+      lists,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    return res.json({ 
+      ok: true,
+      list: targetList 
+    });
+  } catch (error) {
+    console.error("Erro ao definir capa da lista:", error);
+    return res.status(500).json({ 
+      error: "erro_interno",
+      message: error.message 
+    });
+  }
+});
+
+/**
+ * GET /api/lists/:userId
+ * 
+ * Retorna todas as listas de um usuário.
+ * 
+ * @param {string} userId - ID do usuário
+ * 
+ * @returns {Object} { lists: [...] }
+ */
+router.get("/lists/:userId", async (req, res) => {
+  try {
+    const userId = String(req.params.userId || "").trim();
+    
+    if (!userId) {
+      return res.status(400).json({ error: "userId_invalido" });
+    }
+
+    const data = await readUserLists(userId);
+    return res.json(data);
+  } catch (error) {
+    console.error("Erro ao buscar listas:", error);
+    return res.status(500).json({ 
+      error: "erro_interno",
+      message: error.message 
+    });
+  }
+});
+
+/**
  * DELETE /api/lists/:userId/:listId
  * 
  * Remove uma lista do usuário.
@@ -140,7 +268,7 @@ router.post("/:userId", async (req, res) => {
  * 
  * @returns {Object} { ok: true }
  */
-router.delete("/:userId/:listId", async (req, res) => {
+router.delete("/lists/:userId/:listId", async (req, res) => {
   try {
     const userId = String(req.params.userId || "").trim();
     const listId = String(req.params.listId || "").trim();

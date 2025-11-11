@@ -22,6 +22,8 @@ export type ApiMovie = {
   first_air_date?: string | null;
   vote_average?: number | null;
   vote_count?: number | null;
+  popularity?: number | null;
+  image?: string;
 };
 
 export type ApiBrowseResp = {
@@ -684,6 +686,10 @@ export async function searchPeople(query: string, page = 1, lang?: string): Prom
 function localShareKey(slug: string) {
   return `vetra:share:${slug}`;
 }
+
+// Base58 alphabet (sem 0, O, l, I para evitar confusão)
+const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
 function randomSlug(len = 10) {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   let s = "";
@@ -691,9 +697,81 @@ function randomSlug(len = 10) {
   return s;
 }
 
+// Gera código no formato V9-XXXX-XXXX-XXXX com checksum
+export function generateShareCode(): string {
+  const randomPart = Array.from({ length: 9 }, () => 
+    BASE58_ALPHABET[Math.floor(Math.random() * BASE58_ALPHABET.length)]
+  ).join("");
+  
+  const blocks = [
+    randomPart.slice(0, 3),
+    randomPart.slice(3, 6),
+    randomPart.slice(6, 9)
+  ];
+  
+  // Checksum simples: soma dos valores dos caracteres mod 58
+  let checksum = 0;
+  for (const char of randomPart) {
+    checksum = (checksum + BASE58_ALPHABET.indexOf(char)) % 58;
+  }
+  const checksumChar = BASE58_ALPHABET[checksum];
+  
+  return `V9-${blocks[0]}-${blocks[1]}-${blocks[2]}${checksumChar}`;
+}
+
+// Valida código e extrai slug
+export function validateAndExtractSlug(input: string): string | null {
+  // Remove espaços e converte para maiúsculo
+  const cleaned = input.trim().toUpperCase().replace(/\s+/g, "");
+  
+  // Padrão: V9-XXXX-XXXX-XXXX ou apenas o código sem prefixo
+  let code = cleaned;
+  
+  // Se começa com V9-, remove o prefixo
+  if (code.startsWith("V9-")) {
+    code = code.slice(3);
+  }
+  
+  // Remove hífens
+  code = code.replace(/-/g, "");
+  
+  // Deve ter 10 caracteres (9 + 1 checksum)
+  if (code.length !== 10) {
+    // Tenta extrair de URL
+    const urlMatch = input.match(/[?&#]share=([^&?#]+)/i);
+    if (urlMatch) {
+      return urlMatch[1];
+    }
+    // Tenta extrair de path
+    const pathMatch = input.match(/\/share\/([^\/]+)/i);
+    if (pathMatch) {
+      return pathMatch[1];
+    }
+    return null;
+  }
+  
+  // Valida checksum
+  const dataPart = code.slice(0, 9);
+  const checksumChar = code.slice(9);
+  
+  let checksum = 0;
+  for (const char of dataPart) {
+    const idx = BASE58_ALPHABET.indexOf(char);
+    if (idx === -1) return null;
+    checksum = (checksum + idx) % 58;
+  }
+  
+  if (BASE58_ALPHABET[checksum] !== checksumChar) {
+    // Checksum inválido, mas ainda pode ser um slug antigo
+    return code;
+  }
+  
+  return code;
+}
+
 export async function shareCreate(items: any[], type: 'favorites' | 'list' | 'collection' = 'favorites', listName: string | null = null) {
   if (await ensureBackendHealth()) {
-    return fetchJSON(
+    const resp = await fetchJSON(
       `${API_BASE}/api/share`,
       {
         method: "POST",
@@ -702,16 +780,26 @@ export async function shareCreate(items: any[], type: 'favorites' | 'list' | 'co
       },
       12000
     );
+    // Backend pode retornar slug ou url, normalizamos para sempre ter code
+    if (resp.slug) {
+      const code = resp.slug.length === 10 && resp.slug.match(/^[A-Za-z0-9]+$/) 
+        ? `V9-${resp.slug.slice(0, 3)}-${resp.slug.slice(3, 6)}-${resp.slug.slice(6, 9)}${resp.slug.slice(9)}`
+        : generateShareCode();
+      return { code, slug: resp.slug, type: resp.type || type };
+    }
+    return { code: generateShareCode(), slug: resp.slug || generateShareCode().replace(/V9-|-/g, ""), type: resp.type || type };
   }
-  const slug = randomSlug(12);
+  const code = generateShareCode();
+  const slug = code.replace(/V9-|-/g, "").slice(0, 10);
   const payload = { items, type, listName, createdAt: Date.now() };
   localStorage.setItem(localShareKey(slug), JSON.stringify(payload));
-  // Usar query string para compatibilidade
-  const shareUrl = `${location.origin}${location.pathname}?share=${slug}`;
-  return { url: shareUrl, slug, type };
+  return { code, slug, type };
 }
 
-export async function shareGet(slug: string) {
+export async function shareGet(slugOrCode: string) {
+  // Normaliza: extrai slug de código ou URL
+  const slug = validateAndExtractSlug(slugOrCode) || slugOrCode;
+  
   if (await ensureBackendHealth()) {
     return fetchJSON(`${API_BASE}/api/share/${encodeURIComponent(slug)}`, {}, 12000);
   }
@@ -1373,17 +1461,20 @@ export interface DiscoverFilters {
   region?: string;
   runtimeGte?: number;
   runtimeLte?: number;
+  withPoster?: boolean;
 }
 
 export async function discover(
   media: "movie" | "tv",
   filters: DiscoverFilters = {},
-  page = 1
+  page = 1,
+  perPage?: number
 ): Promise<ApiBrowseResp> {
   if (await ensureBackendHealth()) {
     const params = new URLSearchParams();
     params.set("media", media);
     params.set("page", String(page));
+    if (perPage) params.set("per_page", String(perPage));
     if (filters.sortBy) params.set("sortBy", filters.sortBy);
     if (filters.genres && filters.genres.length > 0) params.set("genres", filters.genres.join(","));
     if (filters.year) params.set("year", String(filters.year));
@@ -1398,6 +1489,7 @@ export async function discover(
     if (filters.region) params.set("region", filters.region);
     if (filters.runtimeGte) params.set("runtimeGte", String(filters.runtimeGte));
     if (filters.runtimeLte) params.set("runtimeLte", String(filters.runtimeLte));
+    if (filters.withPoster !== undefined) params.set("withPoster", String(filters.withPoster));
 
     return fetchJSON(
       `${API_BASE}/api/browse/discover?${params.toString()}`,

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import type { Lang } from "../i18n";
+import { Link } from "react-router-dom";
 import { getTrending, getCategory, type ApiMovie } from "../api";
 import { poster } from "../lib/media.utils";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -7,12 +7,9 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 type Props = {
   onSignIn: () => void;
   onSignUp: () => void;
-  t: (k: string, vars?: Record<string, string | number>) => string;
-  lang: Lang;
-  onChangeLang: (l: Lang) => void;
 };
 
-const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp, t }) => {
+const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp }) => {
   const [popularMovies, setPopularMovies] = useState<ApiMovie[]>([]);
   const [popularTv, setPopularTv] = useState<ApiMovie[]>([]);
   const [topRated, setTopRated] = useState<ApiMovie[]>([]);
@@ -109,12 +106,14 @@ const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp, t }) => {
           </div>
         </div>
 
+        <div className="flex items-center gap-3">
           <button
-            onClick={onSignIn}
-            className="px-6 py-2.5 text-sm font-semibold text-white/90 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 hover:border-white/20 transition-all duration-200"
+            onClick={onSignUp}
+            className="text-sm font-semibold text-white hover:text-white/80 transition-all duration-200"
           >
-            {t("login")}
+            Fazer Login
           </button>
+        </div>
         </div>
       </header>
 
@@ -553,9 +552,15 @@ const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp, t }) => {
               <span className="text-xl font-bold text-white">VETRA</span>
             </div>
             <div className="flex flex-wrap justify-center gap-6 text-sm text-white/60">
-              <a href="#" className="hover:text-white transition-colors">Sobre</a>
-              <a href="#" className="hover:text-white transition-colors">Privacidade</a>
-              <a href="#" className="hover:text-white transition-colors">Termos</a>
+              <Link to="/about" className="hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded px-2 py-1">
+                Sobre o VETRA
+              </Link>
+              <Link to="/privacy" className="hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded px-2 py-1">
+                Política de Privacidade
+              </Link>
+              <Link to="/terms" className="hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded px-2 py-1">
+                Termos de Uso
+              </Link>
             </div>
           </div>
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-6 border-t border-white/5">

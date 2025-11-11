@@ -8,6 +8,10 @@ interface HorizontalCarouselProps {
   renderItem: (item: any, index: number) => React.ReactNode;
   loading?: boolean;
   className?: string;
+  showViewAll?: boolean;
+  onViewAll?: () => void;
+  limit?: number;
+  ariaLabel?: string;
 }
 
 export const HorizontalCarousel: React.FC<HorizontalCarouselProps> = ({
@@ -17,6 +21,10 @@ export const HorizontalCarousel: React.FC<HorizontalCarouselProps> = ({
   renderItem,
   loading = false,
   className = "",
+  showViewAll = false,
+  onViewAll,
+  limit,
+  ariaLabel,
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -90,9 +98,11 @@ export const HorizontalCarousel: React.FC<HorizontalCarouselProps> = ({
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">{title}</h2>
           {subtitle && <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{subtitle}</p>}
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-4 overflow-x-auto scrollbar-hide snap-x snap-mandatory -mx-2 px-2">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="flex-shrink-0 w-48 h-72 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-lg" />
+            <div key={i} className="flex-shrink-0 w-32 sm:w-40 md:w-44 lg:w-48 snap-start">
+              <div className="aspect-[2/3] bg-slate-200 dark:bg-slate-800 animate-pulse rounded-lg" />
+            </div>
           ))}
         </div>
       </section>
@@ -103,19 +113,23 @@ export const HorizontalCarousel: React.FC<HorizontalCarouselProps> = ({
     return null;
   }
 
+  const displayItems = limit ? items.slice(0, limit) : items;
+
   return (
     <section className={`mb-8 ${className}`}>
-      <div className="mb-4">
-        <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{title}</h2>
-        {subtitle && <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{subtitle}</p>}
-      </div>
+      {(title || subtitle) && (
+        <div className="mb-4">
+          {title && <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{title}</h2>}
+          {subtitle && <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{subtitle}</p>}
+        </div>
+      )}
       
       <div className="relative group/carousel">
         {/* Botão esquerdo */}
         {canScrollLeft && (
           <button
             onClick={() => scroll("left")}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-full p-2 shadow-lg hover:bg-white dark:hover:bg-slate-800 transition-all opacity-0 group-hover/carousel:opacity-100"
+            className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-full p-2 shadow-lg hover:bg-white dark:hover:bg-slate-800 transition-all opacity-0 group-hover/carousel:opacity-100"
             aria-label="Scroll left"
           >
             <ChevronLeft size={24} className="text-slate-900 dark:text-white" />
@@ -123,21 +137,31 @@ export const HorizontalCarousel: React.FC<HorizontalCarouselProps> = ({
         )}
 
         {/* Container scrollável */}
-        <div
-          ref={scrollContainerRef}
-          className="flex gap-3 md:gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-4 -mx-2 px-2"
-          style={{
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-            cursor: isDragging ? "grabbing" : "grab",
-          }}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
-        >
-          {items.map((item, index) => (
-            <div key={`${item.media || "movie"}-${item.id}-${index}`} className="flex-shrink-0 w-32 sm:w-40 md:w-44 lg:w-48">
+      <div
+        ref={scrollContainerRef}
+        className="flex gap-3 md:gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-4 -mx-2 px-2 snap-x snap-mandatory"
+        style={{
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+          cursor: isDragging ? "grabbing" : "grab",
+          scrollPaddingLeft: "8px",
+          scrollPaddingRight: "8px",
+        }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+        role="region"
+        aria-label={ariaLabel || `Carrossel: ${title || "Conteúdo"}`}
+      >
+          {displayItems.map((item, index) => (
+            <div 
+              key={`${item.media || "movie"}-${item.id}-${index}`} 
+              className="flex-shrink-0 w-32 sm:w-40 md:w-44 lg:w-48 snap-start"
+              style={{
+                paddingRight: index < items.length - 1 ? "0" : "0",
+              }}
+            >
               {renderItem(item, index)}
             </div>
           ))}
@@ -147,7 +171,7 @@ export const HorizontalCarousel: React.FC<HorizontalCarouselProps> = ({
         {canScrollRight && (
           <button
             onClick={() => scroll("right")}
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-full p-2 shadow-lg hover:bg-white dark:hover:bg-slate-800 transition-all opacity-0 group-hover/carousel:opacity-100"
+            className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-full p-2 shadow-lg hover:bg-white dark:hover:bg-slate-800 transition-all opacity-0 group-hover/carousel:opacity-100"
             aria-label="Scroll right"
           >
             <ChevronRight size={24} className="text-slate-900 dark:text-white" />

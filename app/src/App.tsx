@@ -4,7 +4,7 @@ import {
   List as ListIcon, Share2, Pencil, Trash2, Home, ChevronDown, Settings, LogOut,
   BarChart3, Clock, TrendingUp, Film, Users, Calendar, Globe, DollarSign, Building2,
   PenTool, Video, Music, Scissors, Award, Tag, Tv, Link as LinkIcon, ThumbsUp,
-  MessageCircle, Smile, Send, Bookmark, ChevronLeft, ChevronRight, Menu
+  MessageCircle, Smile, Send, Bookmark, ChevronLeft, ChevronRight, Menu, Sparkles as Dice, Check, MoreVertical, FileText, CheckCircle2, Image as ImageIcon
 } from "lucide-react";
 import {
   Routes, Route, useLocation, useNavigate, Link, useParams
@@ -18,6 +18,7 @@ import api, {
   type ApiPersonDetails,
   personDetails as apiPersonDetails,
   popularPeople,
+  discover,
   changePassword,
   getComments,
   createComment,
@@ -26,6 +27,7 @@ import api, {
   deleteComment,
   type Comment,
   type DiscoverFilters,
+  validateAndExtractSlug,
 } from "./api";
 import type { UserProfile } from "./api";
 
@@ -38,657 +40,37 @@ import { LanguageMenu } from "./components/LanguageMenu";
 import LandingScreen from "./landing/LandingScreen";
 import { HorizontalCarousel } from "./components/HorizontalCarousel";
 import { DiscoverFiltersPanel } from "./components/DiscoverFilters";
-
+import { SearchFiltersPanel, SearchFilters, DEFAULT_FILTERS, getDefaultFilters } from "./components/SearchFiltersPanel";
+import { FilterChips } from "./components/FilterChips";
+import { ListCover, getListCoverImageUrl, getListFallbackPosters } from "./components/ListCover";
+import { useListCover } from "./hooks/useListCover";
+import { CoverSelectorModal } from "./components/CoverSelectorModal";
+import { Pagination } from "./components/Pagination";
+import { CategorySection } from "./components/CategorySection";
+import { PrivacyPage } from "./pages/PrivacyPage";
+import { TermsPage } from "./pages/TermsPage";
+import { AboutPage } from "./pages/AboutPage";
+import { HelpPage } from "./pages/HelpPage";
+import { LoginModal } from "./components/LoginModal";
+import type { LoginModalProps } from "./components/LoginModal";
+import { MobileFooter } from "./components/MobileFooter";
+import { SiteFooter } from "./components/SiteFooter";
+import { PersonRouteModal } from "./components/PersonRouteModal";
+import type { MediaT, MovieT, UserState, UserStateMap, CatState, UserList, ApiStatus, TabKey } from "./types/movies";
+import { KEY_FAVS, KEY_LISTS, KEY_STATES, KEY_HISTORY, KEY_STATS } from "./constants/storage";
+import { mediaKey } from "./types/movies";
 import { poster, toPosterPath, CAT_META, type CatKey } from "./lib/media.utils";
+import { formatDate, formatDateShort } from "./utils/date";
 
-type MediaT = "movie" | "tv";
-type MovieT = {
-  id: number;
-  media?: MediaT;
-  title: string;
-  rating?: number | null;
-  voteCount?: number | null;
-  year?: string | null;
-  image: string;
-  overview?: string;
-  poster_path?: string | null;
-};
+// Re-export types that might be used elsewhere in App.tsx
+export type { MediaT, MovieT, UserState, UserStateMap, CatState, UserList, ApiStatus, TabKey } from "./types/movies";
 
-type ApiStatus = "ok" | "falhou" | "carregando";
-type TabKey = "home" | "favorites" | "lists" | "people" | "history" | "stats" | "watchlist";
-
-type UserList = { id: string; name: string; items: MovieT[] };
-
-type CatState = {
-  items: MovieT[];
-  page: number;
-  totalPages?: number;
-  loading: boolean;
-  error?: string;
-  initialized: boolean;
-};
-
-type UserState = "want" | "watched" | "not_watched" | "abandoned";
-type UserStateMap = Record<
-  string, // `${media}:${id}`
-  { 
-    state?: UserState; 
-    rating?: number; 
-    description?: string;
-    // Cache básico do filme para exibição
-    movieCache?: {
-      title: string;
-      poster_path?: string | null;
-      image?: string;
-      year?: string | null;
-      media?: MediaT;
-    };
-  }
->;
-
-const KEY_FAVS = "vetra:favorites";
-const KEY_LISTS = "vetra:lists";
-const KEY_STATES = "vetra:userstates";
-const KEY_HISTORY = "vetra:watch_history";
-const KEY_STATS = "vetra:user_stats";
-
-const mediaKey = (m: MovieT) => `${m.media || "movie"}:${m.id}`;
-const Pagination: React.FC<{
-  currentPage: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
-  loading?: boolean;
-}> = ({ currentPage, totalPages, onPageChange, loading }) => {
-  if (totalPages <= 1) return null;
-
-  const getPageNumbers = () => {
-    const pages: (number | string)[] = [];
-    const maxVisible = 7;
-    
-    if (totalPages <= maxVisible) {
-      for (let i = 1; i <= totalPages; i++) {
-        pages.push(i);
-      }
-    } else {
-      if (currentPage <= 3) {
-        for (let i = 1; i <= 5; i++) pages.push(i);
-        pages.push("...");
-        pages.push(totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        pages.push(1);
-        pages.push("...");
-        for (let i = totalPages - 4; i <= totalPages; i++) pages.push(i);
-      } else {
-        pages.push(1);
-        pages.push("...");
-        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
-        pages.push("...");
-        pages.push(totalPages);
-      }
-    }
-    return pages;
-  };
-
-  const pages = getPageNumbers();
-
-  return (
-    <div className="flex justify-center items-center gap-1.5 mt-10 flex-wrap">
-      <button
-        onClick={() => onPageChange(currentPage - 1)}
-        disabled={currentPage === 1 || loading}
-        className="px-3 py-2 rounded-lg bg-white/5 dark:bg-slate-800/50 hover:bg-white/10 dark:hover:bg-slate-700/70 text-slate-700 dark:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 font-medium text-sm border border-slate-200/20 dark:border-slate-700/50"
-        aria-label="Página anterior"
-      >
-        ‹
-      </button>
-      {pages.map((page, idx) => {
-        if (page === "...") {
-          return (
-            <span key={`ellipsis-${idx}`} className="px-2 text-slate-400 dark:text-slate-500 text-sm">
-              ...
-            </span>
-          );
-        }
-        const pageNum = page as number;
-        const isActive = currentPage === pageNum;
-        return (
-          <button
-            key={pageNum}
-            onClick={() => onPageChange(pageNum)}
-            disabled={loading}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-              isActive
-                ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm border border-slate-200 dark:border-slate-600"
-                : "bg-white/5 dark:bg-slate-800/50 hover:bg-white/10 dark:hover:bg-slate-700/70 text-slate-600 dark:text-slate-300 border border-slate-200/20 dark:border-slate-700/50 disabled:opacity-30 disabled:cursor-not-allowed"
-            }`}
-            aria-label={`Ir para página ${pageNum}`}
-            aria-current={isActive ? "page" : undefined}
-          >
-            {pageNum}
-          </button>
-        );
-      })}
-      <button
-        onClick={() => onPageChange(currentPage + 1)}
-        disabled={currentPage === totalPages || loading}
-        className="px-3 py-2 rounded-lg bg-white/5 dark:bg-slate-800/50 hover:bg-white/10 dark:hover:bg-slate-700/70 text-slate-700 dark:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 font-medium text-sm border border-slate-200/20 dark:border-slate-700/50"
-        aria-label="Próxima página"
-      >
-        ›
-      </button>
-    </div>
-  );
-};
-const CategorySection: React.FC<{
-  title: string;
-  items: MovieT[];
-  loading: boolean;
-  error?: string;
-  currentPage?: number;
-  totalPages?: number;
-  onPageChange?: (page: number) => void;
-  renderCard: (m: MovieT) => React.ReactNode;
-  sectionKey?: string;
-  subtitle?: string;
-}> = ({ title, items, loading, error, currentPage, totalPages, onPageChange, renderCard, sectionKey, subtitle }) => (
-  <section className="mb-12 md:mb-16">
-    <div className="mb-6">
-      <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-1 tracking-tight">
-        {title}
-      </h2>
-      {subtitle && (
-        <p className="text-sm text-slate-600 dark:text-slate-400">{subtitle}</p>
-      )}
-    </div>
-    {loading && items.length === 0 ? (
-      <div className="text-center py-12">
-        <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-slate-300 border-t-cyan-500 dark:border-slate-700" />
-      </div>
-    ) : items.length > 0 ? (
-      <>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-5">
-          {items.slice(0, 12).map((m, idx) => (
-            <div key={`${sectionKey || title}-${m.media}-${m.id}-${idx}`} className="animate-fade-in-up" style={{ animationDelay: `${idx * 30}ms` }}>
-              {renderCard(m)}
-            </div>
-          ))}
-        </div>
-        {currentPage && totalPages && totalPages > 1 && onPageChange && (
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={onPageChange}
-            loading={loading}
-          />
-        )}
-      </>
-    ) : (
-      <div className="text-center py-12 text-slate-500 dark:text-gray-400">
-        {error ? `Falha ao carregar: ${error}` : "Sem resultados"}
-      </div>
-    )}
-  </section>
-);
-
-// ======================= LoginModal (FORA do AppShell para evitar recriação) =======================
-interface LoginModalProps {
-  formData: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    password: string;
-    confirmPassword: string;
-    acceptTerms: boolean;
-  };
-  loginType: "signin" | "signup";
-  showPassword: boolean;
-  emailError: string;
-  passwordError: string;
-  loginError: string;
-  passwordErrors: string[];
-  authLoading: boolean;
-  showForgotPassword: boolean;
-  forgotPasswordEmail: string;
-  forgotPasswordLoading: boolean;
-  forgotPasswordMessage: string;
-  forgotPasswordError: string;
-  forgotPasswordStep: "email" | "password";
-  forgotPasswordNewPassword: string;
-  forgotPasswordConfirmPassword: string;
-  forgotPasswordShowPassword: boolean;
-  emailVerified: boolean;
-  t: (key: string) => string;
-  handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  handleInputBlur: (e: React.FocusEvent<HTMLInputElement>) => void;
-  handleSubmit: (e?: React.MouseEvent) => Promise<void>;
-  setShowLogin: (show: boolean) => void;
-  setLoginError: (error: string) => void;
-  setEmailError: (error: string) => void;
-  setPasswordError: (error: string) => void;
-  setShowPassword: (show: boolean | ((prev: boolean) => boolean)) => void;
-  setFormData: React.Dispatch<React.SetStateAction<{
-    firstName: string;
-    lastName: string;
-    email: string;
-    password: string;
-    confirmPassword: string;
-    acceptTerms: boolean;
-  }>>;
-  setShowForgotPassword: (show: boolean) => void;
-  setForgotPasswordEmail: (email: string) => void;
-  setForgotPasswordError: (error: string) => void;
-  setForgotPasswordMessage: (message: string) => void;
-  setForgotPasswordStep: (step: "email" | "password") => void;
-  setForgotPasswordNewPassword: (password: string) => void;
-  setForgotPasswordConfirmPassword: (password: string) => void;
-  setForgotPasswordShowPassword: (show: boolean) => void;
-  handleForgotPasswordCheckEmail: (e?: React.MouseEvent) => Promise<void>;
-  handleForgotPasswordReset: (e?: React.MouseEvent) => Promise<void>;
-}
-
-const LoginModal: React.FC<LoginModalProps> = React.memo(({
-  formData,
-  loginType,
-  showPassword,
-  emailError,
-  passwordError,
-  loginError,
-  passwordErrors,
-  authLoading,
-        showForgotPassword,
-        forgotPasswordEmail,
-        forgotPasswordLoading,
-        forgotPasswordMessage,
-        forgotPasswordError,
-        forgotPasswordStep,
-        forgotPasswordNewPassword,
-        forgotPasswordConfirmPassword,
-        forgotPasswordShowPassword,
-        emailVerified,
-        t,
-        handleInputChange,
-        handleInputBlur,
-        handleSubmit,
-        setShowLogin,
-        setLoginError,
-        setEmailError,
-        setPasswordError,
-        setShowPassword,
-        setFormData,
-        setShowForgotPassword,
-        setForgotPasswordEmail,
-        setForgotPasswordError,
-        setForgotPasswordMessage,
-        setForgotPasswordStep,
-        setForgotPasswordNewPassword,
-        setForgotPasswordConfirmPassword,
-        setForgotPasswordShowPassword,
-        handleForgotPasswordCheckEmail,
-        handleForgotPasswordReset,
-}) => (
-  <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 safe-area-inset">
-    <div className="bg-white dark:bg-slate-900 rounded-lg max-w-md w-full max-h-[95vh] overflow-y-auto p-4 sm:p-6 md:p-8 relative border border-gray-200 dark:border-slate-800 shadow-xl">
-      <button onClick={() => {
-        setShowLogin(false);
-        setLoginError("");
-        setEmailError("");
-        setPasswordError("");
-        setShowForgotPassword(false);
-        setForgotPasswordEmail("");
-        setForgotPasswordNewPassword("");
-        setForgotPasswordConfirmPassword("");
-        setForgotPasswordStep("email");
-        setForgotPasswordMessage("");
-        setForgotPasswordError("");
-      }} className="absolute top-3 right-3 sm:top-4 sm:right-4 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-white active:text-gray-500 dark:active:text-gray-300 transition touch-manipulation" aria-label="Fechar">
-        <X size={20} className="sm:w-6 sm:h-6" />
-      </button>
-      <div className="text-center mb-6">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 bg-clip-text text-transparent mb-2">
-          {t("app_title")}
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400 text-lg">
-          {showForgotPassword ? "Recuperar senha" : loginType === "signin" ? "Entre na sua conta" : "Crie sua conta"}
-        </p>
-      </div>
-      
-      {showForgotPassword ? (
-        <div className="space-y-4">
-          {forgotPasswordStep === "email" ? (
-            <>
-              <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-                Digite seu email para redefinir sua senha.
-              </p>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t("email")}</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                  <input 
-                    type="email" 
-                    name="forgotPasswordEmail" 
-                    value={forgotPasswordEmail} 
-                    onChange={(e) => setForgotPasswordEmail(e.target.value)}
-                    autoComplete="email"
-                    className="w-full bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white pl-10 pr-4 py-2.5 rounded-md focus:outline-none focus:ring-1 text-sm border border-gray-300 dark:border-slate-700 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder={t("your_email")} 
-                  />
-                </div>
-              </div>
-              
-              {forgotPasswordError && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                  <p className="text-sm text-red-700 dark:text-red-400">{forgotPasswordError}</p>
-                </div>
-              )}
-              
-              <button 
-                type="button"
-                onClick={handleForgotPasswordCheckEmail}
-                disabled={forgotPasswordLoading || !forgotPasswordEmail.trim()}
-                className="w-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-4">
-                {forgotPasswordLoading ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Verificando...
-                  </>
-                ) : (
-                  "Continuar"
-                )}
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-                Digite sua nova senha.
-              </p>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nova senha</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                  <input 
-                    type={forgotPasswordShowPassword ? "text" : "password"} 
-                    value={forgotPasswordNewPassword} 
-                    onChange={(e) => setForgotPasswordNewPassword(e.target.value)}
-                    className="w-full bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white pl-10 pr-10 py-2.5 rounded-md focus:outline-none focus:ring-1 text-sm border border-gray-300 dark:border-slate-700 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="••••••••" 
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setForgotPasswordShowPassword(!forgotPasswordShowPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {forgotPasswordShowPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Confirmar senha</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                  <input 
-                    type={forgotPasswordShowPassword ? "text" : "password"} 
-                    value={forgotPasswordConfirmPassword} 
-                    onChange={(e) => setForgotPasswordConfirmPassword(e.target.value)}
-                    className="w-full bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white pl-10 pr-4 py-2.5 rounded-md focus:outline-none focus:ring-1 text-sm border border-gray-300 dark:border-slate-700 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="••••••••" 
-                  />
-                </div>
-                {forgotPasswordConfirmPassword && forgotPasswordNewPassword !== forgotPasswordConfirmPassword && (
-                  <p className="mt-1 text-xs text-red-500">As senhas não coincidem</p>
-                )}
-              </div>
-              
-              {forgotPasswordMessage && (
-                <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                  <p className="text-sm text-green-700 dark:text-green-400">{forgotPasswordMessage}</p>
-                </div>
-              )}
-              
-              {forgotPasswordError && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                  <p className="text-sm text-red-700 dark:text-red-400">{forgotPasswordError}</p>
-                </div>
-              )}
-              
-              <button 
-                type="button"
-                onClick={handleForgotPasswordReset}
-                disabled={forgotPasswordLoading || !forgotPasswordNewPassword.trim() || forgotPasswordNewPassword !== forgotPasswordConfirmPassword}
-                className="w-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-4">
-                {forgotPasswordLoading ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Redefinindo...
-                  </>
-                ) : (
-                  "Redefinir senha"
-                )}
-              </button>
-            </>
-          )}
-          
-          <button 
-            type="button"
-            onClick={() => {
-              setShowForgotPassword(false);
-              setForgotPasswordEmail("");
-              setForgotPasswordNewPassword("");
-              setForgotPasswordConfirmPassword("");
-              setForgotPasswordStep("email");
-              setForgotPasswordError("");
-              setForgotPasswordMessage("");
-            }}
-            className="w-full text-center text-blue-500 text-sm hover:text-blue-600 hover:underline mt-2">
-            {forgotPasswordStep === "password" ? "Voltar" : "Voltar para o login"}
-          </button>
-        </div>
-      ) : (
-      <div className="space-y-3">
-        {loginType === "signup" && (
-          <>
-          <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nome</label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                <input 
-                  type="text" 
-                  name="firstName" 
-                  value={formData.firstName} 
-                  onChange={handleInputChange}
-                  onBlur={handleInputBlur}
-                  autoComplete="given-name"
-                  className="w-full bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white pl-10 pr-4 py-2.5 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 border border-gray-300 dark:border-slate-700 text-sm"
-                  placeholder="Seu nome" 
-                  required
-                />
-            </div>
-          </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Sobrenome</label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                <input 
-                  type="text" 
-                  name="lastName" 
-                  value={formData.lastName} 
-                  onChange={handleInputChange}
-                  onBlur={handleInputBlur}
-                  autoComplete="family-name"
-                  className="w-full bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white pl-10 pr-4 py-2.5 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 border border-gray-300 dark:border-slate-700 text-sm"
-                  placeholder="Seu sobrenome" 
-                />
-              </div>
-            </div>
-          </>
-        )}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t("email")}</label>
-          <div className="relative">
-            <Mail className={`absolute left-3 top-1/2 -translate-y-1/2 ${emailError ? "text-red-500" : "text-gray-400"}`} size={20} />
-            <input 
-              type="email" 
-              name="email" 
-              value={formData.email} 
-              onChange={handleInputChange}
-              onBlur={handleInputBlur}
-              autoComplete="email"
-              className={`w-full bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white pl-10 pr-4 py-2.5 rounded-md focus:outline-none focus:ring-1 text-sm border ${
-                emailError 
-                  ? "border-red-500 focus:ring-red-500 focus:border-red-500" 
-                  : "border-gray-300 dark:border-slate-700 focus:ring-blue-500 focus:border-blue-500"
-              }`}
-              placeholder={t("your_email")} 
-            />
-          </div>
-          {emailError && (
-            <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1">
-              <span>{emailError}</span>
-            </p>
-          )}
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t("password")}</label>
-          <div className="relative">
-            <Lock className={`absolute left-3 top-1/2 -translate-y-1/2 ${passwordError ? "text-red-500" : "text-gray-400"}`} size={20} />
-            <input 
-              type={showPassword ? "text" : "password"} 
-              name="password" 
-              value={formData.password} 
-              onChange={handleInputChange}
-              onBlur={handleInputBlur}
-              autoComplete={loginType === "signin" ? "current-password" : "new-password"}
-              className={`w-full bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white pl-10 pr-12 py-2.5 rounded-md focus:outline-none focus:ring-1 text-sm border ${
-                passwordError 
-                  ? "border-red-500 focus:ring-red-500 focus:border-red-500" 
-                  : "border-gray-300 dark:border-slate-700 focus:ring-blue-500 focus:border-blue-500"
-              }`}
-              placeholder="••••••••" 
-            />
-            <button type="button" onClick={() => setShowPassword((s) => !s)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-white transition"
-              aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}>
-              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-            </button>
-          </div>
-          {passwordError && (
-            <p className="mt-1.5 text-sm text-red-500 flex items-center gap-1">
-              <span>{passwordError}</span>
-            </p>
-          )}
-          
-          {loginType === "signup" && (
-            <div className="mt-2 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
-              <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Critérios de senha:</p>
-              <ul className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
-                <li className={`flex items-center gap-2 ${formData.password.length >= 8 ? 'text-green-500 dark:text-green-400' : ''}`}>
-                  <span>{formData.password.length >= 8 ? '✓' : '•'}</span>
-                  Mínimo de 8 caracteres
-                </li>
-                <li className={`flex items-center gap-2 ${/[A-Z]/.test(formData.password) ? 'text-green-500 dark:text-green-400' : ''}`}>
-                  <span>{/[A-Z]/.test(formData.password) ? '✓' : '•'}</span>
-                  Pelo menos uma letra maiúscula
-                </li>
-                <li className={`flex items-center gap-2 ${/[a-z]/.test(formData.password) ? 'text-green-500 dark:text-green-400' : ''}`}>
-                  <span>{/[a-z]/.test(formData.password) ? '✓' : '•'}</span>
-                  Pelo menos uma letra minúscula
-                </li>
-                <li className={`flex items-center gap-2 ${/\d/.test(formData.password) ? 'text-green-500 dark:text-green-400' : ''}`}>
-                  <span>{/\d/.test(formData.password) ? '✓' : '•'}</span>
-                  Pelo menos um número
-                </li>
-                <li className={`flex items-center gap-2 ${/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(formData.password) ? 'text-green-500 dark:text-green-400' : ''}`}>
-                  <span>{/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(formData.password) ? '✓' : '•'}</span>
-                  Pelo menos um caractere especial
-                </li>
-                <li className={`flex items-center gap-2 ${formData.password && !formData.password.toLowerCase().includes((formData.firstName || "").toLowerCase()) && !formData.password.toLowerCase().includes((formData.lastName || "").toLowerCase()) ? 'text-green-500 dark:text-green-400' : formData.password ? 'text-red-500 dark:text-red-400' : ''}`}>
-                  <span>{formData.password && !formData.password.toLowerCase().includes((formData.firstName || "").toLowerCase()) && !formData.password.toLowerCase().includes((formData.lastName || "").toLowerCase()) ? '✓' : formData.password ? '✗' : '•'}</span>
-                  Não conter partes do seu nome
-                </li>
-                <li className={`flex items-center gap-2 ${formData.password && formData.email && !formData.password.toLowerCase().includes(formData.email.toLowerCase().split("@")[0]) ? 'text-green-500 dark:text-green-400' : formData.password && formData.email ? 'text-red-500 dark:text-red-400' : ''}`}>
-                  <span>{formData.password && formData.email && !formData.password.toLowerCase().includes(formData.email.toLowerCase().split("@")[0]) ? '✓' : formData.password && formData.email ? '✗' : '•'}</span>
-                  Não conter partes do seu email
-                </li>
-              </ul>
-            </div>
-          )}
-        </div>
-        {loginType === "signup" && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t("confirm_password")}</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input type={showPassword ? "text" : "password"} name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange}
-                className="w-full bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white pl-10 pr-4 py-2.5 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 border border-gray-300 dark:border-slate-700 text-sm"
-                placeholder="••••••••" />
-            </div>
-            {formData.confirmPassword && formData.password !== formData.confirmPassword && (
-              <p className="mt-1 text-xs text-red-500">As senhas não coincidem</p>
-            )}
-          </div>
-        )}
-        
-        {loginType === "signup" && (
-          <div className="flex items-start gap-3 mt-4">
-            <input
-              type="checkbox"
-              id="acceptTerms"
-              checked={formData.acceptTerms}
-              onChange={(e) => setFormData(prev => ({ ...prev, acceptTerms: e.target.checked }))}
-              className="mt-1 w-4 h-4 rounded border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
-            />
-            <label htmlFor="acceptTerms" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer flex-1">
-              Eu aceito os <button type="button" className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline">Termos de Uso</button> e a <button type="button" className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 underline">Política de Privacidade</button> da VETRA
-            </label>
-          </div>
-        )}
-        
-        <button 
-          type="submit"
-          onClick={handleSubmit}
-          disabled={authLoading}
-          className="w-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-4">
-          {authLoading ? (
-            <>
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              {loginType === "signin" ? "Entrando..." : "Criando conta..."}
-            </>
-          ) : (
-            loginType === "signin" ? "Entrar" : t("create_account")
-          )}
-        </button>
-        
-        {loginType === "signin" && loginError && (
-          <p className="text-center text-red-500 text-sm mt-2">
-            {loginError}
-          </p>
-        )}
-      </div>
-      )}
-      {loginType === "signin" && !showForgotPassword && (
-        <div className="text-center mt-4">
-          <button 
-            type="button"
-            onClick={() => {
-              setShowForgotPassword(true);
-              setForgotPasswordEmail(formData.email);
-            }}
-            className="text-blue-500 text-sm hover:text-blue-600 hover:underline">
-            {t("forgot_password")}
-          </button>
-        </div>
-      )}
-    </div>
-  </div>
-));
-
-LoginModal.displayName = "LoginModal";
 
 // ======================= App =======================
 const AppShell: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [viewingShared, setViewingShared] = useState(false);
+  const [resolvingShare, setResolvingShare] = useState(false);
   const [sharedCollection, setSharedCollection] = useState<{ items: Array<{ movie: MovieT; meta: { rating?: number; description?: string } }>; listName: string; category?: string } | null>(null);
   const [sharedList, setSharedList] = useState<{ items: MovieT[]; listName: string } | null>(null);
 
@@ -716,28 +98,36 @@ const AppShell: React.FC = () => {
   const { lang, t, setLang } = useLang();
   const { toasts, pushToast, removeToast } = useToast();
   
-  // Helper para formatar datas de acordo com o idioma
-  const formatDate = (dateStr: string | Date, options: Intl.DateTimeFormatOptions = {}) => {
-    const date = typeof dateStr === 'string' ? new Date(dateStr) : dateStr;
-    const localeMap: Record<Lang, string> = {
-      "pt-BR": "pt-BR",
-      "en-US": "en-US",
-      "es-ES": "es-ES",
-    };
-    return date.toLocaleDateString(localeMap[lang] || "pt-BR", options);
-  };
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [searchType, setSearchType] = useState<"all" | "movie" | "tv" | "person">("all");
-  const [searchSort, setSearchSort] = useState<"relevance" | "rating" | "year">("relevance");
-  const [searchYear, setSearchYear] = useState<string>("");
-  const [searchYearTo, setSearchYearTo] = useState<string>("");
-  const [searchMinRating, setSearchMinRating] = useState<string>("");
-  const [searchGenre, setSearchGenre] = useState<string[]>([]);
-  const [searchOnlyWithPoster, setSearchOnlyWithPoster] = useState<boolean>(true);
-  const [searchMinVotes, setSearchMinVotes] = useState<string>("");
+  // Initialize from URL params on mount
+  const [searchTerm, setSearchTerm] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("q") || "";
+  });
+  const [appliedSearchFilters, setAppliedSearchFilters] = useState<SearchFilters>(() => {
+    // Initialize from URL if available
+    const params = new URLSearchParams(window.location.search);
+    const filters: SearchFilters = { ...getDefaultFilters() };
+    if (params.get("type")) filters.type = params.get("type") as SearchFilters["type"];
+    if (params.get("sort")) {
+      const sort = params.get("sort");
+      if (sort === "popularity.desc" || sort === "rating") filters.sort = "popularity.desc";
+      else if (sort === "relevance" || sort === "year") filters.sort = sort;
+    }
+    if (params.get("year_gte")) filters.yearGte = parseInt(params.get("year_gte") || "1870");
+    if (params.get("year_lte")) filters.yearLte = parseInt(params.get("year_lte") || String(new Date().getFullYear()));
+    if (params.get("vote_avg_gte")) filters.voteAvgGte = parseFloat(params.get("vote_avg_gte") || "0");
+    if (params.get("vote_cnt_gte")) filters.voteCntGte = parseInt(params.get("vote_cnt_gte") || "0");
+    if (params.get("with_poster") === "false") filters.withPoster = false;
+    return filters;
+  });
   const [showSearchFilters, setShowSearchFilters] = useState(false);
-  const [searchGenres, setSearchGenres] = useState<any[]>([]);
+  const [searchPage, setSearchPage] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return parseInt(params.get("page") || "1");
+  });
+  const [searchTotalResults, setSearchTotalResults] = useState(0);
+  const [hasActiveFilters, setHasActiveFilters] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [movies, setMovies] = useState<MovieT[]>([]);
@@ -773,6 +163,23 @@ const AppShell: React.FC = () => {
   const [activeListId, setActiveListId] = useState<string | null>(null);
   const [showListPickerFor, setShowListPickerFor] = useState<MovieT | null>(null);
   const [showCollectionPickerFor, setShowCollectionPickerFor] = useState<MovieT | null>(null);
+  const [listSearchQuery, setListSearchQuery] = useState("");
+  const [listSortOrder, setListSortOrder] = useState<"recent" | "az" | "items" | "updated">("recent");
+
+  // Hook para gerenciar capa de lista com atualização otimista e API
+  const { setListCover: setListCoverWithApi, isUpdating } = useListCover(lists, setLists);
+  
+  // Função wrapper para manter compatibilidade com código existente
+  const setListCover = async (listId: string, type: "item" | "upload" | "auto", itemId?: string, url?: string, focalPoint?: { x: number; y: number }) => {
+    if (type === "item" && itemId) {
+      // Extrair tipo de mídia do itemId (formato: "movie:123" ou "tv:456")
+      const [itemType, id] = itemId.split(":");
+      if (itemType === "movie" || itemType === "tv") {
+        return await setListCoverWithApi(listId, type, id, itemType as "movie" | "tv", itemId, url, focalPoint);
+      }
+    }
+    return await setListCoverWithApi(listId, type, itemId, undefined, undefined, url, focalPoint);
+  };
 
   const [selectedMovie, setSelectedMovie] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("home");
@@ -787,59 +194,144 @@ const AppShell: React.FC = () => {
   });
 
   // Estados para filtros
-  const [trendingWindow, setTrendingWindow] = useState<"day" | "week">("day");
-  const [popularFilter, setPopularFilter] = useState<"streaming" | "tv" | "rent" | "cinema">("streaming");
+  // popularFilter removido - não usado mais
   const [freeWatchFilter, setFreeWatchFilter] = useState<"movie" | "tv">("movie");
   
-  // Estado para filmes populares filtrados
-  const [filteredPopular, setFilteredPopular] = useState<{
-    items: MovieT[];
-    loading: boolean;
-    page: number;
-    totalPages: number;
+  // Estados para seções da Home
+  const [homeSections, setHomeSections] = useState<{
+    recentReleases: { items: MovieT[]; loading: boolean; error?: string };
+    comingSoon: { items: MovieT[]; loading: boolean; error?: string };
+    popularMovies: { items: MovieT[]; loading: boolean; error?: string };
+    byGenre: { items: MovieT[]; loading: boolean; error?: string; genre?: string }[];
   }>({
+    recentReleases: { items: [], loading: false },
+    comingSoon: { items: [], loading: false },
+    popularMovies: { items: [], loading: false },
+    byGenre: [],
+  });
+  
+  // Estados para dados de "Mais bem avaliados" (apenas filmes)
+  const [topRatedMovies, setTopRatedMovies] = useState<{ items: MovieT[]; loading: boolean; error?: string }>({
     items: [],
     loading: false,
-    page: 0,
-    totalPages: 1,
   });
+  
+  // Estado para "Ver tudo"
+  const [viewAllState, setViewAllState] = useState<{
+    section: string;
+    title: string;
+    subtitle?: string;
+    media?: "movie" | "tv" | "all";
+    filters?: DiscoverFilters;
+    initialItems?: MovieT[];
+  } | null>(null);
+  const [viewAllPage, setViewAllPage] = useState(1);
+  const [viewAllItemsPerPage, setViewAllItemsPerPage] = useState(24);
+  const [viewAllItems, setViewAllItems] = useState<MovieT[]>([]);
+  const [viewAllLoading, setViewAllLoading] = useState(false);
+  const [viewAllTotal, setViewAllTotal] = useState(0);
+  const [viewAllTotalPages, setViewAllTotalPages] = useState(1);
+  
+  // Estados para as 12 fileiras inteligentes
+  const [homeRows, setHomeRows] = useState<{
+    trending: { items: MovieT[]; loading: boolean; error?: string; window: "day" | "week" };
+    personalized: { items: MovieT[]; loading: boolean; error?: string };
+    communityLoved: { items: MovieT[]; loading: boolean; error?: string };
+    topRated: { items: MovieT[]; loading: boolean; error?: string; media: "movie" | "tv" };
+    recentReleases: { items: MovieT[]; loading: boolean; error?: string };
+    byGenre: { items: MovieT[]; loading: boolean; error?: string; genre: string; genreId: number }[];
+    byDecade: { items: MovieT[]; loading: boolean; error?: string; decade: string }[];
+    trendingLists: { items: any[]; loading: boolean; error?: string };
+    recentComments: { items: MovieT[]; loading: boolean; error?: string };
+    similarToFavorites: { items: MovieT[]; loading: boolean; error?: string };
+    indieAcclaimed: { items: MovieT[]; loading: boolean; error?: string };
+    shuffleDiscoveries: { items: MovieT[]; loading: boolean; error?: string };
+  }>({
+    trending: { items: [], loading: false, window: "day" },
+    personalized: { items: [], loading: false },
+    communityLoved: { items: [], loading: false },
+    topRated: { items: [], loading: false, media: "movie" },
+    recentReleases: { items: [], loading: false },
+    byGenre: [],
+    byDecade: [],
+    trendingLists: { items: [], loading: false },
+    recentComments: { items: [], loading: false },
+    similarToFavorites: { items: [], loading: false },
+    indieAcclaimed: { items: [], loading: false },
+    shuffleDiscoveries: { items: [], loading: false },
+  });
+  
+  // Cache simples em memória (pode ser melhorado com localStorage)
+  const rowCache = useRef<Map<string, { data: MovieT[]; timestamp: number; ttl: number }>>(new Map());
+  
+  // Estado para filmes populares filtrados (removido - não usado mais)
 
   // Estados para discover (Filmes e Séries)
   const [moviesFilters, setMoviesFilters] = useState<DiscoverFilters>({
     sortBy: "popularity.desc",
     region: "BR",
+    withPoster: true,
   });
   const [tvFilters, setTvFilters] = useState<DiscoverFilters>({
     sortBy: "popularity.desc",
     region: "BR",
+    withPoster: true,
   });
   const [discoverMovies, setDiscoverMovies] = useState<{
     items: MovieT[];
     loading: boolean;
     page: number;
     totalPages: number;
+    total: number;
   }>({
     items: [],
     loading: false,
     page: 1,
     totalPages: 1,
+    total: 0,
   });
   const [discoverTv, setDiscoverTv] = useState<{
     items: MovieT[];
     loading: boolean;
     page: number;
     totalPages: number;
+    total: number;
   }>({
     items: [],
     loading: false,
     page: 1,
     totalPages: 1,
+    total: 0,
   });
+  
+  const [moviesPerPage, setMoviesPerPage] = useState<number>(() => {
+    const saved = localStorage.getItem("vetra:moviesPerPage");
+    return saved ? parseInt(saved, 10) : 24;
+  });
+  const [tvPerPage, setTvPerPage] = useState<number>(() => {
+    const saved = localStorage.getItem("vetra:tvPerPage");
+    return saved ? parseInt(saved, 10) : 24;
+  });
+  
+  const [moviesFacets, setMoviesFacets] = useState<{ minYear?: number; maxYear?: number; genres?: any[] }>({});
+  const [tvFacets, setTvFacets] = useState<{ minYear?: number; maxYear?: number; genres?: any[] }>({});
+  
+  const discoverAbortController = useRef<AbortController | null>(null);
 
   const [formData, setFormData] = useState({ firstName: "", lastName: "", email: "", password: "", confirmPassword: "", acceptTerms: false });
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
+  const [passwordStrength, setPasswordStrength] = useState<"muito-fraca" | "fraca" | "boa" | "forte">("muito-fraca");
+  const [showPasswordTips, setShowPasswordTips] = useState(false);
+  const [confirmPasswordError, setConfirmPasswordError] = useState<string>("");
+  const [confirmPasswordTouched, setConfirmPasswordTouched] = useState(false);
   const [showShare, setShowShare] = useState(false);
-  const [shareUrl, setShareUrl] = useState("");
+  const [shareSlug, setShareSlug] = useState("");
+  const [showSignupCTAHidden, setShowSignupCTAHidden] = useState(() => {
+    const hidden = localStorage.getItem("vetra:signupCTAHidden");
+    return hidden ? new Date().getTime() - parseInt(hidden, 10) < 30 * 24 * 60 * 60 * 1000 : false;
+  });
+  const [showActionSheet, setShowActionSheet] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   const [user, setUser] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -847,10 +339,21 @@ const AppShell: React.FC = () => {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileMenuRef, setProfileMenuRef] = useState<HTMLDivElement | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [deleteAccountPassword, setDeleteAccountPassword] = useState("");
+  const [deleteAccountError, setDeleteAccountError] = useState("");
+  const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
+  const [deleteAccountConfirmCheckbox, setDeleteAccountConfirmCheckbox] = useState(false);
+  
+  const [useBottomNav, setUseBottomNav] = useState(false);
+  const headerNavRef = useRef<HTMLDivElement | null>(null);
+  const [pendingRoute, setPendingRoute] = useState<string | null>(null);
   
   // Modais modernos
   const [renameModal, setRenameModal] = useState<{ show: boolean; listId: string | null; currentName: string }>({ show: false, listId: null, currentName: "" });
   const [confirmModal, setConfirmModal] = useState<{ show: boolean; message: string; onConfirm: () => void }>({ show: false, message: "", onConfirm: () => {} });
+  const [showCoverSelector, setShowCoverSelector] = useState(false);
+  const [coverSelectorListId, setCoverSelectorListId] = useState<string | null>(null);
   const [renameInput, setRenameInput] = useState("");
 
   const location = useLocation();
@@ -886,23 +389,70 @@ const AppShell: React.FC = () => {
   };
 
   const saveProfile = async (profileData: { name: string; avatar_url?: string | null }) => {
+    if (!user?.email) throw new Error("email obrigatório");
+    const res = await api.profileUpdate({ 
+      name: profileData.name.trim(), 
+      email: user.email,
+      avatar_url: profileData.avatar_url || null
+    });
+    setUser((u) => ({ 
+      name: res.name, 
+      email: u?.email || user?.email || "", 
+      avatar_url: res.avatar_url ?? null, 
+      updatedAt: res.updatedAt ?? null 
+    }));
+    setShowProfileModal(false);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deleteAccountPassword.trim() || !deleteAccountConfirmCheckbox) {
+      setDeleteAccountError("Preencha todos os campos obrigatórios.");
+      return;
+    }
+
+    setDeleteAccountLoading(true);
+    setDeleteAccountError("");
+    
     try {
-      if (!user?.email) throw new Error("email obrigatório");
-      const res = await api.profileUpdate({ 
-        name: profileData.name.trim(), 
-        email: user.email,
-        avatar_url: profileData.avatar_url || null
+      const token = localStorage.getItem("authToken");
+      if (!token) throw new Error("Não autenticado");
+
+      const API_BASE = (import.meta.env.VITE_API_BASE || "").trim() || "http://localhost:4001";
+      const response = await fetch(`${API_BASE}/api/auth/delete-account`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ password: deleteAccountPassword })
       });
-      setUser((u) => ({ 
-        name: res.name, 
-        email: u?.email || user?.email || "", 
-        avatar_url: res.avatar_url ?? null, 
-        updatedAt: res.updatedAt ?? null 
-      }));
-      setShowProfileModal(false);
-      pushToast({ message: t("saved_ok") ?? "Salvo!", tone: "ok" });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setDeleteAccountError("Senha incorreta. Tente novamente.");
+        } else {
+          setDeleteAccountError(data.message || "Não foi possível excluir a conta. Tente novamente.");
+        }
+        return;
+      }
+
+      pushToast({ 
+        message: "Sua conta foi marcada para exclusão e será removida permanentemente em 30 dias, a menos que você a reative.", 
+        tone: "ok" 
+      });
+
+      setIsLoggedIn(false);
+      setUser(null);
+      localStorage.removeItem("authToken");
+      setShowDeleteAccountModal(false);
+      setDeleteAccountPassword("");
+      setDeleteAccountConfirmCheckbox(false);
     } catch (e: any) {
-      pushToast({ message: e?.message || "Falha ao salvar", tone: "err" });
+      setDeleteAccountError("Não foi possível excluir a conta. Tente novamente.");
+    } finally {
+      setDeleteAccountLoading(false);
     }
   };
 
@@ -918,6 +468,113 @@ const AppShell: React.FC = () => {
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [showProfileMenu, profileMenuRef]);
+
+  useEffect(() => {
+    if (showSearchFilters && window.innerWidth < 768) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [showSearchFilters]);
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setUseBottomNav(false);
+      return;
+    }
+
+    const checkNavMode = () => {
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      
+      // Breakpoints responsivos seguindo o guia:
+      // xs: < 480px, sm: 480-768px, md: 768-1024px, lg: 1024-1440px, xl: > 1440px
+      
+      // Regra 1: Mostrar Bottom Nav quando viewport < 900px (xs, sm, md estreito)
+      if (viewportWidth < 900) {
+        setUseBottomNav(true);
+        return;
+      }
+      
+      // Regra 2: Verificar "aspecto estreito" - largura < 60% da largura do monitor
+      // Isso cobre casos de desktop em janela estreita (metade de tela)
+      const screenWidth = window.screen?.width || viewportWidth;
+      const isNarrowAspect = viewportWidth < screenWidth * 0.6;
+      
+      if (isNarrowAspect && viewportWidth < 1024) {
+        setUseBottomNav(true);
+        return;
+      }
+      
+      // Regra 3: Em md (768-1024px), se a janela estiver estreita, ativar Bottom Nav
+      if (viewportWidth >= 768 && viewportWidth < 1024) {
+        // Verificar se há overflow no nav do header
+        if (headerNavRef.current) {
+          const nav = headerNavRef.current;
+          const navContainer = nav.parentElement;
+          if (navContainer) {
+            const containerRect = navContainer.getBoundingClientRect();
+            const navRect = nav.getBoundingClientRect();
+            const availableWidth = containerRect.width;
+            const navNeededWidth = nav.scrollWidth;
+            const hasOverflow = navNeededWidth > availableWidth || navRect.width > availableWidth;
+            
+            if (hasOverflow || isNarrowAspect) {
+              setUseBottomNav(true);
+              return;
+            }
+          }
+        }
+      }
+      
+      // Regra 4: Desktop amplo (lg/xl) - verificar overflow do nav
+      if (viewportWidth >= 1024) {
+        if (headerNavRef.current) {
+          const nav = headerNavRef.current;
+          const navContainer = nav.parentElement;
+          if (navContainer) {
+            const containerRect = navContainer.getBoundingClientRect();
+            const navRect = nav.getBoundingClientRect();
+            const availableWidth = containerRect.width;
+            const navNeededWidth = nav.scrollWidth;
+            const hasOverflow = navNeededWidth > availableWidth || navRect.width > availableWidth;
+            
+            // Em desktop, só mostrar bottom nav se houver overflow E janela estreita
+            if (hasOverflow && isNarrowAspect) {
+              setUseBottomNav(true);
+              return;
+            }
+          }
+        }
+      }
+      
+      // Desktop amplo sem necessidade: usar nav do header
+      setUseBottomNav(false);
+    };
+
+    const timeoutId = setTimeout(checkNavMode, 100);
+    window.addEventListener('resize', checkNavMode);
+    
+    const resizeObserver = new ResizeObserver(() => {
+      setTimeout(checkNavMode, 50);
+    });
+    
+    if (headerNavRef.current) {
+      resizeObserver.observe(headerNavRef.current);
+      const container = headerNavRef.current.parentElement;
+      if (container) {
+        resizeObserver.observe(container);
+      }
+    }
+
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('resize', checkNavMode);
+      resizeObserver.disconnect();
+    };
+  }, [isLoggedIn]);
 
   useEffect(() => setTmdb(tmdbAuthStatus()), []);
 
@@ -961,73 +618,57 @@ const AppShell: React.FC = () => {
     })));
   }, []);
 
-  // compartilhar via ?share= ou /share/:slug
-  useEffect(() => {
-    // Verificar query string primeiro
-    const usp = new URLSearchParams(window.location.search);
-    let slug = usp.get("share");
-    
- 
-    if (!slug) {
-      const pathMatch = window.location.pathname.match(/\/share\/([^\/]+)/);
-      if (pathMatch) {
-        slug = pathMatch[1];
+  // Função para resolver e exibir compartilhamento
+  const resolveShare = async (slugOrCode: string) => {
+    const normalizedSlug = validateAndExtractSlug(slugOrCode) || slugOrCode;
+    console.log('[resolveShare] Iniciando resolução do compartilhamento:', normalizedSlug);
+    setResolvingShare(true);
+    try {
+      const data = await api.shareGet(normalizedSlug);
+      console.log('[resolveShare] Dados recebidos:', data);
       
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.set("share", slug);
-        newUrl.pathname = newUrl.pathname.replace(/\/share\/[^\/]+/, "");
-        window.history.replaceState({}, "", newUrl.toString());
-      }
-    }
-    
-    if (!slug) return;
-    (async () => {
-      try {
-        const data = await api.shareGet(slug);
-        if (Array.isArray(data.items)) {
-          if (data.type === 'collection') {
-            // Coleção compartilhada
-            const mapped = data.items.map((m: any) => ({
-              movie: {
-                id: m.id,
-                media: (m.media || "movie") as MediaT,
-                title: m.title || "",
-                rating: m.vote_average ?? null,
-                voteCount: m.vote_count ?? null,
-                year: (m.release_date || m.first_air_date || "")?.slice(0, 4) || null,
-                image: poster(m.poster_path),
-                overview: m.overview || m.user_description || "",
-                poster_path: m.poster_path ?? null,
-              },
-              meta: {
-                rating: m.user_rating ?? null,
-                description: m.user_description || null,
-              }
-            }));
-            
-            const categoryName = data.listName || "Coleção Compartilhada";
-            setSharedCollection({ items: mapped, listName: categoryName, category: categoryName });
-            setActiveTab("watchlist");
-            setViewingShared(true);
-          } else if (data.type === 'list') {
-            // Lista compartilhada
-            const mapped = data.items.map((m: any) => ({
+      if (Array.isArray(data.items)) {
+        if (data.type === 'collection') {
+          const mapped = data.items.map((m: any) => ({
+            movie: {
               id: m.id,
-              media: m.media || "movie",
+              media: (m.media || "movie") as MediaT,
               title: m.title || "",
               rating: m.vote_average ?? null,
               voteCount: m.vote_count ?? null,
               year: (m.release_date || m.first_air_date || "")?.slice(0, 4) || null,
               image: poster(m.poster_path),
-              overview: m.overview || "",
+              overview: m.overview || m.user_description || "",
               poster_path: m.poster_path ?? null,
-            }));
-            const listName = data.listName || "Lista Compartilhada";
-            setSharedList({ items: mapped, listName });
-            setActiveTab("lists");
-            setViewingShared(true);
-          } else {
-            // Favoritos compartilhados
+            },
+            meta: {
+              rating: m.user_rating ?? null,
+              description: m.user_description || null,
+            }
+          }));
+          const categoryName = data.listName || "Coleção Compartilhada";
+          setSharedCollection({ items: mapped, listName: categoryName, category: categoryName });
+          setActiveTab("watchlist");
+          setViewingShared(true);
+          console.log('[resolveShare] Coleção compartilhada carregada:', mapped.length, 'itens');
+        } else if (data.type === 'list') {
+          const mapped = data.items.map((m: any) => ({
+            id: m.id,
+            media: m.media || "movie",
+            title: m.title || "",
+            rating: m.vote_average ?? null,
+            voteCount: m.vote_count ?? null,
+            year: (m.release_date || m.first_air_date || "")?.slice(0, 4) || null,
+            image: poster(m.poster_path),
+            overview: m.overview || "",
+            poster_path: m.poster_path ?? null,
+          }));
+          const listName = data.listName || "Lista Compartilhada";
+          setSharedList({ items: mapped, listName });
+          setActiveTab("lists");
+          setViewingShared(true);
+          console.log('[resolveShare] Lista compartilhada carregada:', mapped.length, 'itens', { listName, viewingShared: true, isLoggedIn });
+        } else {
           const mapped = data.items.map((m: any) => ({
             id: m.id,
             media: m.media || "movie",
@@ -1042,12 +683,63 @@ const AppShell: React.FC = () => {
           setFavorites(mapped);
           setActiveTab("favorites");
           setViewingShared(true);
-          }
+          console.log('[resolveShare] Favoritos compartilhados carregados:', mapped.length, 'itens');
         }
-      } catch { pushToast({ message: t("share_fail"), tone: "err" }); }
-    })();
-  }, []);
-
+      } else {
+        console.warn('[resolveShare] Resposta inválida: items não é um array');
+        pushToast({ 
+          message: "Formato de dados inválido.", 
+          tone: "err" 
+        });
+      }
+    } catch (error: any) {
+      console.error('[resolveShare] Erro ao resolver compartilhamento:', error);
+      const errorMessage = error?.message || error?.toString() || "";
+      if (errorMessage.includes("404") || errorMessage.includes("não encontrado") || errorMessage.includes("not found")) {
+        pushToast({ 
+          message: "Não encontramos nenhuma lista para este código. Verifique e tente novamente.", 
+          tone: "err" 
+        });
+      } else if (errorMessage.includes("403") || errorMessage.includes("privada") || errorMessage.includes("private")) {
+        pushToast({ 
+          message: "Esta lista é privada.", 
+          tone: "err" 
+        });
+      } else {
+        pushToast({ 
+          message: "Erro ao carregar lista compartilhada. Tente novamente.", 
+          tone: "err" 
+        });
+      }
+      setViewingShared(false);
+    } finally {
+      setResolvingShare(false);
+    }
+  };
+  
+  // Deep-link handling: detecta ?share= na URL e resolve
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    let slug = searchParams.get("share");
+    
+    // Tenta extrair de path também
+    if (!slug) {
+      const pathMatch = location.pathname.match(/\/share\/([^\/]+)/);
+      if (pathMatch) {
+        slug = pathMatch[1];
+        // Limpa o path e adiciona ?share= na query
+        const newPath = location.pathname.replace(/\/share\/[^\/]+/, "");
+        navigate(`${newPath}?share=${slug}`, { replace: true });
+        return; // Retorna para evitar processar duas vezes
+      }
+    }
+    
+    if (!slug) return;
+    
+    // Resolve o compartilhamento
+    resolveShare(slug);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search, location.pathname]);
   
   const mapRows = (rows: ApiMovie[]): MovieT[] =>
     rows.map((m) => ({
@@ -1155,7 +847,6 @@ const AppShell: React.FC = () => {
 
  
   useEffect(() => {
-    loadTrending(trendingWindow, 1);
     (["popular", "top_rated", "now_playing", "upcoming"] as CatKey[]).forEach((k) => {
       loadCategory(k, 1);
      
@@ -1163,53 +854,169 @@ const AppShell: React.FC = () => {
     });
     
   }, [lang]);
-
- 
-  useEffect(() => {
-    if (cats.trending.initialized) {
-      loadTrending(trendingWindow, 1);
-    }
-   
-  }, [trendingWindow]);
-
- 
-  const loadFilteredPopular = async (filter: "streaming" | "tv" | "rent" | "cinema", page: number = 1) => {
-    setFilteredPopular((s) => ({ ...s, loading: true }));
-    try {
-      const data = await api.browsePopularWithFilter(filter, page) as BrowseResp;
-      const rows = (data?.results || []) as ApiMovie[];
-      
-      
-      const filteredRows = rows.filter((x: any) => {
-        const hasImage = (x.poster_path && x.poster_path.trim() !== "") || 
-                        (x.backdrop_path && x.backdrop_path.trim() !== "");
-        const hasTitle = (x.title && x.title.trim() !== "") || 
-                        (x.name && x.name.trim() !== "");
-        const hasInfo = (x.overview && x.overview.trim() !== "") || 
-                       x.release_date || 
-                       x.first_air_date ||
-                       x.vote_average !== null;
-        return hasImage && hasTitle && hasInfo;
-      });
-      
-      const mapped = mapRows(filteredRows);
-
-      setFilteredPopular((prev) => ({
-        items: page > 1 ? [...prev.items, ...mapped] : mapped,
-        loading: false,
-        page,
-        totalPages: (data as any)?.total_pages ?? 1,
-      }));
-    } catch (e: any) {
-      console.error("[loadFilteredPopular] Erro:", e);
-      setFilteredPopular((s) => ({ ...s, loading: false }));
-    }
+  
+  // Helper: limpar cache específico
+  const clearCachedRow = (key: string) => {
+    rowCache.current.delete(key);
   };
-
+  
+  // Helper: verificar cache
+  const getCachedRow = (key: string): MovieT[] | null => {
+    const cached = rowCache.current.get(key);
+    if (cached && Date.now() - cached.timestamp < cached.ttl) {
+      return cached.data;
+    }
+    return null;
+  };
+  
+  // Helper: salvar no cache
+  const setCachedRow = (key: string, data: MovieT[], ttl: number) => {
+    rowCache.current.set(key, { data, timestamp: Date.now(), ttl });
+  };
+  
+  // Helper: deduplicar itens entre fileiras (evitar repetição lado a lado)
+  const dedupeItems = (newItems: MovieT[], existingItems: MovieT[]): MovieT[] => {
+    const existingKeys = new Set(existingItems.map(m => `${m.media || "movie"}:${m.id}`));
+    return newItems.filter(m => !existingKeys.has(`${m.media || "movie"}:${m.id}`));
+  };
+  
+  // 1. Mais bem avaliados (top_rated) - Usar browse/getCategory com filtro vote_count >= 500
+  const loadTopRatedSection = useCallback(async (page = 1, skipIds: Set<string> = new Set(), forceRefresh = false) => {
+    const cacheKey = `top_rated_movies_${lang}_BR_${page}`;
+    const cacheTTL = 15 * 60 * 1000; // 15 minutos
+    
+    // Limpar cache se forceRefresh
+    if (forceRefresh) {
+      clearCachedRow(cacheKey);
+    }
+    
+    const cached = getCachedRow(cacheKey);
+    
+    if (cached && cached.length > 0 && !forceRefresh) {
+      const filtered = cached.filter(m => !skipIds.has(`${m.media || "movie"}:${m.id}`));
+      setTopRatedMovies({ items: filtered, loading: false });
+      console.log(`[home_carousel_loaded] section=top_rated source=cache page=${page} items=${filtered.length}`);
+      return filtered;
+    }
+    
+    setTopRatedMovies(prev => ({ ...prev, loading: true }));
+    const startTime = Date.now();
+    
+    try {
+      let data: BrowseResp;
+      let source = "tmdb";
+      
+      // Tentar usar browse do VETRA primeiro
+      try {
+        data = await api.browse("top_rated", page);
+        source = "vetra";
+      } catch (vetraError) {
+        // Fallback para getCategory do TMDb
+        console.log(`[api_fallback_used] endpoint=/browse/top_rated reason=${vetraError} status=fallback`);
+        data = await api.getCategory("movie", "top_rated", page);
+      }
+      
+      const results = (data?.results || []) as ApiMovie[];
+      
+      // Filtrar por vote_count >= 500 e ordenar por vote_average DESC, tie-break por vote_count DESC
+      const filtered = results
+        .filter(m => {
+          const voteCount = (m as any).vote_count || 0;
+          const hasPoster = m.poster_path || (m as any).image;
+          return voteCount >= 500 && hasPoster;
+        })
+        .sort((a, b) => {
+          const aVote = a.vote_average || 0;
+          const bVote = b.vote_average || 0;
+          if (bVote !== aVote) return bVote - aVote;
+          const aCount = (a as any).vote_count || 0;
+          const bCount = (b as any).vote_count || 0;
+          return bCount - aCount;
+        })
+        .slice(0, 20);
+      
+      // Remover duplicados baseado em skipIds
+      const deduplicated = filtered.filter(m => !skipIds.has(`${m.media || "movie"}:${m.id}`));
+      
+      // Se não temos itens suficientes após dedup, tentar próxima página (máx 3 tentativas)
+      let finalItems = deduplicated;
+      if (deduplicated.length < 10 && page < 3) {
+        const nextPageItems = await loadTopRatedSection(page + 1, skipIds, false);
+        finalItems = [...deduplicated, ...nextPageItems].slice(0, 20);
+      } else if (deduplicated.length === 0 && page === 1) {
+        // Se não encontrou nada na primeira página, logar
+        console.log(`[home_carousel_dedup_skips] section=top_rated skipped_count=${filtered.length - deduplicated.length}`);
+      }
+      
+      const mapped = mapRows(finalItems as ApiMovie[]);
+      
+      setCachedRow(cacheKey, mapped, cacheTTL);
+      const duration = Date.now() - startTime;
+      console.log(`[home_carousel_loaded] section=top_rated source=${source} page=${page} items=${mapped.length} duration_ms=${duration} forceRefresh=${forceRefresh}`);
+      
+      // Alertar se >30% dos itens têm vote_count < 500
+      const lowVoteCount = mapped.filter(m => (m.voteCount || 0) < 500).length;
+      if (lowVoteCount > mapped.length * 0.3) {
+        console.warn(`[home_carousel_quality_alert] section=top_rated low_vote_count_items=${lowVoteCount} total=${mapped.length}`);
+      }
+      
+      setTopRatedMovies({ items: mapped, loading: false });
+      console.log('[home_sections] Estado topRatedMovies atualizado com', mapped.length, 'itens');
+      return mapped;
+    } catch (e: any) {
+      const duration = Date.now() - startTime;
+      console.error(`[home_carousel_error] section=top_rated error=${e?.message} duration_ms=${duration}`);
+      setTopRatedMovies(prev => ({ ...prev, loading: false, error: e?.message }));
+      return [];
+    }
+  }, [lang]);
+ 
+  // Carregar fileiras inteligentes com deduplicação
   useEffect(() => {
-    loadFilteredPopular(popularFilter, 1);
+    if (!searchTerm && !hasActiveFilters && activeTab === "home" && activeCategory === "home") {
+      console.log('[home_sections] Carregando seções da home...');
+      // Sempre recarregar para garantir dados atualizados (forceRefresh = true na primeira vez)
+      loadTopRatedSection(1, new Set(), true).then((topRatedItems) => {
+        console.log('[home_sections] Top rated carregado:', topRatedItems.length, 'itens');
+        // Criar set de IDs já renderizados para deduplicação
+        const renderedIds = new Set(topRatedItems.map(m => `${m.media || "movie"}:${m.id}`));
+        
+        // Carregar "Populares" pulando duplicados
+        loadPopularSection(1, renderedIds, true).then((popularItems) => {
+          console.log('[home_sections] Popular carregado:', popularItems.length, 'itens');
+        });
+      });
+      loadPersonalizedRow();
+      loadTopRatedRow("movie");
+      loadRecentReleasesRow();
+      loadShuffleDiscoveries();
+      
+      // Carregar gêneros mais comuns (se logado)
+      if (isLoggedIn && favorites.length > 0) {
+        const favoriteGenres = new Map<number, number>();
+        favorites.forEach((m) => {
+          const genres = (m as any).genres || [];
+          genres.forEach((g: any) => {
+            const genreId = typeof g === "object" ? g.id : g;
+            if (genreId) favoriteGenres.set(genreId, (favoriteGenres.get(genreId) || 0) + 1);
+          });
+        });
+        const topGenres = Array.from(favoriteGenres.entries()).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([id]) => id);
+        topGenres.forEach((id, idx) => {
+          const genreNames: Record<number, string> = { 28: "Ação", 35: "Comédia", 18: "Drama", 53: "Suspense", 16: "Animação", 99: "Documentário" };
+          setTimeout(() => loadByGenreRow(id, genreNames[id] || `Gênero ${id}`), idx * 300);
+        });
+      } else {
+        // Gêneros padrão
+        setTimeout(() => loadByGenreRow(28, "Ação"), 0);
+        setTimeout(() => loadByGenreRow(35, "Comédia"), 300);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, hasActiveFilters, activeTab, activeCategory, lang]);
 
-  }, [popularFilter]);
+ 
+  // loadFilteredPopular removido - não usado mais
 
 
   useEffect(() => {
@@ -1229,15 +1036,28 @@ const AppShell: React.FC = () => {
           const results = (data as any).results || [];
           console.log("[PeopleContent] Total de resultados:", results.length);
           
-         
-          const filteredResults = results.filter((person: any) => {
+          // Garantir que profile_path está presente
+          const resultsWithImages = results.map((person: any) => ({
+            ...person,
+            profile_path: person.profile_path || null,
+            name: person.name || "",
+            known_for_department: person.known_for_department || null,
+            known_for: person.known_for || [],
+            popularity: person.popularity || 0,
+          }));
+          
+          const filteredResults = resultsWithImages.filter((person: any) => {
             const hasName = person.name && person.name.trim() !== "";
             return hasName;
           });
           
           console.log("[PeopleContent] Após filtro:", filteredResults.length);
+          console.log("[PeopleContent] Primeira pessoa:", filteredResults[0]);
+          if (filteredResults[0]) {
+            console.log("[PeopleContent] Profile path da primeira pessoa:", filteredResults[0].profile_path);
+            console.log("[PeopleContent] URL da imagem:", filteredResults[0].profile_path ? `https://image.tmdb.org/t/p/w300${filteredResults[0].profile_path}` : "Sem imagem");
+          }
           
-      
           const sortedResults = filteredResults.sort((a: any, b: any) => {
             const aHasPhoto = a.profile_path && a.profile_path.trim() !== "";
             const bHasPhoto = b.profile_path && b.profile_path.trim() !== "";
@@ -1256,7 +1076,7 @@ const AppShell: React.FC = () => {
         .finally(() => setPeopleLoading(false));
     }
     
-  }, [activeTab]);
+  }, [activeTab, lang]);
   
   useEffect(() => {
     if (activeTab === "people" && peoplePage > 1 && !peopleLoading) {
@@ -1264,7 +1084,18 @@ const AppShell: React.FC = () => {
       popularPeople(peoplePage, lang)
         .then((data) => {
           const results = (data as any).results || [];
-          const filteredResults = results.filter((person: any) => {
+          
+          // Garantir que profile_path está presente
+          const resultsWithImages = results.map((person: any) => ({
+            ...person,
+            profile_path: person.profile_path || null,
+            name: person.name || "",
+            known_for_department: person.known_for_department || null,
+            known_for: person.known_for || [],
+            popularity: person.popularity || 0,
+          }));
+          
+          const filteredResults = resultsWithImages.filter((person: any) => {
             const hasName = person.name && person.name.trim() !== "";
             return hasName;
           });
@@ -1289,201 +1120,871 @@ const AppShell: React.FC = () => {
  
   }, [peoplePage]);
 
+  const loadViewAllPage = async (page: number, media: "movie" | "tv" | "all", filters: DiscoverFilters) => {
+    if (!viewAllState) return;
+    setViewAllLoading(true);
+    try {
+      if (media === "all") {
+        const [moviesData, tvData] = await Promise.all([
+          api.discover("movie", filters, page, viewAllItemsPerPage),
+          api.discover("tv", filters, page, viewAllItemsPerPage),
+        ]);
+        const allItems = [
+          ...mapRows((moviesData?.results || moviesData?.items || []) as ApiMovie[]),
+          ...mapRows((tvData?.results || tvData?.items || []) as ApiMovie[]),
+        ];
+        setViewAllItems(allItems);
+        const total = ((moviesData as any)?.total_results || 0) + ((tvData as any)?.total_results || 0);
+        setViewAllTotal(total);
+        setViewAllTotalPages(Math.ceil(total / viewAllItemsPerPage));
+      } else {
+        const data = await api.discover(media, filters, page, viewAllItemsPerPage);
+        const mapped = mapRows((data?.results || data?.items || []) as ApiMovie[]);
+        setViewAllItems(mapped);
+        setViewAllTotal((data as any)?.total_results || 0);
+        setViewAllTotalPages((data as any)?.total_pages || Math.ceil(((data as any)?.total_results || 0) / viewAllItemsPerPage));
+      }
+    } catch (e: any) {
+      pushToast({ message: "Erro ao carregar itens", tone: "err" });
+      console.error("Erro ao carregar viewAll:", e);
+    } finally {
+      setViewAllLoading(false);
+    }
+  };
+  
+  // 2. Para você (Personalizado)
+  const loadPersonalizedRow = async () => {
+    if (!isLoggedIn || (favorites.length === 0 && Object.keys(userStates).length === 0)) {
+      const popularData = await api.discover("movie", { sortBy: "popularity.desc", withPoster: true }, 1, 20);
+      const popularItems = mapRows((popularData?.results || []) as ApiMovie[]);
+      setHomeRows(s => ({ ...s, personalized: { items: popularItems, loading: false } }));
+      return;
+    }
+    
+    const cacheKey = `personalized_${user?.email || "guest"}_${lang}_${new Date().toISOString().split('T')[0]}`;
+    const cached = getCachedRow(cacheKey);
+    if (cached) {
+      setHomeRows(s => ({ ...s, personalized: { ...s.personalized, items: cached, loading: false } }));
+      return;
+    }
+    
+    setHomeRows(s => ({ ...s, personalized: { ...s.personalized, loading: true } }));
+    try {
+      const favoriteGenres = new Map<number, number>();
+      const favoriteCast = new Map<number, number>();
+      const favoriteIds = new Set<string>();
+      
+      favorites.forEach((m) => {
+        favoriteIds.add(mediaKey(m));
+        const genres = (m as any).genres || [];
+        genres.forEach((g: any) => {
+          const genreId = typeof g === "object" ? g.id : g;
+          if (genreId) favoriteGenres.set(genreId, (favoriteGenres.get(genreId) || 0) + 1);
+        });
+      });
+      
+      const topGenres = Array.from(favoriteGenres.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => id);
+      if (topGenres.length === 0) {
+        const popularData = await api.discover("movie", { sortBy: "popularity.desc", withPoster: true }, 1, 20);
+        const popularItems = mapRows((popularData?.results || []) as ApiMovie[]);
+        setHomeRows(s => ({ ...s, personalized: { items: popularItems, loading: false } }));
+        return;
+      }
+      
+      const [moviesData, tvData] = await Promise.all([
+        api.discover("movie", { genres: topGenres, sortBy: "popularity.desc", withPoster: true }, 1, 20),
+        api.discover("tv", { genres: topGenres, sortBy: "popularity.desc", withPoster: true }, 1, 20),
+      ]);
+      
+      const allItems = [
+        ...mapRows((moviesData?.results || []) as ApiMovie[]),
+        ...mapRows((tvData?.results || []) as ApiMovie[]),
+      ].filter(m => !favoriteIds.has(mediaKey(m)))
+        .map((m: any) => {
+          let score = 0.1 * (m.popularity || 0);
+          const genres = m.genres || [];
+          genres.forEach((g: any) => {
+            if (topGenres.includes(typeof g === "object" ? g.id : g)) score += 0.6 / topGenres.length;
+          });
+          return { movie: m, score };
+        })
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 20)
+        .map(({ movie }) => movie);
+      
+      if (allItems.length < 10) {
+        const popularData = await api.discover("movie", { sortBy: "popularity.desc", withPoster: true }, 1, 20);
+        const popularItems = mapRows((popularData?.results || []) as ApiMovie[]);
+        allItems.push(...popularItems.slice(0, 10 - allItems.length));
+      }
+      
+      setCachedRow(cacheKey, allItems, 24 * 60 * 60 * 1000); // 24h
+      setHomeRows(s => ({ ...s, personalized: { items: allItems, loading: false } }));
+    } catch (e: any) {
+      setHomeRows(s => ({ ...s, personalized: { ...s.personalized, loading: false, error: e?.message } }));
+    }
+  };
+  
+  // 4. Altíssima avaliação
+  const loadTopRatedRow = async (media: "movie" | "tv") => {
+    const cacheKey = `top_rated_${media}_${lang}_${new Date().toISOString().split('T')[0]}`;
+    const cached = getCachedRow(cacheKey);
+    if (cached) {
+      setHomeRows(s => ({ ...s, topRated: { ...s.topRated, items: cached, loading: false, media } }));
+      return;
+    }
+    
+    setHomeRows(s => ({ ...s, topRated: { ...s.topRated, loading: true, media } }));
+    try {
+      const data = await api.discover(media, {
+        sortBy: "vote_average.desc",
+        voteCountGte: 1000,
+        voteAverageGte: 8.0,
+        withPoster: true,
+      }, 1, 20);
+      
+      let mapped = mapRows((data?.results || []) as ApiMovie[]);
+      if (mapped.length < 12) {
+        const fallbackData = await api.discover(media, {
+          sortBy: "vote_average.desc",
+          voteCountGte: 1000,
+          voteAverageGte: 7.5,
+          withPoster: true,
+        }, 1, 20);
+        mapped = mapRows((fallbackData?.results || []) as ApiMovie[]);
+      }
+      
+      setCachedRow(cacheKey, mapped, 24 * 60 * 60 * 1000); // 24h
+      setHomeRows(s => ({ ...s, topRated: { items: mapped, loading: false, media } }));
+    } catch (e: any) {
+      setHomeRows(s => ({ ...s, topRated: { ...s.topRated, loading: false, error: e?.message } }));
+    }
+  };
+  
+  // 5. Lançados recentemente
+  const loadRecentReleasesRow = async () => {
+    const cacheKey = `recent_releases_${lang}_${new Date().toISOString().split('T')[0]}`;
+    const cached = getCachedRow(cacheKey);
+    if (cached) {
+      setHomeRows(s => ({ ...s, recentReleases: { ...s.recentReleases, items: cached, loading: false } }));
+      return;
+    }
+    
+    setHomeRows(s => ({ ...s, recentReleases: { ...s.recentReleases, loading: true } }));
+    try {
+      const today = new Date();
+      const sixtyDaysAgo = new Date(today);
+      sixtyDaysAgo.setDate(today.getDate() - 60);
+      const dateFrom = sixtyDaysAgo.toISOString().split('T')[0];
+      const dateTo = today.toISOString().split('T')[0];
+      
+      const [moviesData, tvData] = await Promise.all([
+        api.discover("movie", {
+          releaseDateFrom: dateFrom,
+          releaseDateTo: dateTo,
+          sortBy: "primary_release_date.desc",
+          withPoster: true,
+        }, 1, 20),
+        api.discover("tv", {
+          airDateFrom: dateFrom,
+          airDateTo: dateTo,
+          sortBy: "first_air_date.desc",
+          withPoster: true,
+        }, 1, 20),
+      ]);
+      
+      const allItems = [
+        ...mapRows((moviesData?.results || []) as ApiMovie[]),
+        ...mapRows((tvData?.results || []) as ApiMovie[]),
+      ].sort((a, b) => {
+        const aDate = a.year ? parseInt(a.year) : 0;
+        const bDate = b.year ? parseInt(b.year) : 0;
+        return bDate - aDate;
+      }).slice(0, 20);
+      
+      if (allItems.length < 10) {
+        const ninetyDaysAgo = new Date(today);
+        ninetyDaysAgo.setDate(today.getDate() - 90);
+        const dateFrom90 = ninetyDaysAgo.toISOString().split('T')[0];
+        const [moviesData90, tvData90] = await Promise.all([
+          api.discover("movie", {
+            releaseDateFrom: dateFrom90,
+            releaseDateTo: dateTo,
+            sortBy: "primary_release_date.desc",
+            withPoster: true,
+          }, 1, 20),
+          api.discover("tv", {
+            airDateFrom: dateFrom90,
+            airDateTo: dateTo,
+            sortBy: "first_air_date.desc",
+            withPoster: true,
+          }, 1, 20),
+        ]);
+        const allItems90 = [
+          ...mapRows((moviesData90?.results || []) as ApiMovie[]),
+          ...mapRows((tvData90?.results || []) as ApiMovie[]),
+        ].sort((a, b) => {
+          const aDate = a.year ? parseInt(a.year) : 0;
+          const bDate = b.year ? parseInt(b.year) : 0;
+          return bDate - aDate;
+        }).slice(0, 20);
+        setHomeRows(s => ({ ...s, recentReleases: { items: allItems90, loading: false } }));
+        setCachedRow(cacheKey, allItems90, 24 * 60 * 60 * 1000);
+        return;
+      }
+      
+      setCachedRow(cacheKey, allItems, 24 * 60 * 60 * 1000); // 24h
+      setHomeRows(s => ({ ...s, recentReleases: { items: allItems, loading: false } }));
+    } catch (e: any) {
+      setHomeRows(s => ({ ...s, recentReleases: { ...s.recentReleases, loading: false, error: e?.message } }));
+    }
+  };
+  
+  // 6. Explorar por gênero
+  const loadByGenreRow = async (genreId: number, genreName: string) => {
+    const cacheKey = `by_genre_${genreId}_${lang}_${new Date().toISOString().split('T')[0]}`;
+    const cached = getCachedRow(cacheKey);
+    if (cached) {
+      const existing = homeRows.byGenre.find(g => g.genreId === genreId);
+      if (!existing) {
+        setHomeRows(s => ({
+          ...s,
+          byGenre: [...s.byGenre, { items: cached, loading: false, genre: genreName, genreId }],
+        }));
+      }
+      return;
+    }
+    
+    const existing = homeRows.byGenre.find(g => g.genreId === genreId);
+    if (existing) {
+      setHomeRows(s => ({
+        ...s,
+        byGenre: s.byGenre.map(g => g.genreId === genreId ? { ...g, loading: true } : g),
+      }));
+    } else {
+      setHomeRows(s => ({
+        ...s,
+        byGenre: [...s.byGenre, { items: [], loading: true, genre: genreName, genreId }],
+      }));
+    }
+    
+    try {
+      const [moviesData, tvData] = await Promise.all([
+        api.discover("movie", {
+          genres: [genreId],
+          sortBy: "popularity.desc",
+          voteCountGte: 300,
+          withPoster: true,
+        }, 1, 15),
+        api.discover("tv", {
+          genres: [genreId],
+          sortBy: "popularity.desc",
+          voteCountGte: 300,
+          withPoster: true,
+        }, 1, 15),
+      ]);
+      
+      const allItems = [
+        ...mapRows((moviesData?.results || []) as ApiMovie[]),
+        ...mapRows((tvData?.results || []) as ApiMovie[]),
+      ].slice(0, 15);
+      
+      setCachedRow(cacheKey, allItems, 24 * 60 * 60 * 1000); // 24h
+      setHomeRows(s => ({
+        ...s,
+        byGenre: s.byGenre.map(g => g.genreId === genreId ? { ...g, items: allItems, loading: false } : g),
+      }));
+    } catch (e: any) {
+      setHomeRows(s => ({
+        ...s,
+        byGenre: s.byGenre.map(g => g.genreId === genreId ? { ...g, loading: false, error: e?.message } : g),
+      }));
+    }
+  };
+  
+  // 12. Descobertas rápidas (Shuffle)
+  const loadShuffleDiscoveries = async () => {
+    setHomeRows(s => ({ ...s, shuffleDiscoveries: { ...s.shuffleDiscoveries, loading: true } }));
+    try {
+      const favoriteIds = new Set(favorites.map(m => mediaKey(m)));
+      const seed = user?.email ? parseInt(user.email.slice(-4), 16) || 0 : Math.floor(Math.random() * 10000);
+      
+      const data = await api.discover("movie", {
+        sortBy: "popularity.desc",
+        withPoster: true,
+      }, Math.floor(seed % 10) + 1, 20);
+      
+      const mapped = mapRows((data?.results || []) as ApiMovie[])
+        .filter(m => !favoriteIds.has(mediaKey(m)))
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 20);
+      
+      setHomeRows(s => ({ ...s, shuffleDiscoveries: { items: mapped, loading: false } }));
+    } catch (e: any) {
+      setHomeRows(s => ({ ...s, shuffleDiscoveries: { ...s.shuffleDiscoveries, loading: false, error: e?.message } }));
+    }
+  };
+  
+  const loadDiscoverMovies = useCallback(async (page: number = 1, filters: DiscoverFilters = moviesFilters) => {
+    if (discoverAbortController.current) {
+      discoverAbortController.current.abort();
+    }
+    discoverAbortController.current = new AbortController();
+    
+    setDiscoverMovies((prev) => ({ ...prev, loading: true }));
+    
+    try {
+      const data = await api.discover("movie", { ...filters, withPoster: filters.withPoster !== false }, page, moviesPerPage);
+      const results = (data?.results || []) as ApiMovie[];
+      const filtered = results.filter((x: any) => {
+        if (filters.withPoster !== false) {
+          const hasImage = (x.poster_path && x.poster_path.trim() !== "") || 
+                          (x.backdrop_path && x.backdrop_path.trim() !== "");
+          if (!hasImage) return false;
+        }
+        const hasTitle = (x.title && x.title.trim() !== "") || 
+                        (x.name && x.name.trim() !== "");
+        const hasInfo = (x.overview && x.overview.trim() !== "") || 
+                       x.release_date || 
+                       x.first_air_date ||
+                       x.vote_average !== null;
+        return hasTitle && hasInfo;
+      });
+      const mapped = mapRows(filtered);
+      setDiscoverMovies({
+        items: mapped,
+        loading: false,
+        page: page,
+        totalPages: (data as any)?.total_pages ?? 1,
+        total: (data as any)?.total_results ?? 0,
+      });
+      
+      if ((data as any)?.facets) {
+        setMoviesFacets((data as any).facets);
+      }
+    } catch (e: any) {
+      if (e.name === "AbortError") return;
+      console.error("[loadDiscoverMovies] Erro:", e);
+      setDiscoverMovies((prev) => ({ ...prev, loading: false }));
+      pushToast({ message: t("error_load_movies"), tone: "err" });
+    }
+  }, [moviesFilters, moviesPerPage, t, pushToast]);
+
+  const discoverMoviesDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   useEffect(() => {
     if (activeCategory === "movies" && activeTab === "home") {
-      setDiscoverMovies({ items: [], loading: true, page: 1, totalPages: 1 });
-      api.discover("movie", moviesFilters, 1)
-        .then((data) => {
-          const results = (data?.results || []) as ApiMovie[];
-          const filtered = results.filter((x: any) => {
-            const hasImage = (x.poster_path && x.poster_path.trim() !== "") || 
-                            (x.backdrop_path && x.backdrop_path.trim() !== "");
-            const hasTitle = (x.title && x.title.trim() !== "") || 
-                            (x.name && x.name.trim() !== "");
-            const hasInfo = (x.overview && x.overview.trim() !== "") || 
-                           x.release_date || 
-                           x.first_air_date ||
-                           x.vote_average !== null;
-            return hasImage && hasTitle && hasInfo;
-          });
-          const mapped = mapRows(filtered);
-          setDiscoverMovies({
-            items: mapped,
-            loading: false,
-            page: 1,
-            totalPages: (data as any)?.total_pages ?? 1,
-          });
-        })
-        .catch((e: any) => {
-          console.error("[loadDiscoverMovies] Erro:", e);
-          setDiscoverMovies((prev) => ({ ...prev, loading: false }));
-                                      pushToast({ message: t("error_load_movies"), tone: "err" });
-        });
+      if (discoverMoviesDebounce.current) {
+        clearTimeout(discoverMoviesDebounce.current);
+      }
+      discoverMoviesDebounce.current = setTimeout(() => {
+        setDiscoverMovies((prev) => ({ ...prev, page: 1, total: 0 }));
+        loadDiscoverMovies(1, moviesFilters);
+      }, 350);
+      
+      return () => {
+        if (discoverMoviesDebounce.current) {
+          clearTimeout(discoverMoviesDebounce.current);
+        }
+      };
     }
+  }, [activeCategory, activeTab, moviesFilters, loadDiscoverMovies]);
+
+
+  const loadDiscoverTv = useCallback(async (page: number = 1, filters: DiscoverFilters = tvFilters) => {
+    if (discoverAbortController.current) {
+      discoverAbortController.current.abort();
+    }
+    discoverAbortController.current = new AbortController();
     
-  }, [activeCategory, activeTab, moviesFilters]);
-
-
-  useEffect(() => {
-    if (activeCategory === "tv" && activeTab === "home") {
-      setDiscoverTv({ items: [], loading: true, page: 1, totalPages: 1 });
-      api.discover("tv", tvFilters, 1)
-        .then((data) => {
-          const results = (data?.results || []) as ApiMovie[];
-          const filtered = results.filter((x: any) => {
-            const hasImage = (x.poster_path && x.poster_path.trim() !== "") || 
-                            (x.backdrop_path && x.backdrop_path.trim() !== "");
-            const hasTitle = (x.title && x.title.trim() !== "") || 
-                            (x.name && x.name.trim() !== "");
-            const hasInfo = (x.overview && x.overview.trim() !== "") || 
-                           x.release_date || 
-                           x.first_air_date ||
-                           x.vote_average !== null;
-            return hasImage && hasTitle && hasInfo;
-          });
-          const mapped = mapRows(filtered);
-          setDiscoverTv({
-            items: mapped,
-            loading: false,
-            page: 1,
-            totalPages: (data as any)?.total_pages ?? 1,
-          });
-        })
-        .catch((e: any) => {
-          console.error("[loadDiscoverTv] Erro:", e);
-          setDiscoverTv((prev) => ({ ...prev, loading: false }));
-                                      pushToast({ message: t("error_load_series"), tone: "err" });
-        });
-    }
-   
-  }, [activeCategory, activeTab, tvFilters]);
-
-
-  const runSearch = async (query: string) => {
-    if (!query.trim()) {
-      setMovies([]); setPeople([]); return;
-    }
-    setLoading(true);
+    setDiscoverTv((prev) => ({ ...prev, loading: true }));
+    
     try {
-      const filters: { year?: number; minRating?: number } = {};
-      if (searchYear) filters.year = parseInt(searchYear);
-      if (searchMinRating) filters.minRating = parseFloat(searchMinRating);
-      
-      const data = await api.search(query, 1, filters);
-      const mixed = (data as any).items || (data as any).results || [];
-      
-      console.log('Search results:', { 
-        query, 
-        total: mixed.length, 
-        movies: mixed.filter((x: any) => (x.media_type || x.media) === 'movie').length,
-        tv: mixed.filter((x: any) => (x.media_type || x.media) === 'tv').length,
-        people: mixed.filter((x: any) => (x.media_type || x.media) === 'person').length,
-      });
-
-
-      let moviesPart = mixed.filter((x: any) => {
-        const mediaType = x.media_type || x.media;
-        
-
-        if (mediaType === "movie" || mediaType === "tv") {
-
-        if (searchOnlyWithPoster && !x.poster_path) return false;
-
+      const data = await api.discover("tv", { ...filters, withPoster: filters.withPoster !== false }, page, tvPerPage);
+      const results = (data?.results || []) as ApiMovie[];
+      const filtered = results.filter((x: any) => {
+        if (filters.withPoster !== false) {
+          const hasImage = (x.poster_path && x.poster_path.trim() !== "") || 
+                          (x.backdrop_path && x.backdrop_path.trim() !== "");
+          if (!hasImage) return false;
+        }
         const hasTitle = (x.title && x.title.trim() !== "") || 
                         (x.name && x.name.trim() !== "");
-    
-          return hasTitle;
-        }
-        
-        
-        if (x.poster_path && !x.profile_path) {
-          const hasTitle = (x.title && x.title.trim() !== "") || 
-                          (x.name && x.name.trim() !== "");
-          if (searchOnlyWithPoster && !x.poster_path) return false;
-          return hasTitle;
-        }
-        
-
-        if (x.title && x.release_date) {
-          if (searchOnlyWithPoster && !x.poster_path) return false;
-          return true;
-        }
-
-        if (x.name && x.first_air_date) {
-          if (searchOnlyWithPoster && !x.poster_path) return false;
-          return true;
-        }
-        
-        return false;
+        const hasInfo = (x.overview && x.overview.trim() !== "") || 
+                       x.release_date || 
+                       x.first_air_date ||
+                       x.vote_average !== null;
+        return hasTitle && hasInfo;
+      });
+      const mapped = mapRows(filtered);
+      setDiscoverTv({
+        items: mapped,
+        loading: false,
+        page: page,
+        totalPages: (data as any)?.total_pages ?? 1,
+        total: (data as any)?.total_results ?? 0,
       });
       
+      if ((data as any)?.facets) {
+        setTvFacets((data as any).facets);
+      }
+    } catch (e: any) {
+      if (e.name === "AbortError") return;
+      console.error("[loadDiscoverTv] Erro:", e);
+      setDiscoverTv((prev) => ({ ...prev, loading: false }));
+      pushToast({ message: t("error_load_series"), tone: "err" });
+    }
+  }, [tvFilters, tvPerPage, t, pushToast]);
 
-      if (searchYear || searchYearTo) {
-        moviesPart = moviesPart.filter((x: any) => {
-          const releaseYear = x.release_date || x.first_air_date;
-          if (!releaseYear) return false;
-          const year = parseInt(releaseYear.slice(0, 4));
-          if (searchYear && year < parseInt(searchYear)) return false;
-          if (searchYearTo && year > parseInt(searchYearTo)) return false;
+  const discoverTvDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  useEffect(() => {
+    if (activeCategory === "tv" && activeTab === "home") {
+      if (discoverTvDebounce.current) {
+        clearTimeout(discoverTvDebounce.current);
+      }
+      discoverTvDebounce.current = setTimeout(() => {
+        setDiscoverTv((prev) => ({ ...prev, page: 1, total: 0 }));
+        loadDiscoverTv(1, tvFilters);
+      }, 350);
+      
+      return () => {
+        if (discoverTvDebounce.current) {
+          clearTimeout(discoverTvDebounce.current);
+        }
+      };
+    }
+  }, [activeCategory, activeTab, tvFilters, loadDiscoverTv]);
+
+  // Carregar dados para seção "Populares" - Usar browse/getCategory com ordenação por popularity DESC
+  const loadPopularSection = useCallback(async (page = 1, skipIds: Set<string> = new Set(), forceRefresh = false) => {
+    const cacheKey = `popular_movies_${lang}_BR_${page}`;
+    const cacheTTL = 15 * 60 * 1000; // 15 minutos
+    
+    // Limpar cache se forceRefresh
+    if (forceRefresh) {
+      clearCachedRow(cacheKey);
+    }
+    
+    const cached = getCachedRow(cacheKey);
+    
+    if (cached && cached.length > 0 && !forceRefresh) {
+      const filtered = cached.filter(m => !skipIds.has(`${m.media || "movie"}:${m.id}`));
+      setHomeSections(s => ({
+        ...s,
+        popularMovies: { items: filtered, loading: false }
+      }));
+      console.log(`[home_carousel_loaded] section=popular source=cache page=${page} items=${filtered.length}`);
+      return filtered;
+    }
+    
+    setHomeSections(s => ({
+      ...s,
+      popularMovies: { ...s.popularMovies, loading: true }
+    }));
+    
+    const startTime = Date.now();
+    
+    try {
+      let data: BrowseResp;
+      let source = "tmdb";
+      
+      // Tentar usar browse do VETRA primeiro
+      try {
+        data = await api.browse("popular", page);
+        source = "vetra";
+      } catch (vetraError) {
+        // Fallback para getCategory do TMDb
+        console.log(`[api_fallback_used] endpoint=/browse/popular reason=${vetraError} status=fallback`);
+        data = await api.getCategory("movie", "popular", page);
+      }
+      
+      const results = (data?.results || []) as ApiMovie[];
+      
+      // Filtrar apenas itens com poster
+      const withPoster = results.filter(m => {
+        const hasPoster = m.poster_path || (m as any).image;
+        return hasPoster;
+      });
+      
+      // Ordenar por popularity DESC (a API já vem ordenada, mas garantimos)
+      const sorted = withPoster.sort((a, b) => {
+        const aPop = a.popularity ?? (a as any).popularity ?? 0;
+        const bPop = b.popularity ?? (b as any).popularity ?? 0;
+        return bPop - aPop;
+      });
+      
+      const filtered = sorted.slice(0, 20);
+      
+      console.log('[popular_debug] Primeiros 5 após ordenação:', filtered.slice(0, 5).map(m => ({
+        id: m.id,
+        title: m.title || m.name,
+        popularity: m.popularity ?? (m as any).popularity
+      })));
+      
+      // Remover duplicados baseado em skipIds
+      const deduplicated = filtered.filter(m => !skipIds.has(`${m.media || "movie"}:${m.id}`));
+      
+      // Se não temos itens suficientes após dedup, tentar próxima página (máx 3 tentativas)
+      let finalItems = deduplicated;
+      if (deduplicated.length < 10 && page < 3) {
+        const nextPageItems = await loadPopularSection(page + 1, skipIds, false);
+        finalItems = [...deduplicated, ...nextPageItems].slice(0, 20);
+      } else if (deduplicated.length === 0 && page === 1) {
+        // Se não encontrou nada na primeira página, logar
+        console.log(`[home_carousel_dedup_skips] section=popular skipped_count=${filtered.length - deduplicated.length}`);
+      }
+      
+      const mapped = mapRows(finalItems as ApiMovie[]);
+      setCachedRow(cacheKey, mapped, cacheTTL);
+      const duration = Date.now() - startTime;
+      console.log(`[home_carousel_loaded] section=popular source=${source} page=${page} items=${mapped.length} duration_ms=${duration} forceRefresh=${forceRefresh}`);
+      
+      setHomeSections(s => ({
+        ...s,
+        popularMovies: { items: mapped, loading: false }
+      }));
+      console.log('[home_sections] Estado popularMovies atualizado com', mapped.length, 'itens');
+      return mapped;
+    } catch (e: any) {
+      const duration = Date.now() - startTime;
+      console.error(`[home_carousel_error] section=popular error=${e?.message} duration_ms=${duration}`);
+      setHomeSections(s => ({
+        ...s,
+        popularMovies: { ...s.popularMovies, loading: false, error: e?.message }
+      }));
+      return [];
+    }
+  }, [lang]);
+
+  // Removido - agora carregado junto com top_rated para deduplicação
+
+  const normalizeNumber = (value: string): string => {
+    return value.replace(',', '.');
+  };
+
+  const snapRating = (value: number): number => {
+    return Math.round(value * 10) / 10;
+  };
+
+  const snapVotes = (value: number): number => {
+    return Math.max(0, Math.round(value));
+  };
+
+  const logToLinear = (value: number, min: number, max: number): number => {
+    const logMin = Math.log10(min || 1);
+    const logMax = Math.log10(max);
+    const logValue = logMin + (value / 100) * (logMax - logMin);
+    return Math.pow(10, logValue);
+  };
+
+  const linearToLog = (value: number, min: number, max: number): number => {
+    const safeValue = Math.max(min || 1, value);
+    const logMin = Math.log10(min || 1);
+    const logMax = Math.log10(max);
+    const logValue = Math.log10(safeValue);
+    return ((logValue - logMin) / (logMax - logMin)) * 100;
+  };
+
+  // Sync URL with filters
+  const updateURL = useCallback((filters: SearchFilters, term: string, page: number) => {
+    const params = new URLSearchParams();
+    const defaults = getDefaultFilters();
+    if (term) params.set("q", term);
+    if (filters.type !== defaults.type) params.set("type", filters.type);
+    // Map internal sort to URL param
+    if (filters.sort !== defaults.sort) {
+      const sortValue = filters.sort === "popularity.desc" ? "rating" : filters.sort;
+      params.set("sort", sortValue);
+    }
+    if (filters.yearGte !== defaults.yearGte && filters.yearGte !== null) params.set("year_gte", String(filters.yearGte));
+    if (filters.yearLte !== defaults.yearLte && filters.yearLte !== null) params.set("year_lte", String(filters.yearLte));
+    if (filters.voteAvgGte > defaults.voteAvgGte) params.set("vote_avg_gte", String(filters.voteAvgGte));
+    if (filters.voteCntGte > defaults.voteCntGte) params.set("vote_cnt_gte", String(filters.voteCntGte));
+    if (!filters.withPoster) params.set("with_poster", "false");
+    if (page > 1) params.set("page", String(page));
+    
+    const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+    window.history.replaceState({}, "", newURL);
+  }, []);
+
+  const runSearch = async (query?: string, filters?: SearchFilters, page?: number) => {
+    const searchQuery = query !== undefined ? query : searchTerm;
+    const hasSearchTerm = searchQuery.trim().length > 0;
+    const activeFilters = filters || appliedSearchFilters;
+    const currentPage = page !== undefined ? page : searchPage;
+    
+    setLoading(true);
+    try {
+      // Determine effective sort
+      let effectiveSort = activeFilters.sort;
+      if (effectiveSort === "relevance" && !hasSearchTerm) {
+        effectiveSort = "popularity.desc";
+      }
+      
+      const uiSort = effectiveSort === "popularity.desc" ? "rating" : effectiveSort;
+      const yearFrom = activeFilters.yearGte !== null ? activeFilters.yearGte : undefined;
+      const yearTo = activeFilters.yearLte !== null ? activeFilters.yearLte : undefined;
+      const minVotes = activeFilters.voteCntGte;
+      const minRating = activeFilters.voteAvgGte;
+      
+      // Update URL
+      updateURL(activeFilters, searchQuery, currentPage);
+      
+      if (!hasSearchTerm) {
+        // Filter without search term - use discover API
+        if (activeFilters.type === "all") {
+          const discoverFilters: DiscoverFilters = {
+            voteCountGte: minVotes,
+            voteAverageGte: minRating > 0 ? minRating : undefined,
+            releaseDateFrom: yearFrom ? `${yearFrom}-01-01` : undefined,
+            releaseDateTo: yearTo ? `${yearTo}-12-31` : undefined,
+            airDateFrom: yearFrom ? `${yearFrom}-01-01` : undefined,
+            airDateTo: yearTo ? `${yearTo}-12-31` : undefined,
+            sortBy: uiSort === "rating" ? "vote_average.desc" : uiSort === "year" ? "primary_release_date.desc" : "popularity.desc"
+          };
+          
+          const [moviesData, tvData] = await Promise.all([
+            discover("movie", discoverFilters, currentPage),
+            discover("tv", {
+              ...discoverFilters,
+              sortBy: uiSort === "rating" ? "vote_average.desc" : uiSort === "year" ? "first_air_date.desc" : "popularity.desc"
+            }, currentPage)
+          ]);
+          
+          let allResults = [
+            ...(moviesData.results || moviesData.items || []),
+            ...(tvData.results || tvData.items || [])
+          ];
+          
+          if (activeFilters.withPoster) {
+            allResults = allResults.filter((x: any) => x.poster_path);
+          }
+          
+          // Client-side sorting if needed
+          if (uiSort === "rating") {
+            allResults.sort((a: any, b: any) => {
+              const ratingA = a.vote_average || 0;
+              const ratingB = b.vote_average || 0;
+              if (ratingB !== ratingA) return ratingB - ratingA;
+              const votesA = a.vote_count || 0;
+              const votesB = b.vote_count || 0;
+              if (votesB !== votesA) return votesB - votesA;
+              const yearA = parseInt((a.release_date || a.first_air_date || "").slice(0, 4) || "0");
+              const yearB = parseInt((b.release_date || b.first_air_date || "").slice(0, 4) || "0");
+              return yearB - yearA;
+            });
+          } else if (uiSort === "year") {
+            allResults.sort((a: any, b: any) => {
+              const yearA = parseInt((a.release_date || a.first_air_date || "").slice(0, 4) || "0");
+              const yearB = parseInt((b.release_date || b.first_air_date || "").slice(0, 4) || "0");
+              if (yearB !== yearA) return yearB - yearA;
+              const ratingA = a.vote_average || 0;
+              const ratingB = b.vote_average || 0;
+              if (ratingB !== ratingA) return ratingB - ratingA;
+              const votesA = a.vote_count || 0;
+              const votesB = b.vote_count || 0;
+              return votesB - votesA;
+            });
+          }
+          
+          const mapped = mapRows(allResults);
+          setMovies(mapped);
+          setPeople([]);
+          setSearchTotalResults(mapped.length);
+          // Check if we have active filters (non-default)
+          const defaults = getDefaultFilters();
+          const hasNonDefaultFilters = 
+            activeFilters.type !== defaults.type ||
+            activeFilters.sort !== defaults.sort ||
+            activeFilters.yearGte !== defaults.yearGte ||
+            activeFilters.yearLte !== defaults.yearLte ||
+            activeFilters.voteAvgGte > defaults.voteAvgGte ||
+            activeFilters.voteCntGte > defaults.voteCntGte ||
+            activeFilters.withPoster !== defaults.withPoster;
+          setHasActiveFilters(hasNonDefaultFilters || hasSearchTerm);
+        } else if (activeFilters.type === "movie" || activeFilters.type === "tv") {
+          const discoverFilters: DiscoverFilters = {
+            voteCountGte: minVotes,
+            voteAverageGte: minRating > 0 ? minRating : undefined,
+            releaseDateFrom: activeFilters.type === "movie" && yearFrom ? `${yearFrom}-01-01` : undefined,
+            releaseDateTo: activeFilters.type === "movie" && yearTo ? `${yearTo}-12-31` : undefined,
+            airDateFrom: activeFilters.type === "tv" && yearFrom ? `${yearFrom}-01-01` : undefined,
+            airDateTo: activeFilters.type === "tv" && yearTo ? `${yearTo}-12-31` : undefined,
+            sortBy: uiSort === "rating" ? "vote_average.desc" : uiSort === "year" ? (activeFilters.type === "movie" ? "primary_release_date.desc" : "first_air_date.desc") : "popularity.desc"
+          };
+          
+          const data = await discover(activeFilters.type, discoverFilters, currentPage);
+          let results = data.results || data.items || [];
+          
+          if (activeFilters.withPoster) {
+            results = results.filter((x: any) => x.poster_path);
+          }
+          
+          // Client-side sorting if needed
+          if (uiSort === "rating") {
+            results.sort((a: any, b: any) => {
+              const ratingA = a.vote_average || 0;
+              const ratingB = b.vote_average || 0;
+              if (ratingB !== ratingA) return ratingB - ratingA;
+              const votesA = a.vote_count || 0;
+              const votesB = b.vote_count || 0;
+              if (votesB !== votesA) return votesB - votesA;
+              const yearA = parseInt((a.release_date || a.first_air_date || "").slice(0, 4) || "0");
+              const yearB = parseInt((b.release_date || b.first_air_date || "").slice(0, 4) || "0");
+              return yearB - yearA;
+            });
+          } else if (uiSort === "year") {
+            results.sort((a: any, b: any) => {
+              const yearA = parseInt((a.release_date || a.first_air_date || "").slice(0, 4) || "0");
+              const yearB = parseInt((b.release_date || b.first_air_date || "").slice(0, 4) || "0");
+              if (yearB !== yearA) return yearB - yearA;
+              const ratingA = a.vote_average || 0;
+              const ratingB = b.vote_average || 0;
+              if (ratingB !== ratingA) return ratingB - ratingA;
+              const votesA = a.vote_count || 0;
+              const votesB = b.vote_count || 0;
+              return votesB - votesA;
+            });
+          }
+          
+          const mapped = mapRows(results);
+          setMovies(mapped);
+          setPeople([]);
+          setSearchTotalResults(data.total_results || mapped.length);
+          // Check if we have active filters (non-default)
+          const defaults = getDefaultFilters();
+          const hasNonDefaultFilters = 
+            activeFilters.type !== defaults.type ||
+            activeFilters.sort !== defaults.sort ||
+            activeFilters.yearGte !== defaults.yearGte ||
+            activeFilters.yearLte !== defaults.yearLte ||
+            activeFilters.voteAvgGte > defaults.voteAvgGte ||
+            activeFilters.voteCntGte > defaults.voteCntGte ||
+            activeFilters.withPoster !== defaults.withPoster;
+          setHasActiveFilters(hasNonDefaultFilters || hasSearchTerm);
+        } else if (activeFilters.type === "person") {
+          const data = await popularPeople(currentPage, lang);
+          let results = data.results || data.items || [];
+          
+          const filteredResults = results.filter((p: any) => {
+            const hasName = p.name && p.name.trim() !== "";
+            return hasName;
+          });
+          
+          setMovies([]);
+          setPeople(filteredResults);
+          setSearchTotalResults(data.total_results || filteredResults.length);
+          // Check if we have active filters (non-default)
+          const defaults = getDefaultFilters();
+          const hasNonDefaultFilters = 
+            activeFilters.type !== defaults.type ||
+            activeFilters.sort !== defaults.sort ||
+            activeFilters.yearGte !== defaults.yearGte ||
+            activeFilters.yearLte !== defaults.yearLte ||
+            activeFilters.voteAvgGte > defaults.voteAvgGte ||
+            activeFilters.voteCntGte > defaults.voteCntGte ||
+            activeFilters.withPoster !== defaults.withPoster;
+          setHasActiveFilters(hasNonDefaultFilters || hasSearchTerm);
+        }
+      } else {
+        // Search with term
+        const filters: { year?: number; minRating?: number } = {};
+        if (yearFrom) filters.year = yearFrom;
+        if (minRating > 0) filters.minRating = minRating;
+        
+        const data = await api.search(searchQuery, currentPage, filters);
+        const mixed = (data as any).items || (data as any).results || [];
+      
+        let moviesPart = mixed.filter((x: any) => {
+          const mediaType = x.media_type || x.media;
+          if (activeFilters.type === "movie" && mediaType !== "movie") return false;
+          if (activeFilters.type === "tv" && mediaType !== "tv") return false;
+          if (activeFilters.type === "person" && mediaType !== "person") return false;
+          
+          if (mediaType === "movie" || mediaType === "tv") {
+            if (activeFilters.withPoster && !x.poster_path) return false;
+            const hasTitle = (x.title && x.title.trim() !== "") || (x.name && x.name.trim() !== "");
+            return hasTitle;
+          }
+          
           return true;
         });
+        
+        if (activeFilters.type !== "person") {
+          // Apply year filter
+          if (yearFrom || yearTo) {
+            moviesPart = moviesPart.filter((x: any) => {
+              const releaseYear = x.release_date || x.first_air_date;
+              if (!releaseYear) return false;
+              const year = parseInt(releaseYear.slice(0, 4));
+              if (yearFrom && year < yearFrom) return false;
+              if (yearTo && year > yearTo) return false;
+              return true;
+            });
+          }
+          
+          // Apply vote filters
+          if (minVotes > 0) {
+            moviesPart = moviesPart.filter((x: any) => (x.vote_count || 0) >= minVotes);
+          }
+          
+          if (minRating > 0) {
+            moviesPart = moviesPart.filter((x: any) => (x.vote_average || 0) >= minRating);
+          }
+          
+          // Apply sorting
+          if (uiSort === "rating") {
+            moviesPart.sort((a: any, b: any) => {
+              const ratingA = a.vote_average || 0;
+              const ratingB = b.vote_average || 0;
+              if (ratingB !== ratingA) return ratingB - ratingA;
+              const votesA = a.vote_count || 0;
+              const votesB = b.vote_count || 0;
+              if (votesB !== votesA) return votesB - votesA;
+              const yearA = parseInt((a.release_date || a.first_air_date || "").slice(0, 4) || "0");
+              const yearB = parseInt((b.release_date || b.first_air_date || "").slice(0, 4) || "0");
+              return yearB - yearA;
+            });
+          } else if (uiSort === "year") {
+            moviesPart.sort((a: any, b: any) => {
+              const yearA = parseInt((a.release_date || a.first_air_date || "").slice(0, 4) || "0");
+              const yearB = parseInt((b.release_date || b.first_air_date || "").slice(0, 4) || "0");
+              if (yearB !== yearA) return yearB - yearA;
+              const ratingA = a.vote_average || 0;
+              const ratingB = b.vote_average || 0;
+              if (ratingB !== ratingA) return ratingB - ratingA;
+              const votesA = a.vote_count || 0;
+              const votesB = b.vote_count || 0;
+              return votesB - votesA;
+            });
+          }
+        }
+        
+        const peoplePart = mixed.filter((x: any) => {
+          const mediaType = x.media_type || x.media;
+          const isPerson = mediaType === "person" || (x.profile_path && !x.poster_path) || (x.known_for_department && !x.title && !x.name);
+          if (!isPerson) return false;
+          if (activeFilters.type === "movie" || activeFilters.type === "tv") return false;
+          return x.name && x.name.trim() !== "";
+        });
+  
+        const mapped = mapRows(moviesPart);
+        setMovies(mapped);
+        setPeople(peoplePart);
+        setSearchTotalResults((data as any).total_results || (mapped.length + peoplePart.length));
+        // Check if we have active filters (non-default)
+        const defaults = getDefaultFilters();
+        const hasNonDefaultFilters = 
+          activeFilters.type !== defaults.type ||
+          activeFilters.sort !== defaults.sort ||
+          activeFilters.yearGte !== defaults.yearGte ||
+          activeFilters.yearLte !== defaults.yearLte ||
+          activeFilters.voteAvgGte > defaults.voteAvgGte ||
+          activeFilters.voteCntGte > defaults.voteCntGte ||
+          activeFilters.withPoster !== defaults.withPoster;
+        setHasActiveFilters(hasNonDefaultFilters || hasSearchTerm);
       }
-      
-      
-      if (searchMinVotes) {
-        const minVotes = parseInt(searchMinVotes);
-        moviesPart = moviesPart.filter((x: any) => (x.vote_count || 0) >= minVotes);
-      }
-      
-
-      const peoplePart = mixed.filter((x: any) => {
-        const mediaType = x.media_type || x.media;
-        
-    
-        const isPerson = mediaType === "person" || 
-                        (x.profile_path && !x.poster_path) ||
-                        (x.known_for_department && !x.title && !x.name);
-        
-        if (!isPerson) return false;
-        
-     
-        const hasProfileImage = x.profile_path && x.profile_path.trim() !== "";
-        
-        // Deve ter nome
-        const hasName = x.name && x.name.trim() !== "";
-        
-        // Deve ter pelo menos alguma informação relevante (biografia, known_for, etc)
-        const hasInfo = (x.biography && x.biography.trim() !== "") ||
-                       (x.known_for && x.known_for.length > 0) ||
-                       x.known_for_department ||
-                       x.popularity !== null;
-        
-        return hasProfileImage && hasName && hasInfo;
-      });
-
-      let mapped = mapRows(moviesPart);
-     
-      if (searchYear && !filters.year) {
-        const year = parseInt(searchYear);
-        mapped = mapped.filter((m) => m.year && parseInt(m.year) === year);
-      }
-      
-      if (searchMinRating && !filters.minRating) {
-        const minRating = parseFloat(searchMinRating);
-        mapped = mapped.filter((m) => m.rating && m.rating >= minRating);
-      }
-
-      mapped = [...mapped].sort((a, b) => {
-        if (searchSort === "rating") return (b.rating || 0) - (a.rating || 0);
-        if (searchSort === "year") return parseInt(b.year || "0") - parseInt(a.year || "0");
-        return 0;
-      });
-
-      setMovies(mapped);
-      setPeople(peoplePart || []);
-      
-      console.log('Filtered results:', { movies: mapped.length, people: peoplePart.length });
     } catch (e: any) {
       console.error('Search error:', e);
       setMovies([]); 
@@ -1493,12 +1994,119 @@ const AppShell: React.FC = () => {
   };
 
 
+  // Initial load from URL params
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hasSearchTerm = params.has("q") && params.get("q")?.trim().length > 0;
+    const hasFilterParams = params.has("type") || params.has("sort") || 
+                           params.has("year_gte") || params.has("year_lte") || 
+                           params.has("vote_avg_gte") || params.has("vote_cnt_gte") || 
+                           params.has("with_poster");
+    const hasPageParam = params.has("page");
+    
+    // If URL has search term or filter params, run search
+    // (state is already initialized from URL in useState initializers)
+    if (hasSearchTerm || hasFilterParams || hasPageParam) {
+      // Check if filters differ from defaults (state is already set from URL)
+      const defaults = getDefaultFilters();
+      const hasNonDefaultFilters = 
+        appliedSearchFilters.type !== defaults.type ||
+        appliedSearchFilters.sort !== defaults.sort ||
+        appliedSearchFilters.yearGte !== defaults.yearGte ||
+        appliedSearchFilters.yearLte !== defaults.yearLte ||
+        appliedSearchFilters.voteAvgGte > defaults.voteAvgGte ||
+        appliedSearchFilters.voteCntGte > defaults.voteCntGte ||
+        appliedSearchFilters.withPoster !== defaults.withPoster;
+      
+      const shouldRunSearch = hasSearchTerm || hasNonDefaultFilters || hasPageParam;
+      
+      if (shouldRunSearch) {
+        // Run search with URL params (state is already initialized from URL)
+        runSearch(searchTerm, appliedSearchFilters, searchPage);
+        setHasActiveFilters(hasNonDefaultFilters || hasSearchTerm);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount - state is initialized from URL synchronously
+
+  // Debounced search for text input only (not for filters)
+  useEffect(() => {
+    if (searchTerm.trim().length === 0 && !hasActiveFilters) {
+      // Clear results when no search term and no filters
+      const defaults = getDefaultFilters();
+      const hasNonDefaultFilters = 
+        appliedSearchFilters.type !== defaults.type ||
+        appliedSearchFilters.sort !== defaults.sort ||
+        appliedSearchFilters.yearGte !== defaults.yearGte ||
+        appliedSearchFilters.yearLte !== defaults.yearLte ||
+        appliedSearchFilters.voteAvgGte > defaults.voteAvgGte ||
+        appliedSearchFilters.voteCntGte > defaults.voteCntGte ||
+        appliedSearchFilters.withPoster !== defaults.withPoster;
+      
+      if (!hasNonDefaultFilters) {
+        setMovies([]);
+        setPeople([]);
+        setHasActiveFilters(false);
+        setSearchTotalResults(0);
+        return;
+      }
+    }
+
     const tmo = setTimeout(() => {
-      if (searchTerm.trim()) runSearch(searchTerm);
+      if (searchTerm.trim().length > 0) {
+        // Only auto-search when there's text (debounced)
+        runSearch(searchTerm, appliedSearchFilters, 1);
+        setSearchPage(1);
+      }
     }, 400);
     return () => clearTimeout(tmo);
-  }, [searchTerm, lang, searchSort, searchYear, searchYearTo, searchMinRating, searchMinVotes, searchOnlyWithPoster]);
+  }, [searchTerm, lang]);
+  
+  // Handlers for filter panel
+  const handleApplyFilters = useCallback((filters: SearchFilters) => {
+    setAppliedSearchFilters(filters);
+    setSearchPage(1);
+    runSearch(searchTerm, filters, 1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [searchTerm]);
+
+  const handleClearAllFilters = useCallback(() => {
+    const defaults = getDefaultFilters();
+    // Adjust sort based on search term
+    if (!searchTerm.trim() && defaults.sort === "relevance") {
+      defaults.sort = "popularity.desc";
+    }
+    setAppliedSearchFilters(defaults);
+    setSearchPage(1);
+    runSearch(searchTerm, defaults, 1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [searchTerm]);
+
+  const handleRemoveFilter = useCallback((key: keyof SearchFilters) => {
+    const newFilters = { ...appliedSearchFilters };
+    const defaults = getDefaultFilters();
+    
+    // Reset the specific filter to default
+    if (key === "yearGte" || key === "yearLte") {
+      // Handle year range specially - reset both if removing one
+      newFilters.yearGte = defaults.yearGte;
+      newFilters.yearLte = defaults.yearLte;
+    } else {
+      (newFilters as any)[key] = (defaults as any)[key];
+    }
+    
+    // Adjust sort if needed
+    if (key === "sort" && !searchTerm.trim() && newFilters.sort === "relevance") {
+      newFilters.sort = "popularity.desc";
+    }
+    
+    setAppliedSearchFilters(newFilters);
+    setSearchPage(1);
+    runSearch(searchTerm, newFilters, 1);
+  }, [appliedSearchFilters, searchTerm]);
+  
+  // Apply filters when they change (manual trigger via Apply button)
+  // This effect is intentionally minimal - filters are applied via onApply callback
 
   const handleForgotPasswordCheckEmail = async (e?: React.MouseEvent) => {
     e?.preventDefault();
@@ -1594,8 +2202,11 @@ const AppShell: React.FC = () => {
 
 
   const toggleFavorite = (movie: MovieT, skipConfirm = false) => {
-    if (viewingShared) return;
-    if (!isLoggedIn) { setShowLogin(true); return; }
+    if (!isLoggedIn) { 
+      setPendingAction(() => () => toggleFavorite(movie, skipConfirm));
+      setShowActionSheet(true);
+      return; 
+    }
     const wasFav = favorites.some((f) => f.id === movie.id && (f.media || "movie") === (movie.media || "movie"));
     
     if (wasFav && !skipConfirm) {
@@ -1621,7 +2232,7 @@ const AppShell: React.FC = () => {
         ? prev.filter((f) => !(f.id === movie.id && (f.media || "movie") === (movie.media || "movie")))
         : [...prev, movie]
     );
-    pushToast({ message: wasFav ? t("removed_ok") : t("added_ok"), tone: "ok" });
+    pushToast({ message: wasFav ? "Removido dos favoritos" : "Adicionado aos favoritos ✔", tone: "ok" });
   };
   const isFavorite = (m: MovieT) => favorites.some((f) => f.id === m.id && (f.media || "movie") === (m.media || "movie"));
 
@@ -1672,8 +2283,66 @@ const AppShell: React.FC = () => {
   }, [watchHistory, favorites, lists, updateUserStats]);
 
   const getPersonalizedRecommendations = (): MovieT[] => {
- 
-    return cats.trending?.items?.slice(0, 10) || [];
+    if (!isLoggedIn || (favorites.length === 0 && Object.keys(userStates).length === 0)) {
+      return [];
+    }
+    
+    const favoriteGenres = new Map<string, number>();
+    const favoriteIds = new Set<string>();
+    
+    favorites.forEach((m) => {
+      favoriteIds.add(mediaKey(m));
+      const genres = (m as any).genres || [];
+      genres.forEach((g: any) => {
+        favoriteGenres.set(g.name || g, (favoriteGenres.get(g.name || g) || 0) + 1);
+      });
+    });
+    
+    Object.values(userStates).forEach((meta) => {
+      if (meta.rating && meta.rating >= 7) {
+        const movie = meta.movieCache;
+        if (movie && movie.id) {
+          favoriteIds.add(`${movie.media || "movie"}:${movie.id}`);
+        }
+      }
+    });
+    
+    const allItems = [
+      ...(cats.trending?.items || []),
+      ...(cats.popular?.items || []),
+      ...(cats.top_rated?.items || []),
+    ];
+    
+    const scored = allItems
+      .filter((m) => {
+        const key = mediaKey(m);
+        if (favoriteIds.has(key)) return false;
+        return true;
+      })
+      .map((m) => {
+        let score = 0;
+        const genres = (m as any).genres || [];
+        genres.forEach((g: any) => {
+          score += favoriteGenres.get(g.name || g) || 0;
+        });
+        if (favorites.some((f) => {
+          const fGenres = (f as any).genres || [];
+          return fGenres.some((fg: any) => genres.some((g: any) => (g.name || g) === (fg.name || fg)));
+        })) {
+          score += 2;
+        }
+        return { movie: m, score };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20)
+      .map(({ movie }) => movie);
+    
+    if (scored.length < 10) {
+      const fallback = cats.popular?.items?.slice(0, 20 - scored.length) || [];
+      return [...scored, ...fallback].slice(0, 20);
+    }
+    
+    return scored;
   };
 
   const setStateFor = (m: MovieT, state?: UserState) => {
@@ -1693,7 +2362,15 @@ const AppShell: React.FC = () => {
     }
       
    
-      const movieCache = {
+      const movieCache: {
+        id: number;
+        title: string;
+        poster_path?: string;
+        image?: string;
+        year?: string;
+        media: MediaT;
+      } = {
+        id: m.id,
         title: m.title,
         poster_path: m.poster_path,
         image: m.image,
@@ -1725,12 +2402,67 @@ const AppShell: React.FC = () => {
   };
   const getUserMeta = (m: MovieT) => userStates[mediaKey(m)] || {};
 
-
   const createList = (name: string): string => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    setLists((prev) => [...prev, { id, name, items: [] }]);
+    const newList: UserList = {
+      id,
+      name,
+      items: [],
+      cover: undefined, // Sem capa inicial - será definida quando adicionar o primeiro item
+      updatedAt: new Date().toISOString(),
+    };
+    
+    setLists((prev) => [...prev, newList]);
     pushToast({ message: t("created_list_ok", { name }), tone: "ok" });
     return id;
+  };
+
+  const handleCoverSelect = async (cover: {
+    type: "none" | "first_item" | "item" | "upload" | "tmdb";
+    itemId?: string;
+    url?: string;
+  }, listName?: string) => {
+    if (coverSelectorListId === "new") {
+      // Criar nova lista (sem capa inicial - será definida quando adicionar o primeiro item)
+      const name = listName || `Minha lista ${lists.length + 1}`;
+      const id = createList(name);
+      setActiveListId(id);
+      setShowCoverSelector(false);
+      setCoverSelectorListId(null);
+      return;
+    }
+
+    if (!coverSelectorListId) return;
+
+    const listId = coverSelectorListId;
+    
+    try {
+      if (cover.type === "none") {
+        await setListCover(listId, "auto");
+        pushToast({ message: "Capa removida", tone: "ok" });
+      } else if (cover.type === "first_item") {
+        // Aplicar quando o primeiro item for adicionado
+        setLists((prev) =>
+          prev.map((l) =>
+            l.id === listId
+              ? { ...l, cover: { type: "auto" }, updatedAt: new Date().toISOString() }
+              : l
+          )
+        );
+        pushToast({ message: "Capa será definida automaticamente pelo primeiro item", tone: "ok" });
+      } else if (cover.type === "item" && cover.itemId) {
+        await setListCover(listId, "item", cover.itemId);
+        pushToast({ message: "Capa definida", tone: "ok" });
+      } else if (cover.type === "upload" && cover.url) {
+        await setListCover(listId, "upload", undefined, cover.url);
+        pushToast({ message: "Capa atualizada", tone: "ok" });
+      }
+    } catch (error: any) {
+      pushToast({ message: error?.message || "Erro ao definir capa", tone: "err" });
+    }
+    
+    setShowCoverSelector(false);
+    setCoverSelectorListId(null);
   };
   const addToList = (listId: string, movie: MovieT) => {
     setLists((prev) =>
@@ -1743,28 +2475,70 @@ const AppShell: React.FC = () => {
               )
                 ? l.items
                 : [...l.items, movie],
+              // Se não tem capa e está adicionando o primeiro item, definir como capa
+              cover: (!l.cover && l.items.length === 0) 
+                ? { type: "item", itemId: mediaKey(movie) }
+                : l.cover,
+              updatedAt: new Date().toISOString(),
             }
           : l
       )
     );
+    // Se a lista não tinha capa e agora tem o primeiro item, atualizar via API
+    const list = lists.find(l => l.id === listId);
+    if (list && !list.cover && list.items.length === 0) {
+      setListCover(listId, "item", mediaKey(movie)).catch(() => {
+        // Se falhar, apenas atualiza localmente
+      });
+    }
     pushToast({ message: t("added_list_ok"), tone: "ok" });
   };
   const removeFromList = (listId: string, movieId: number, media?: MediaT) => {
     setLists((prev) =>
-      prev.map((l) =>
-        l.id === listId
-          ? { ...l, items: l.items.filter((m) => !(m.id === movieId && (m.media || "movie") === (media || "movie"))) }
-          : l
-      )
+      prev.map((l) => {
+        if (l.id !== listId) return l;
+        
+        const itemKey = mediaKey({ id: movieId, media: media || "movie" } as MovieT);
+        const wasCover = l.cover?.type === "item" && (l.cover.itemId === itemKey || l.cover.itemId === String(movieId));
+        
+        const newItems = l.items.filter((m) => !(m.id === movieId && (m.media || "movie") === (media || "movie")));
+        
+        // Se o item removido era a capa, definir fallback (primeiro item ou undefined)
+        let newCover = l.cover;
+        if (wasCover) {
+          if (newItems.length > 0) {
+            // Usar o primeiro item como capa
+            const firstItemKey = mediaKey(newItems[0]);
+            newCover = { type: "item", itemId: firstItemKey };
+            // Atualizar a capa via API também
+            setListCover(listId, "item", firstItemKey).catch(() => {
+              // Se falhar, apenas atualiza localmente
+            });
+          } else {
+            // Lista vazia, remover capa
+            newCover = undefined;
+            setListCover(listId, "auto").catch(() => {
+              // Se falhar, apenas atualiza localmente
+            });
+          }
+        }
+        
+        return {
+          ...l,
+          items: newItems,
+          cover: newCover,
+          updatedAt: new Date().toISOString(),
+        };
+      })
     );
     pushToast({ message: t("removed_list_ok"), tone: "ok" });
   };
   const renameList = (listId: string, newName: string) => {
-    setLists((prev) => prev.map((l) => (l.id === listId ? { ...l, name: newName } : l)));
+    setLists((prev) => prev.map((l) => (l.id === listId ? { ...l, name: newName, updatedAt: new Date().toISOString() } : l)));
     pushToast({ message: t("renamed_list_ok", { name: newName }), tone: "ok" });
   };
   const clearList = (listId: string) => {
-    setLists((prev) => prev.map((l) => (l.id === listId ? { ...l, items: [] } : l)));
+    setLists((prev) => prev.map((l) => (l.id === listId ? { ...l, items: [], cover: undefined, updatedAt: new Date().toISOString() } : l)));
     pushToast({ message: t("cleared_list_ok"), tone: "ok" });
   };
   const deleteList = (listId: string) => {
@@ -1818,6 +2592,17 @@ const AppShell: React.FC = () => {
       if (passwordErrorRef.current) setPasswordError("");
       if (passwordErrorsRef.current.length > 0) setPasswordErrors([]);
       if (loginTypeRef.current === "signin" && loginErrorRef.current) setLoginError("");
+      if (loginTypeRef.current === "signup") {
+        setTimeout(() => validatePasswordInRealTime(), 0);
+      }
+    }
+    if (name === "confirmPassword" && loginTypeRef.current === "signup") {
+      const currentPassword = formDataRef.current?.password || "";
+      if (value && value !== currentPassword) {
+        setConfirmPasswordError("As senhas não conferem");
+      } else if (value === currentPassword) {
+        setConfirmPasswordError("");
+      }
     }
   }, []); 
 
@@ -1830,44 +2615,7 @@ const AppShell: React.FC = () => {
       }
       
       validationTimeoutRef.current = setTimeout(() => {
-        const currentData = formDataRef.current;
-          const errors: string[] = [];
-        const pwd = currentData.password;
-        const fullName = currentData.lastName?.trim() 
-          ? `${currentData.firstName.trim()} ${currentData.lastName.trim()}`
-          : currentData.firstName.trim();
-        const email = currentData.email.trim().toLowerCase();
-          
-          if (pwd) {
-            if (pwd.length < 8) errors.push("Mínimo 8 caracteres");
-            if (!/[A-Z]/.test(pwd)) errors.push("Uma maiúscula");
-            if (!/[a-z]/.test(pwd)) errors.push("Uma minúscula");
-            if (!/\d/.test(pwd)) errors.push("Um número");
-            if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd)) errors.push("Um caractere especial");
-            
-            if (fullName) {
-              const nameParts = fullName.toLowerCase().split(/\s+/).filter(p => p.length > 2);
-              const pwdLower = pwd.toLowerCase();
-              if (nameParts.some(part => pwdLower.includes(part))) {
-                errors.push("Não pode conter seu nome");
-              }
-            }
-            
-            if (email) {
-              const emailParts = email.split("@")[0].split(/[._-]/).filter(p => p.length > 2);
-              const pwdLower = pwd.toLowerCase();
-              if (emailParts.some(part => pwdLower.includes(part))) {
-                errors.push("Não pode conter seu email");
-              }
-            }
-        }
-        
-        setPasswordErrors(prev => {
-          if (prev.length !== errors.length) return errors;
-          const prevStr = prev.slice().sort().join(",");
-          const errorsStr = errors.slice().sort().join(",");
-          return prevStr === errorsStr ? prev : errors;
-        });
+        validatePasswordInRealTime();
       }, 300);
     }
   }, []);
@@ -1881,6 +2629,20 @@ const AppShell: React.FC = () => {
     };
   }, []);
   
+  const calculatePasswordStrength = (pwd: string): "muito-fraca" | "fraca" | "boa" | "forte" => {
+    if (!pwd || pwd.length < 8) return "muito-fraca";
+    
+    const hasLetters = /[a-zA-Z]/.test(pwd);
+    const hasDigits = /\d/.test(pwd);
+    const hasSymbols = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd);
+    
+    const groupsCount = [hasLetters, hasDigits, hasSymbols].filter(Boolean).length;
+    
+    if (groupsCount < 2) return "fraca";
+    if (pwd.length >= 12 && groupsCount === 3) return "forte";
+    return "boa";
+  };
+
   const validatePasswordInRealTime = () => {
     const errors: string[] = [];
     const pwd = formData.password;
@@ -1889,27 +2651,41 @@ const AppShell: React.FC = () => {
       : formData.firstName.trim();
     const email = formData.email.trim().toLowerCase();
     
-    if (!pwd) return;
+    if (!pwd) {
+      setPasswordStrength("muito-fraca");
+      setPasswordErrors([]);
+      return;
+    }
     
-    if (pwd.length < 8) errors.push("Mínimo 8 caracteres");
-    if (!/[A-Z]/.test(pwd)) errors.push("Uma maiúscula");
-    if (!/[a-z]/.test(pwd)) errors.push("Uma minúscula");
-    if (!/\d/.test(pwd)) errors.push("Um número");
-    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd)) errors.push("Um caractere especial");
+    const strength = calculatePasswordStrength(pwd);
+    setPasswordStrength(strength);
+    
+    if (pwd.length < 8) {
+      errors.push("A senha precisa ter pelo menos 8 caracteres");
+    }
+    
+    const hasLetters = /[a-zA-Z]/.test(pwd);
+    const hasDigits = /\d/.test(pwd);
+    const hasSymbols = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd);
+    const groupsCount = [hasLetters, hasDigits, hasSymbols].filter(Boolean).length;
+    
+    if (pwd.length >= 8 && groupsCount < 2) {
+      errors.push("Use pelo menos dois tipos: letras, números ou símbolos");
+    }
     
     if (fullName) {
       const nameParts = fullName.toLowerCase().split(/\s+/).filter(p => p.length > 2);
       const pwdLower = pwd.toLowerCase();
       if (nameParts.some(part => pwdLower.includes(part))) {
-        errors.push("Não pode conter seu nome");
+        errors.push("Sua senha não deve conter seu nome ou e-mail");
       }
     }
     
     if (email) {
-      const emailParts = email.split("@")[0].split(/[._-]/).filter(p => p.length > 2);
+      const emailLocal = email.split("@")[0];
       const pwdLower = pwd.toLowerCase();
-      if (emailParts.some(part => pwdLower.includes(part))) {
-        errors.push("Não pode conter seu email");
+      if (pwdLower.includes(emailLocal) || pwdLower.includes(email)) {
+        errors.push("Sua senha não deve conter seu nome ou e-mail");
       }
     }
     
@@ -1924,10 +2700,37 @@ const AppShell: React.FC = () => {
     
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim())) {
-      setEmailError("Formato de email inválido");
+      setEmailError("Informe um e-mail válido");
     } else {
       setEmailError("");
     }
+  };
+
+  const generatePassword = () => {
+    const length = 16;
+    const lowercase = "abcdefghijklmnopqrstuvwxyz";
+    const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const numbers = "0123456789";
+    const symbols = "!@#$%^&*()_+-=[]{}|;:,.<>?";
+    const all = lowercase + uppercase + numbers + symbols;
+    
+    let password = "";
+    password += lowercase[Math.floor(Math.random() * lowercase.length)];
+    password += uppercase[Math.floor(Math.random() * uppercase.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += symbols[Math.floor(Math.random() * symbols.length)];
+    
+    for (let i = password.length; i < length; i++) {
+      password += all[Math.floor(Math.random() * all.length)];
+    }
+    
+    password = password.split("").sort(() => Math.random() - 0.5).join("");
+    
+    setFormData(prev => ({ ...prev, password, confirmPassword: password }));
+    setPasswordErrors([]);
+    setConfirmPasswordError("");
+    setConfirmPasswordTouched(false);
+    validatePasswordInRealTime();
   };
   
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1941,28 +2744,33 @@ const AppShell: React.FC = () => {
       }
       
       if (!formData.email?.trim()) {
-        pushToast({ message: "Preencha seu email", tone: "warn" });
+        setEmailError("Informe um e-mail válido");
+        return;
+      }
+      
+      if (emailError) {
         return;
       }
       
       if (!formData.password?.trim()) {
-        pushToast({ message: "Preencha sua senha", tone: "warn" });
+        setPasswordError("A senha precisa ter pelo menos 8 caracteres");
+        return;
+      }
+      
+      if (passwordErrors.length > 0) {
+        setPasswordError(passwordErrors[0]);
         return;
       }
       
       if (formData.password !== formData.confirmPassword) {
-      pushToast({ message: "As senhas não coincidem", tone: "warn" });
-      return;
-    }
-
-      if (passwordErrors.length > 0) {
-        pushToast({ message: "A senha não atende aos critérios de segurança", tone: "warn" });
-      return;
-    }
+        setConfirmPasswordError("As senhas não conferem");
+        setConfirmPasswordTouched(true);
+        return;
+      }
 
       if (!formData.acceptTerms) {
-        pushToast({ message: "Você deve aceitar os termos de uso", tone: "warn" });
-      return;
+        pushToast({ message: "Você precisa aceitar os Termos e a Política de Privacidade", tone: "warn" });
+        return;
       }
     }
     
@@ -2074,30 +2882,47 @@ const AppShell: React.FC = () => {
           }
         }
    
-        if (result.error === "email_ja_cadastrado") {
+        if (result.error === "email_ja_cadastrado" || String(actualError).includes("email") && String(actualError).includes("já") || String(actualError).includes("already")) {
           if (loginType === "signup") {
-            setEmailError("Este email já está cadastrado. Use 'Esqueci minha senha' se necessário.");
+            setEmailError("Este e-mail já está em uso. Tente entrar ou recuperar sua senha.");
             setAuthLoading(false);
             return;
           } else {
-            errorMsg = "Este email já está cadastrado. Use 'Esqueci minha senha' se necessário.";
+            errorMsg = "Este e-mail já está em uso. Tente entrar ou recuperar sua senha.";
             pushToast({ message: errorMsg, tone: "err" });
             setAuthLoading(false);
             return;
           }
         }
-        
-  
-        if (result.error === "senha_fraca") {
-          const errors = (result as any).errors || [];
-          errorMsg = errors.length > 0 
-            ? `Senha inválida: ${errors.join(", ")}`
-            : "A senha não atende aos critérios de segurança";
-          pushToast({ message: errorMsg, tone: "err" });
-          setAuthLoading(false);
-          return;
+
+        if (loginType === "signup") {
+          if (result.error === "senha_fraca" || String(actualError).includes("senha")) {
+            const errors = (result as any).errors || [];
+            if (errors.length > 0) {
+              const firstError = errors[0];
+              if (firstError.includes("8 caracteres")) {
+                setPasswordError("A senha precisa ter pelo menos 8 caracteres");
+              } else if (firstError.includes("dois tipos")) {
+                setPasswordError("Use pelo menos dois tipos: letras, números ou símbolos");
+              } else if (firstError.includes("nome ou e-mail")) {
+                setPasswordError("Sua senha não deve conter seu nome ou e-mail");
+              } else {
+                setPasswordError(firstError);
+              }
+            } else {
+              setPasswordError("A senha não atende aos critérios de segurança");
+            }
+            setAuthLoading(false);
+            return;
+          }
+
+          if (String(actualError).includes("rate") || String(actualError).includes("limit") || String(actualError).includes("muitas tentativas")) {
+            errorMsg = "Muitas tentativas. Aguarde alguns minutos e tente novamente.";
+            pushToast({ message: errorMsg, tone: "err" });
+            setAuthLoading(false);
+            return;
+          }
         }
-        
         
         if (result.error === "email_invalido") {
           if (loginType === "signin") {
@@ -2142,10 +2967,24 @@ const AppShell: React.FC = () => {
           avatar_url: result.user.avatar_url || null,
           updatedAt: result.user.updatedAt || null,
         });
+        
+        // Executar ação pendente após login bem-sucedido
+        if (pendingAction) {
+          setTimeout(() => {
+            pendingAction();
+            setPendingAction(null);
+            pushToast({ message: "Ação concluída!", tone: "ok" });
+          }, 300);
+        }
+        
         setShowLogin(false);
-        setViewingShared(false);
-        setSharedList(null);
-        setSharedCollection(null);
+        
+        if (pendingRoute) {
+          setTimeout(() => {
+            navigate(pendingRoute);
+            setPendingRoute(null);
+          }, 100);
+        }
         setFormData({ firstName: "", lastName: "", email: "", password: "", confirmPassword: "", acceptTerms: false });
         setPasswordErrors([]);
         setEmailError("");
@@ -2263,8 +3102,31 @@ const AppShell: React.FC = () => {
     requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   };
 
+  const navigateWithAuth = (route: string, requiresAuth: boolean = false) => {
+    if (requiresAuth && !isLoggedIn) {
+      setPendingRoute(route);
+      setShowLogin(true);
+      setLoginType("signin");
+      return;
+    }
+    navigate(route);
+  };
+
+  const handleFooterLink = (action: () => void, route: string | null = null, requiresAuth: boolean = false) => {
+    if (requiresAuth && !isLoggedIn) {
+      if (route) {
+        setPendingRoute(route);
+      }
+      setShowLogin(true);
+      setLoginType("signin");
+      return;
+    }
+    action();
+  };
+
 
   const MovieCard: React.FC<{ movie: MovieT }> = ({ movie }) => {
+    const [isAnimating, setIsAnimating] = useState<string | null>(null);
     const openDetails = (e?: React.MouseEvent) => {
       e?.stopPropagation();
       const mediaType = (movie.media || "movie") as "movie" | "tv";
@@ -2272,15 +3134,66 @@ const AppShell: React.FC = () => {
       navigate(path);
     };
 
-    const handleFav = (e: React.MouseEvent) => { e.stopPropagation(); toggleFavorite(movie); };
+    const handleFav = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!isLoggedIn) {
+        setPendingAction(() => () => {
+          setIsAnimating("fav");
+          setTimeout(() => setIsAnimating(null), 150);
+          toggleFavorite(movie, true);
+        });
+        setShowActionSheet(true);
+        return;
+      }
+      setIsAnimating("fav");
+      setTimeout(() => setIsAnimating(null), 150);
+      toggleFavorite(movie, true);
+    };
+
     const handleAddToList = (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (!isLoggedIn) { setShowLogin(true); return; }
+      if (!isLoggedIn) {
+        setPendingAction(() => () => setShowListPickerFor(movie));
+        setShowActionSheet(true);
+        return;
+      }
       setShowListPickerFor(movie);
+    };
+
+    const handleCollection = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!isLoggedIn) {
+        setPendingAction(() => () => {
+          setShowCollectionPickerFor(movie);
+          setIsAnimating("collection");
+          setTimeout(() => setIsAnimating(null), 150);
+          if (!getUserMeta(movie).state) {
+            pushToast({ 
+              message: "Salvo em coleção ✔", 
+              tone: "ok" 
+            });
+          }
+        });
+        setShowActionSheet(true);
+        return;
+      }
+      setShowCollectionPickerFor(movie);
+      setIsAnimating("collection");
+      setTimeout(() => setIsAnimating(null), 150);
+      if (!getUserMeta(movie).state) {
+        pushToast({ 
+          message: "Salvo em coleção ✔", 
+          tone: "ok" 
+        });
+      }
     };
 
     const score = typeof movie.rating === "number" ? Math.round((movie.rating + Number.EPSILON) * 10) / 10 : null;
     const meta = getUserMeta(movie);
+    const hasPoster = movie.image || movie.poster_path;
+    const isWatched = meta?.state === "watched";
+    const isFavoriteMovie = isFavorite(movie);
+    const hasCollectionState = !!getUserMeta(movie).state;
 
     return (
       <div 
@@ -2288,96 +3201,133 @@ const AppShell: React.FC = () => {
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetails(); } }}
         role="button"
         tabIndex={0}
-        className="group relative text-left w-full select-none cursor-pointer z-0"
+        className={`group relative text-left w-full select-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 rounded-[16px] sm:rounded-[20px] ${isWatched ? "ring-2 ring-green-500/50" : ""}`}
         title={movie.title}
       >
-        <div className="absolute -inset-2 bg-gradient-to-br from-cyan-400/0 via-purple-500/0 to-lime-400/0 group-hover:from-cyan-400/80 group-hover:via-purple-500/80 group-hover:to-lime-400/80 rounded-2xl blur-2xl opacity-0 group-hover:opacity-100 transition-all duration-500 pointer-events-none" style={{ zIndex: -1 }} />
-        
-        <div className="relative rounded-2xl p-[1px] bg-gradient-to-br from-cyan-400/50 via-purple-500/40 to-lime-400/50 transition-all duration-300 group-hover:from-cyan-400 group-hover:via-purple-500 group-hover:to-lime-400 group-hover:shadow-2xl group-hover:shadow-cyan-500/40 transform group-hover:-translate-y-2 group-hover:scale-[1.03]">
-          <div className="rounded-2xl overflow-hidden bg-slate-900/70 backdrop-blur-sm ring-1 ring-white/10 transition-all duration-300 group-hover:ring-2 group-hover:ring-cyan-400/50">
-            <div className="relative overflow-hidden">
+        <div className="relative rounded-[16px] sm:rounded-[20px] overflow-hidden bg-slate-900/70 backdrop-blur-sm border border-slate-800/50 dark:border-slate-700/50 shadow-sm hover:shadow-lg transition-shadow duration-300">
+          <div className="relative w-full" style={{ aspectRatio: "2/3" }}>
+            {hasPoster ? (
               <img 
                 src={movie.image || poster(movie.poster_path)} 
                 alt={movie.title} 
-                className="w-full h-full object-cover transition-all duration-500 group-hover:scale-110 group-hover:brightness-110" 
-                style={{ aspectRatio: "2/3" }} 
-                loading="lazy" 
+                className="w-full h-full object-cover" 
+                loading="lazy"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = "none";
+                  const placeholder = target.nextElementSibling as HTMLElement;
+                  if (placeholder) placeholder.style.display = "flex";
+                }}
               />
-              <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/0 via-purple-500/0 to-lime-400/0 group-hover:from-cyan-500/25 group-hover:via-purple-500/20 group-hover:to-lime-400/25 transition-all duration-500 pointer-events-none" />
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-              <div className="absolute top-1.5 left-1.5">
-                <div className="flex items-center gap-0.5 rounded-full bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-white/10 transition-all duration-300 group-hover:bg-black/90 group-hover:ring-yellow-400/50 group-hover:shadow-lg group-hover:scale-110">
+            ) : null}
+            <div 
+              className={`absolute inset-0 bg-slate-800 flex items-center justify-center ${hasPoster ? "hidden" : "flex"}`}
+            >
+              <Film size={32} className="text-slate-600 dark:text-slate-500" />
+            </div>
+            
+            {isWatched && (
+              <div 
+                className="absolute bottom-2 right-2 w-[18px] h-[18px] sm:w-[20px] sm:h-[20px] rounded-full bg-green-500/90 backdrop-blur-sm flex items-center justify-center shadow-lg ring-2 ring-white/30"
+                title="Assistido"
+                aria-label="Assistido"
+              >
+                <Check size={12} className="sm:w-[14px] sm:h-[14px] text-white" strokeWidth={3} />
+              </div>
+            )}
+            
+            {score !== null && (
+              <div className="absolute top-2 left-2 z-10">
+                <div className="flex items-center gap-0.5 rounded-full bg-black/80 backdrop-blur-sm px-1.5 py-0.5 text-xs font-semibold ring-1 ring-white/20">
                   <Star size={12} className="shrink-0" color="#FFD700" fill="#FFD700" />
-                  <span className="tabular-nums">{score ?? "—"}</span>
+                  <span className="tabular-nums text-white">{score}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="absolute bottom-0 left-0 right-0 md:hidden">
+              <div className="bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-8 pb-2 px-2">
+                <div className="flex gap-2 justify-center items-center">
+                  <button
+                    onClick={handleAddToList}
+                    className="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white flex items-center justify-center transition-all duration-150 border border-white/30 hover:border-cyan-400/70 touch-manipulation active:scale-95 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    title="Mais opções"
+                    aria-label="Mais opções"
+                  >
+                    <ListIcon size={18} />
+                  </button>
+                  <button
+                    onClick={handleFav}
+                    className={`min-w-[44px] min-h-[44px] w-11 h-11 rounded-full flex items-center justify-center transition-all duration-150 border touch-manipulation active:scale-95 focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
+                      isFavoriteMovie
+                        ? "bg-white/20 hover:bg-white/30 text-red-400 border-white/30 hover:border-red-400/70"
+                        : "bg-white/20 hover:bg-white/30 text-white border-white/30 hover:border-cyan-400/70"
+                    } ${isAnimating === "fav" ? "animate-bounce" : ""}`}
+                    title={isFavoriteMovie ? "Remover dos favoritos" : "Favoritar"}
+                    aria-label={isFavoriteMovie ? "Remover dos favoritos" : "Favoritar"}
+                  >
+                    <Heart size={18} fill={isFavoriteMovie ? "currentColor" : "none"} />
+                  </button>
+                  <button
+                    onClick={handleCollection}
+                    className={`min-w-[44px] min-h-[44px] w-11 h-11 rounded-full backdrop-blur-sm text-white flex items-center justify-center transition-all duration-150 border touch-manipulation active:scale-95 focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
+                      hasCollectionState
+                        ? "bg-cyan-500/40 hover:bg-cyan-500/50 border-cyan-400/70"
+                        : "bg-white/20 hover:bg-white/30 border-white/30 hover:border-cyan-400/70"
+                    } ${isAnimating === "collection" ? "animate-bounce" : ""}`}
+                    title="Salvar em coleção"
+                    aria-label="Salvar em coleção"
+                  >
+                    <Bookmark size={18} fill={hasCollectionState ? "currentColor" : "none"} />
+                  </button>
                 </div>
               </div>
             </div>
-            <div className="p-2 flex flex-col transition-all duration-300 group-hover:bg-slate-800/90">
-              <h3 className="font-semibold text-white/95 leading-tight line-clamp-2 mb-1.5 text-xs transition-colors duration-300 group-hover:text-cyan-300">{movie.title}</h3>
-              
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-[10px] text-gray-400 flex items-center gap-1 transition-colors duration-300 group-hover:text-gray-300">
-                  {movie.year && <span>{movie.year}</span>}
-                  {movie.voteCount && movie.year && <span>•</span>}
-                  {movie.voteCount && <span>({movie.voteCount})</span>}
-                </div>
-                {meta?.state && (
-                  <span className="text-[9px] uppercase text-gray-400 px-1 py-0.5 rounded bg-white/5 transition-all duration-300 group-hover:bg-cyan-500/20 group-hover:text-cyan-300">
-                    {meta.state}
-                </span>
-                )}
-              </div>
-              
-              {}
-              <div className="flex gap-2 sm:gap-1.5 justify-center">
-                {!viewingShared && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!isLoggedIn) { setShowLogin(true); return; }
-                      setShowListPickerFor(movie);
-                    }}
-                    className="min-w-[44px] min-h-[44px] sm:w-7 sm:h-7 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white flex items-center justify-center transition-all duration-200 border border-white/20 group-hover:bg-white/20 group-hover:border-cyan-400/50 group-hover:shadow-lg group-hover:shadow-cyan-400/50 touch-manipulation active:scale-95"
-                    title={t("add_to_list")}
-                  >
-                    <ListIcon size={16} className="sm:w-[14px] sm:h-[14px]" />
-                  </button>
-                )}
-                  <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleFav(e);
-                  }}
-                  disabled={viewingShared}
-                  className={`min-w-[44px] min-h-[44px] sm:w-7 sm:h-7 rounded-full flex items-center justify-center transition-all duration-200 border border-white/20 group-hover:border-cyan-400/50 group-hover:shadow-lg group-hover:shadow-cyan-400/50 touch-manipulation active:scale-95 ${
-                    viewingShared
-                      ? "bg-white/10 text-slate-400 cursor-not-allowed"
-                        : isFavorite(movie)
-                        ? "bg-white/10 hover:bg-white/20 text-white group-hover:bg-red-500/30 group-hover:border-red-400/50"
-                        : "bg-white/10 hover:bg-white/20 text-white"
-                  }`}
-                  title={isFavorite(movie) ? t("remove") : t("favorite")}
-                >
-                    <Heart size={16} className="sm:w-[14px] sm:h-[14px]" fill={!viewingShared && isFavorite(movie) ? "currentColor" : "none"} />
-                  </button>
-                  {!viewingShared && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!isLoggedIn) { setShowLogin(true); return; }
-                      setShowCollectionPickerFor(movie);
-                    }}
-                    className={`min-w-[44px] min-h-[44px] sm:w-7 sm:h-7 rounded-full backdrop-blur-sm text-white flex items-center justify-center transition-all duration-200 border group-hover:shadow-lg group-hover:shadow-cyan-400/50 touch-manipulation active:scale-95 ${
-                      getUserMeta(movie).state
-                        ? "bg-cyan-500/30 hover:bg-cyan-500/40 border-cyan-400/50 group-hover:bg-cyan-500/50"
-                        : "bg-white/10 hover:bg-white/20 border-white/20 group-hover:border-cyan-400/50"
-                    }`}
-                    title={t("add_to_collection")}
-                  >
-                    <Bookmark size={16} className="sm:w-[14px] sm:h-[14px]" fill={getUserMeta(movie).state ? "currentColor" : "none"} />
-                    </button>
-                  )}
-              </div>
+          </div>
+          
+          <div className="p-2 sm:p-3 flex flex-col bg-slate-900/70">
+            <h3 className="font-semibold text-white leading-tight line-clamp-2 mb-1.5 text-sm sm:text-base min-h-[2.5em] sm:min-h-[3em]">
+              {movie.title}
+            </h3>
+            <div className="text-[12px] sm:text-[13px] text-gray-400 flex items-center gap-1 line-clamp-1 min-h-[1.25em] mb-2">
+              {movie.year ? <span>{movie.year}</span> : <span>—</span>}
+              {movie.voteCount && movie.year && <span>•</span>}
+              {movie.voteCount && <span>({movie.voteCount.toLocaleString('pt-BR')})</span>}
+            </div>
+            
+            <div className="hidden md:flex gap-2 sm:gap-3 justify-center min-h-[36px] sm:min-h-[44px] items-center">
+              <button
+                onClick={handleAddToList}
+                className="min-w-[36px] min-h-[36px] sm:min-w-[44px] sm:min-h-[44px] w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-sm text-slate-300 dark:text-slate-400 hover:text-white flex items-center justify-center transition-all duration-150 border border-white/20 hover:border-cyan-400/50 touch-manipulation active:scale-95 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                title="Mais opções"
+                aria-label="Mais opções"
+              >
+                <ListIcon size={16} className="sm:w-5 sm:h-5" />
+              </button>
+              <button
+                onClick={handleFav}
+                className={`min-w-[36px] min-h-[36px] sm:min-w-[44px] sm:min-h-[44px] w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-all duration-150 border touch-manipulation active:scale-95 focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
+                  isFavoriteMovie
+                    ? "bg-white/10 hover:bg-white/20 text-red-400 border-white/20 hover:border-red-400/50"
+                    : "bg-white/10 hover:bg-white/20 text-slate-300 dark:text-slate-400 hover:text-white border-white/20 hover:border-cyan-400/50"
+                } ${isAnimating === "fav" ? "animate-bounce" : ""}`}
+                title={isFavoriteMovie ? "Remover dos favoritos" : "Favoritar"}
+                aria-label={isFavoriteMovie ? "Remover dos favoritos" : "Favoritar"}
+              >
+                <Heart size={16} className="sm:w-5 sm:h-5" fill={isFavoriteMovie ? "currentColor" : "none"} />
+              </button>
+              <button
+                onClick={handleCollection}
+                className={`min-w-[36px] min-h-[36px] sm:min-w-[44px] sm:min-h-[44px] w-9 h-9 sm:w-11 sm:h-11 rounded-full backdrop-blur-sm text-white flex items-center justify-center transition-all duration-150 border touch-manipulation active:scale-95 focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
+                  hasCollectionState
+                    ? "bg-cyan-500/30 hover:bg-cyan-500/40 border-cyan-400/50"
+                    : "bg-white/10 hover:bg-white/20 text-slate-300 dark:text-slate-400 hover:text-white border-white/20 hover:border-cyan-400/50"
+                } ${isAnimating === "collection" ? "animate-bounce" : ""}`}
+                title="Salvar em coleção"
+                aria-label="Salvar em coleção"
+              >
+                <Bookmark size={16} className="sm:w-5 sm:h-5" fill={hasCollectionState ? "currentColor" : "none"} />
+              </button>
             </div>
           </div>
         </div>
@@ -2396,7 +3346,22 @@ const AppShell: React.FC = () => {
     const [newCommentText, setNewCommentText] = useState("");
     const [newCommentRating, setNewCommentRating] = useState<number | undefined>(undefined);
     const [submittingComment, setSubmittingComment] = useState(false);
+    const [commentError, setCommentError] = useState<string>("");
+    const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const ratingChipsRef = useRef<HTMLDivElement>(null);
     const [activeMediaTab, setActiveMediaTab] = useState<"videos" | "backdrops" | "posters">("videos");
+    const [openAccordions, setOpenAccordions] = useState<Set<string>>(() => {
+      if (typeof window !== "undefined" && window.innerWidth >= 897) {
+        return new Set(["sobre", "creditos"]);
+      }
+      return new Set(["sobre"]);
+    });
+    const [activeTab, setActiveTab] = useState<"sobre" | "info" | "elenco" | "episodios" | "reviews">("sobre");
+    const [synopsisExpanded, setSynopsisExpanded] = useState(false);
+    const [showCastMore, setShowCastMore] = useState(false);
+    const [showDock, setShowDock] = useState(false);
+    const [commentsToShow, setCommentsToShow] = useState(3);
     
     // Extrai o tipo de mídia da URL (movie ou tv) - memoizado para evitar re-renders
     const mediaType = useMemo(() => {
@@ -2451,6 +3416,66 @@ const AppShell: React.FC = () => {
     
     const d: ApiDetails | undefined = selectedMovie?._details;
     const runtimeStr = d?.runtime ? `${Math.floor(d.runtime / 60)}h ${d.runtime % 60}min` : undefined;
+    
+    const toggleAccordion = (key: string) => {
+      setOpenAccordions(prev => {
+        const next = new Set(prev);
+        if (next.has(key)) {
+          next.delete(key);
+        } else {
+          next.add(key);
+        }
+        return next;
+      });
+    };
+    
+    const getCountryCode = (countryName: string): string => {
+      const codes: Record<string, string> = {
+        "United States of America": "US",
+        "United States": "US",
+        "Brazil": "BR",
+        "United Kingdom": "GB",
+        "France": "FR",
+        "Germany": "DE",
+        "Spain": "ES",
+        "Italy": "IT",
+        "Canada": "CA",
+        "Australia": "AU",
+        "Japan": "JP",
+        "China": "CN",
+        "India": "IN",
+        "Mexico": "MX",
+        "Argentina": "AR",
+      };
+      return codes[countryName] || countryName.substring(0, 3).toUpperCase();
+    };
+    
+    const getCountryFlag = (countryName: string): string => {
+      const flags: Record<string, string> = {
+        "United States of America": "🇺🇸",
+        "United States": "🇺🇸",
+        "Brazil": "🇧🇷",
+        "United Kingdom": "🇬🇧",
+        "France": "🇫🇷",
+        "Germany": "🇩🇪",
+        "Spain": "🇪🇸",
+        "Italy": "🇮🇹",
+        "Canada": "🇨🇦",
+        "Australia": "🇦🇺",
+        "Japan": "🇯🇵",
+        "China": "🇨🇳",
+        "India": "🇮🇳",
+        "Mexico": "🇲🇽",
+        "Argentina": "🇦🇷",
+      };
+      return flags[countryName] || "🌍";
+    };
+    
+    const formatDateShort = (dateStr: string | Date): string => {
+      if (!dateStr) return "";
+      const date = typeof dateStr === "string" ? new Date(dateStr) : dateStr;
+      return date.toLocaleDateString("pt-BR", { day: "numeric", month: "short", year: "numeric" });
+    };
 
   
     useEffect(() => {
@@ -2493,13 +3518,56 @@ const AppShell: React.FC = () => {
     }, []);
 
 
+    useEffect(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        const newHeight = Math.min(Math.max(textareaRef.current.scrollHeight, 72), 192);
+        textareaRef.current.style.height = `${newHeight}px`;
+      }
+    }, [newCommentText]);
+
+    useEffect(() => {
+      const handleScroll = () => {
+        const modalContent = document.querySelector('.bg-white.dark\\:bg-gray-900.rounded-lg.max-w-6xl');
+        if (modalContent) {
+          const scrollTop = modalContent.scrollTop || 0;
+          setShowDock(scrollTop > 200);
+        } else {
+          setShowDock(window.scrollY > 200);
+        }
+      };
+      const modalContent = document.querySelector('.bg-white.dark\\:bg-gray-900.rounded-lg.max-w-6xl');
+      if (modalContent) {
+        modalContent.addEventListener('scroll', handleScroll);
+        return () => modalContent.removeEventListener('scroll', handleScroll);
+      } else {
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+      }
+    }, []);
+
+    const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setNewCommentText(e.target.value);
+      setCommentError("");
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        const newHeight = Math.min(Math.max(textareaRef.current.scrollHeight, 72), 192);
+        textareaRef.current.style.height = `${newHeight}px`;
+      }
+    };
+
     const handleCreateComment = async () => {
       if (!isLoggedIn) {
-        pushToast({ message: "Você precisa estar logado para comentar", tone: "err" });
+        setCommentError("Você precisa estar logado para comentar");
+        setShowLogin(true);
         return;
       }
       if (!newCommentText.trim()) {
-        pushToast({ message: "Digite um comentário", tone: "err" });
+        setCommentError("Digite um comentário");
+        return;
+      }
+      if (newCommentText.trim().length > 500) {
+        setCommentError("Comentário muito longo (máx. 500 caracteres)");
         return;
       }
       if (!mediaType || !id) return;
@@ -2508,17 +3576,39 @@ const AppShell: React.FC = () => {
       if (isNaN(movieId)) return;
 
       setSubmittingComment(true);
+      setCommentError("");
       const result = await createComment(mediaType, movieId, newCommentText.trim(), newCommentRating);
       if (result.ok && result.comment) {
         setComments([result.comment, ...comments]);
         setNewCommentText("");
         setNewCommentRating(undefined);
-        pushToast({ message: "Comentário publicado!", tone: "ok" });
+        if (textareaRef.current) {
+          textareaRef.current.style.height = "auto";
+        }
+        pushToast({ message: "Comentário publicado", tone: "ok" });
       } else {
-        pushToast({ message: result.error || "Erro ao publicar comentário", tone: "err" });
+        const errorMsg = result.error || "Não foi possível publicar agora. Tente novamente.";
+        if (errorMsg.includes("rápido") || errorMsg.includes("rate limit")) {
+          setCommentError("Você comentou muito rápido. Tente novamente em alguns segundos.");
+        } else {
+          setCommentError(errorMsg);
+        }
       }
       setSubmittingComment(false);
     };
+
+    const toggleCommentExpand = (commentId: string) => {
+      setExpandedComments(prev => {
+        const next = new Set(prev);
+        if (next.has(commentId)) {
+          next.delete(commentId);
+        } else {
+          next.add(commentId);
+        }
+        return next;
+      });
+    };
+
 
     const handleLikeComment = async (commentId: string) => {
       if (!isLoggedIn || !user?.email) {
@@ -2553,6 +3643,47 @@ const AppShell: React.FC = () => {
         pushToast({ message: "Comentário deletado", tone: "ok" });
       } else {
         pushToast({ message: result.error || "Erro ao deletar comentário", tone: "err" });
+      }
+    };
+
+    const handleShareMovie = async () => {
+      try {
+        if (!selectedMovie) return;
+        const payload = [{
+          id: selectedMovie.id,
+          media: (selectedMovie.media || d?.media || "movie") as "movie" | "tv",
+          title: selectedMovie.title,
+          poster_path: selectedMovie.poster_path || d?.poster_path || "",
+          vote_average: d?.vote_average ?? null,
+          vote_count: d?.vote_count ?? null,
+          release_date: d?.release_date || null,
+          overview: selectedMovie.overview || d?.overview || ""
+        }];
+        const resp = await api.shareCreate(payload, "favorites", selectedMovie.title);
+        if (!resp || !resp.slug) {
+          throw new Error("Resposta inválida do servidor");
+        }
+        setShareSlug(resp.slug || (resp.code ? resp.code.replace(/V9-|-/g, "").slice(0, 10) : ""));
+        setShowShare(true);
+      } catch (e: any) {
+        const errorMsg = e?.message || "Erro ao compartilhar";
+        pushToast({ message: errorMsg, tone: "err" });
+      }
+    };
+
+    const handleRateMovie = () => {
+      if (!isLoggedIn) {
+        setShowLogin(true);
+        return;
+      }
+      const rating = prompt("Digite sua nota de 1 a 10:");
+      if (rating) {
+        const numRating = parseFloat(rating);
+        if (numRating >= 1 && numRating <= 10) {
+          pushToast({ message: `Você avaliou com ${numRating}/10`, tone: "ok" });
+        } else {
+          pushToast({ message: "Nota inválida. Use um valor entre 1 e 10.", tone: "err" });
+        }
       }
     };
 
@@ -2620,100 +3751,55 @@ const AppShell: React.FC = () => {
       <div className="fixed inset-0 bg-black/80 dark:bg-black/90 z-50 flex items-center justify-center p-2 sm:p-3 md:p-4 backdrop-blur-sm" onClick={() => navigate(-1)}>
         <div className="bg-white dark:bg-gray-900 rounded-lg max-w-6xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto shadow-2xl mx-2 sm:mx-auto" onClick={(e) => e.stopPropagation()}>
           <div className="relative overflow-hidden rounded-t-lg">
-            <div className="relative w-full h-[300px] sm:h-[400px] md:h-[500px] overflow-hidden">
+            <div className="relative w-full max-h-[55vh] sm:max-h-[50vh] md:h-[500px] overflow-hidden" style={{ aspectRatio: "16/9" }}>
               <img 
                 src={d?.backdrop_path ? `https://image.tmdb.org/t/p/w1280${d.backdrop_path}` : (selectedMovie.image || poster(selectedMovie.poster_path))} 
                 alt={selectedMovie.title} 
                 className="w-full h-full object-cover"
+                loading="lazy"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-white via-white/50 to-transparent dark:from-gray-900 dark:via-gray-900/50" />
+              <div className="absolute inset-0 bg-gradient-to-t from-white via-white/60 to-transparent dark:from-gray-900 dark:via-gray-900/60" />
             </div>
             <button onClick={() => navigate(-1)} className="absolute top-3 right-3 sm:top-4 sm:right-4 min-w-[44px] min-h-[44px] flex items-center justify-center bg-black/60 dark:bg-black/60 backdrop-blur-sm p-2 rounded-full hover:bg-black/80 active:bg-black/90 transition z-10 touch-manipulation" aria-label="Fechar">
               <X size={20} className="sm:w-6 sm:h-6" color="white" />
             </button>
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent dark:from-gray-900 dark:via-gray-900/95 p-4 sm:p-6 md:p-8">
-              <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 md:gap-6 mb-4">
-                {d?.vote_average !== null && d?.vote_average !== undefined ? (
-                  <div className="flex-shrink-0">
-                    <div className="relative w-16 h-16 md:w-20 md:h-20">
-                      <svg className="transform -rotate-90 w-full h-full" viewBox="0 0 36 36">
-                        <circle
-                          cx="18"
-                          cy="18"
-                          r="16"
-                          fill="none"
-                          className="stroke-slate-300 dark:stroke-white/20"
-                          strokeWidth="2"
-                        />
-                        <circle
-                          cx="18"
-                          cy="18"
-                          r="16"
-                          fill="none"
-                          stroke={d.vote_average >= 7 ? "#10b981" : d.vote_average >= 5 ? "#f59e0b" : "#ef4444"}
-                          strokeWidth="2"
-                          strokeDasharray={`${(d.vote_average / 10) * 100}, 100`}
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-slate-900 dark:text-white font-bold text-sm md:text-base">
-                          {Math.round(d.vote_average * 10)}%
-                </span>
-              </div>
-            </div>
-                    <p className="text-xs text-slate-600 dark:text-gray-400 mt-1 text-center">Avaliação dos usuários</p>
-          </div>
-                ) : null}
-                
-                <div className="flex-1">
-                  <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 dark:text-white mb-2 break-words">
-                    {selectedMovie.title} {selectedMovie.year ? `(${selectedMovie.year})` : ""}
-                  </h2>
-                  <div className="flex flex-wrap items-center gap-3 md:gap-4 text-slate-700 dark:text-white text-sm md:text-base">
-                    {d?.certification ? (
-                      <span className="px-2 py-1 bg-slate-200 dark:bg-gray-700/50 rounded text-xs font-semibold border border-slate-300 dark:border-gray-600 text-slate-900 dark:text-white">
-                        {d.certification}
-                      </span>
-                    ) : null}
-                    {d?.genres?.length ? <span className="text-slate-600 dark:text-gray-300">• {d.genres.join(", ")}</span> : null}
-                    {runtimeStr ? <span className="text-slate-600 dark:text-gray-300">• {runtimeStr}</span> : null}
-                    {d?.directors?.length ? <span className="text-slate-600 dark:text-gray-300">• Dir.: {d.directors.join(", ")}</span> : null}
-                    <span className="text-slate-600 dark:text-gray-300">• {(selectedMovie.media || d?.media) === "tv" ? "Série" : "Filme"}</span>
-                  </div>
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/98 to-transparent dark:from-gray-900 dark:via-gray-900/98 p-3 sm:p-4 md:p-6">
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2 break-words leading-tight">
+                {selectedMovie.title} {selectedMovie.year ? `(${selectedMovie.year})` : ""}
+              </h2>
+              <div className="mb-3 overflow-x-auto -mx-3 px-3 pb-2 scrollbar-hide">
+                <div className="flex gap-2 min-w-max">
+                  {d?.certification ? (
+                    <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap flex items-center gap-1">
+                      🔞 {d.certification}
+                    </span>
+                  ) : null}
+                  {d?.genres?.slice(0, 2).map((genre: string, idx: number) => (
+                    <span key={idx} className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                      🎭 {genre}
+                    </span>
+                  ))}
+                  {runtimeStr ? (
+                    <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap flex items-center gap-1">
+                      ⏱ {runtimeStr}
+                    </span>
+                  ) : null}
+                  {d?.vote_average !== null && d?.vote_average !== undefined ? (
+                    <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap flex items-center gap-1">
+                      ⭐ {d.vote_average.toFixed(1)}
+                      {d.vote_count ? ` (${d.vote_count.toLocaleString('pt-BR')})` : ""}
+                    </span>
+                  ) : null}
+                  <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap flex items-center gap-1">
+                    📺 {(selectedMovie.media || d?.media) === "tv" ? "Série" : "Filme"}
+                  </span>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="p-8 bg-white dark:bg-gray-900">
-            {!viewingShared && (
-              <div className="flex flex-wrap gap-3 mb-6">
-                <select
-                  value={getUserMeta(selectedMovie).state || ""}
-                  onChange={(e) => setStateFor(selectedMovie, (e.target.value || undefined) as UserState)}
-                  className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md px-3 py-2"
-                >
-                  <option value="">{`— estado —`}</option>
-                  <option value="want">Quero assistir</option>
-                  <option value="watched">Assisti</option>
-                  <option value="not_watched">Não assisti</option>
-                  <option value="abandoned">Abandonei</option>
-                </select>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-700 dark:text-gray-300">Minha nota</span>
-                  <input
-                    type="number" min={0} max={10} step={0.5}
-                    value={getUserMeta(selectedMovie).rating ?? ""}
-                    onChange={(e) => setRatingFor(selectedMovie, e.target.value === "" ? undefined : Number(e.target.value))}
-                    className="w-20 bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md px-2 py-2"
-                    placeholder="0–10"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 mb-6">
+          <div className="p-3 sm:p-4 md:p-6 bg-white dark:bg-gray-900">
+            <div className="flex items-center gap-2 sm:gap-3 mb-4">
               {(() => {
  
                 const findTrailerInVideos = (videos: any[]): string | null => {
@@ -2811,9 +3897,7 @@ const AppShell: React.FC = () => {
                   );
                 }
               })()}
-              {!viewingShared && (
-                <>
-                  <button onClick={() => toggleFavorite(selectedMovie)}
+              <button onClick={() => toggleFavorite(selectedMovie)}
                     className={`flex-1 sm:flex-none min-w-full sm:min-w-[220px] min-h-[44px] px-4 sm:px-6 py-3 rounded-md font-semibold transition flex items-center justify-center gap-2 touch-manipulation active:scale-95 ${
                       isFavorite(selectedMovie) ? "bg-red-600 text-white hover:bg-red-700 active:bg-red-800" : "bg-slate-200 dark:bg-gray-800 text-slate-900 dark:text-white hover:bg-slate-300 dark:hover:bg-gray-700 active:bg-slate-400 dark:active:bg-gray-600"}`}>
                     <Heart size={20} />{isFavorite(selectedMovie) ? t("remove") : t("favorite")}
@@ -2826,406 +3910,404 @@ const AppShell: React.FC = () => {
                     className="flex-1 sm:flex-none min-w-full sm:min-w-[220px] min-h-[44px] px-4 sm:px-6 py-3 rounded-md font-semibold transition flex items-center justify-center gap-2 bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-300 dark:hover:bg-slate-700 active:bg-slate-400 dark:active:bg-slate-600 border border-slate-300 dark:border-slate-600 touch-manipulation active:scale-95">
                     <ListIcon size={20} />{t("add_to_list")}
                   </button>
-                </>
-              )}
             </div>
 
-            <div className="text-slate-700 dark:text-gray-300 space-y-6 sm:space-y-8 px-4 sm:px-6 pb-4 sm:pb-6">
-              {d?.tagline ? (
-                <div className="text-center italic text-lg text-slate-600 dark:text-gray-400 border-l-4 border-cyan-500 pl-4 py-2">
-                  "{d.tagline}"
+            <div className="px-3 sm:px-4 md:px-6 pb-4 sm:pb-6">
+              <div className="overflow-x-auto -mx-3 sm:-mx-4 md:-mx-6 px-3 sm:px-4 md:px-6 pb-2 scrollbar-hide border-b border-slate-200 dark:border-slate-700 mb-4">
+                <div className="flex gap-1 min-w-max">
+                  {(["sobre", "info", "elenco", ...(d?.numberOfSeasons || d?.numberOfEpisodes ? ["episodios"] : []), "reviews"] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab as "sobre" | "info" | "elenco" | "episodios" | "reviews")}
+                      className={`px-3 sm:px-4 py-2 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap min-h-[44px] ${
+                        activeTab === tab
+                          ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border-b-2 border-cyan-500"
+                          : "text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
+                      }`}
+                      aria-selected={activeTab === tab}
+                    >
+                      {tab === "sobre" ? "Sobre" : tab === "info" ? "Info" : tab === "elenco" ? "Elenco" : tab === "episodios" ? "Episódios" : "Reviews"}
+                    </button>
+                  ))}
                 </div>
-              ) : null}
-              
-              <div>
-                <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-3">{t("synopsis")}</h3>
-                <p className="leading-relaxed text-slate-700 dark:text-gray-300">{selectedMovie.overview || d?.overview || "—"}</p>
               </div>
 
+              {activeTab === "sobre" && (
+                <div className="space-y-3">
+                  {d?.tagline && (
+                    <div className="text-sm italic text-slate-600 dark:text-gray-400 border-l-4 border-cyan-500 pl-3 py-2">
+                      "{d.tagline}"
+                    </div>
+                  )}
                   <div>
-                <h3 className="text-base md:text-lg font-semibold text-slate-900 dark:text-white mb-3">Informações</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {d?.release_date ? (
-                    <div className="bg-slate-50 dark:bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-slate-200 dark:border-white/10">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Calendar size={18} className="text-cyan-500 dark:text-cyan-400" />
-                        <h4 className="text-sm font-semibold text-slate-700 dark:text-gray-300">Data de lançamento</h4>
+                    <p className={`text-slate-700 dark:text-gray-300 leading-relaxed text-sm sm:text-base ${!synopsisExpanded ? "line-clamp-6" : ""}`}>
+                      {selectedMovie.overview || d?.overview || "—"}
+                    </p>
+                    {(selectedMovie.overview || d?.overview) && (selectedMovie.overview || d?.overview || "").length > 200 && (
+                      <button
+                        onClick={() => setSynopsisExpanded(!synopsisExpanded)}
+                        className="text-sm text-cyan-600 dark:text-cyan-400 hover:underline mt-2"
+                      >
+                        {synopsisExpanded ? "Ver menos" : "Ver mais"}
+                      </button>
+                    )}
+                  </div>
+                  {d?.original_title && d.original_title !== selectedMovie.title && (
+                    <div className="text-sm">
+                      <span className="font-semibold text-slate-700 dark:text-gray-300">Título original: </span>
+                      <span className="text-slate-900 dark:text-white">{d.original_title}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === "info" && (
+                <div className="space-y-2 text-sm">
+                  {d?.release_date && (
+                    <div className="flex items-center gap-2">
+                      <Calendar size={16} className="text-slate-500 dark:text-gray-400 flex-shrink-0" />
+                      <span className="text-slate-700 dark:text-gray-300">Data de lançamento:</span>
+                      <span className="text-slate-900 dark:text-white">{formatDate(d.release_date, { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                    </div>
+                  )}
+                  {d?.certification && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-500 dark:text-gray-400">🔞</span>
+                      <span className="text-slate-700 dark:text-gray-300">Classificação:</span>
+                      <span className="text-slate-900 dark:text-white">{d.certification}</span>
+                    </div>
+                  )}
+                  {d?.production_countries?.length ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Globe size={16} className="text-slate-500 dark:text-gray-400 flex-shrink-0" />
+                      <span className="text-slate-700 dark:text-gray-300">Países:</span>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {d.production_countries.slice(0, 3).map((country: string, idx: number) => (
+                          <span key={idx} className="text-slate-900 dark:text-white flex items-center gap-1" title={country}>
+                            {getCountryFlag(country)} {getCountryCode(country)}
+                          </span>
+                        ))}
+                        {d.production_countries.length > 3 && (
+                          <span className="text-slate-600 dark:text-gray-400">+{d.production_countries.length - 3}</span>
+                        )}
                       </div>
-                      <p className="text-slate-900 dark:text-white">{formatDate(d.release_date, { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                  </div>
-                ) : null}
-                
-                {d?.original_title && d.original_title !== selectedMovie.title ? (
-                    <div className="bg-slate-50 dark:bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-slate-200 dark:border-white/10">
-                      <h4 className="text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Título original</h4>
-                      <p className="text-slate-900 dark:text-white">{d.original_title}</p>
-                  </div>
-                ) : null}
-
-                {d?.status ? (
-                    <div className="bg-slate-50 dark:bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-slate-200 dark:border-white/10">
-                      <h4 className="text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Status</h4>
-                      <p className="text-slate-900 dark:text-white">
-                        {d.status === "Released" ? "Lançado" : d.status === "In Production" ? "Em produção" : d.status === "Post Production" ? "Pós-produção" : d.status === "Planned" ? "Planejado" : d.status === "Returning Series" ? "Em exibição" : d.status === "Ended" ? "Finalizada" : d.status}
-                      </p>
-                  </div>
-                ) : null}
-
-                {d?.production_countries?.length ? (
-                    <div className="bg-slate-50 dark:bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-slate-200 dark:border-white/10">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Globe size={18} className="text-cyan-500 dark:text-cyan-400" />
-                        <h4 className="text-sm font-semibold text-slate-700 dark:text-gray-300">País de origem</h4>
-                      </div>
-                      <p className="text-slate-900 dark:text-white">{d.production_countries.join(", ")}</p>
-                  </div>
-                ) : null}
-
-                {d?.spoken_languages?.length ? (
-                    <div className="bg-slate-50 dark:bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-slate-200 dark:border-white/10">
-                      <h4 className="text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Idiomas</h4>
-                      <p className="text-slate-900 dark:text-white">{d.spoken_languages.join(", ")}</p>
-                  </div>
-                ) : null}
-
-
-                {d?.imdb_id ? (
-                    <div className="bg-slate-50 dark:bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-slate-200 dark:border-white/10">
-                      <h4 className="text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">IMDb</h4>
-                      <a href={`https://www.imdb.com/title/${d.imdb_id}`} target="_blank" rel="noreferrer" className="text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 underline inline-flex items-center gap-1">
-                        Ver no IMDb <LinkIcon size={14} className="inline" />
-                    </a>
-                  </div>
-                ) : null}
-
-                {d?.homepage ? (
-                    <div className="bg-slate-50 dark:bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-slate-200 dark:border-white/10">
-                      <h4 className="text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Site oficial</h4>
-                      <a href={d.homepage} target="_blank" rel="noreferrer" className="text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 underline break-all inline-flex items-center gap-1">
-                        {d.homepage.replace(/^https?:\/\//, '')} <LinkIcon size={14} className="inline" />
-                    </a>
-                  </div>
-                ) : null}
-
-                  {d?.certification ? (
-                    <div className="bg-slate-50 dark:bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-slate-200 dark:border-white/10">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Award size={18} className="text-yellow-500 dark:text-yellow-400" />
-                        <h4 className="text-sm font-semibold text-slate-700 dark:text-gray-300">Classificação</h4>
-              </div>
-                      <p className="text-slate-900 dark:text-white font-semibold">{d.certification}</p>
                     </div>
                   ) : null}
+                  {d?.spoken_languages?.length ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-slate-500 dark:text-gray-400">🌐</span>
+                      <span className="text-slate-700 dark:text-gray-300">Idiomas:</span>
+                      <span className="text-slate-900 dark:text-white">{d.spoken_languages.slice(0, 3).join(", ")}{d.spoken_languages.length > 3 ? ` +${d.spoken_languages.length - 3}` : ""}</span>
+                    </div>
+                  ) : null}
+                  {(d?.homepage || d?.imdb_id) && (
+                    <div className="flex items-center gap-2 flex-wrap pt-2">
+                      {d?.homepage && (
+                        <a
+                          href={d.homepage}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-sm font-medium text-slate-900 dark:text-white transition-colors min-h-[44px]"
+                        >
+                          <LinkIcon size={14} />
+                          Site oficial
+                        </a>
+                      )}
+                      {d?.imdb_id && (
+                        <a
+                          href={`https://www.imdb.com/title/${d.imdb_id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-sm font-medium text-slate-900 dark:text-white transition-colors min-h-[44px]"
+                        >
+                          <LinkIcon size={14} />
+                          IMDb
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
-                  {(d?.numberOfSeasons || d?.numberOfEpisodes) ? (
-                    <div className="bg-slate-50 dark:bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-slate-200 dark:border-white/10">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Tv size={18} className="text-purple-500 dark:text-purple-400" />
-                        <h4 className="text-sm font-semibold text-slate-700 dark:text-gray-300">Temporadas/Episódios</h4>
+              {activeTab === "elenco" && (
+                <div>
+                  {d?.cast?.length ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-4">
+                        {(showCastMore ? d.cast : d.cast.slice(0, 8)).map((actor: any, idx: number) => (
+                          <div key={idx} className="flex items-center gap-2 sm:gap-3">
+                            {actor.profile_path ? (
+                              <img
+                                src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
+                                alt={actor.name || ""}
+                                className="w-12 h-12 sm:w-16 sm:h-16 rounded-lg object-cover flex-shrink-0"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+                                <User size={20} className="text-slate-400" />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{actor.name || actor}</p>
+                              {actor.character && (
+                                <p className="text-xs text-slate-600 dark:text-gray-400 truncate">{actor.character}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <p className="text-slate-900 dark:text-white">
-                        {d.numberOfSeasons ? `${d.numberOfSeasons} temporada${d.numberOfSeasons > 1 ? 's' : ''}` : ''}
+                      {d.cast.length > 8 && (
+                        <button
+                          onClick={() => setShowCastMore(!showCastMore)}
+                          className="w-full min-h-[44px] px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-sm"
+                        >
+                          {showCastMore ? "Ver menos" : `Ver mais (${d.cast.length - 8})`}
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-slate-600 dark:text-gray-400 text-sm">—</p>
+                  )}
+                </div>
+              )}
+
+              {activeTab === "episodios" && (d?.numberOfSeasons || d?.numberOfEpisodes || d?.lastAirDate) && (
+                <div className="space-y-2 text-sm">
+                  {(d?.numberOfSeasons || d?.numberOfEpisodes) && (
+                    <div className="flex items-center gap-2">
+                      <Tv size={16} className="text-slate-500 dark:text-gray-400 flex-shrink-0" />
+                      <span className="text-slate-700 dark:text-gray-300">Temporadas/Episódios:</span>
+                      <span className="text-slate-900 dark:text-white">
+                        {d.numberOfSeasons ? `${d.numberOfSeasons} temp` : ''}
                         {d.numberOfSeasons && d.numberOfEpisodes ? ' • ' : ''}
-                        {d.numberOfEpisodes ? `${d.numberOfEpisodes} episódio${d.numberOfEpisodes > 1 ? 's' : ''}` : ''}
-                      </p>
-                    </div>
-                  ) : null}
-
-                  {d?.lastAirDate ? (
-                    <div className="bg-slate-50 dark:bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-slate-200 dark:border-white/10">
-                      <h4 className="text-sm font-semibold text-slate-700 dark:text-gray-300 mb-2">Último episódio</h4>
-                      <p className="text-slate-900 dark:text-white">{formatDate(d.lastAirDate, { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-
-              {(d?.writers?.length || d?.producers?.length || d?.cinematographers?.length || d?.composers?.length || d?.editors?.length) ? (
-                  <div>
-                  <h3 className="text-base md:text-lg font-semibold text-slate-900 dark:text-white mb-3">Equipe Técnica</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {d.writers?.length ? (
-                      <div className="bg-slate-50 dark:bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-slate-200 dark:border-white/10">
-                        <div className="flex items-center gap-2 mb-3">
-                          <PenTool size={18} className="text-blue-500 dark:text-blue-400" />
-                          <h4 className="text-sm font-semibold text-slate-700 dark:text-gray-300">Roteiristas</h4>
-                        </div>
-                        <div className="space-y-1">
-                          {d.writers.map((w: any, idx: number) => (
-                            <p key={idx} className="text-slate-900 dark:text-white text-sm">
-                              {w.name}
-                              {w.job && w.job !== "Writer" ? (
-                                <span className="text-slate-600 dark:text-white/60 text-xs ml-1">({w.job})</span>
-                              ) : null}
-                            </p>
-                          ))}
-                        </div>
-                  </div>
-                ) : null}
-
-                    {d.producers?.length ? (
-                      <div className="bg-slate-50 dark:bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-slate-200 dark:border-white/10">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Video size={18} className="text-green-500 dark:text-green-400" />
-                          <h4 className="text-sm font-semibold text-slate-700 dark:text-gray-300">Produtores</h4>
-                        </div>
-                        <div className="space-y-1">
-                          {d.producers.map((p: any, idx: number) => (
-                            <p key={idx} className="text-slate-900 dark:text-white text-sm">
-                              {p.name}
-                              {p.job && p.job !== "Producer" ? (
-                                <span className="text-slate-600 dark:text-white/60 text-xs ml-1">({p.job})</span>
-                              ) : null}
-                            </p>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {d.cinematographers?.length ? (
-                      <div className="bg-slate-50 dark:bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-slate-200 dark:border-white/10">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Video size={18} className="text-cyan-500 dark:text-cyan-400" />
-                          <h4 className="text-sm font-semibold text-slate-700 dark:text-gray-300">Fotografia</h4>
-                        </div>
-                        <div className="space-y-1">
-                          {d.cinematographers.map((c: string, idx: number) => (
-                            <p key={idx} className="text-slate-900 dark:text-white text-sm">{c}</p>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {d.composers?.length ? (
-                      <div className="bg-slate-50 dark:bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-slate-200 dark:border-white/10">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Music size={18} className="text-pink-500 dark:text-pink-400" />
-                          <h4 className="text-sm font-semibold text-slate-700 dark:text-gray-300">Música</h4>
-                        </div>
-                        <div className="space-y-1">
-                          {d.composers.map((c: string, idx: number) => (
-                            <p key={idx} className="text-slate-900 dark:text-white text-sm">{c}</p>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {d.editors?.length ? (
-                      <div className="bg-slate-50 dark:bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-slate-200 dark:border-white/10">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Scissors size={18} className="text-orange-500 dark:text-orange-400" />
-                          <h4 className="text-sm font-semibold text-slate-700 dark:text-gray-300">Edição</h4>
-                        </div>
-                        <div className="space-y-1">
-                          {d.editors.map((e: string, idx: number) => (
-                            <p key={idx} className="text-slate-900 dark:text-white text-sm">{e}</p>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-
-              {d?.keywords?.length ? (
-                  <div>
-                  <h3 className="text-base md:text-lg font-semibold text-slate-900 dark:text-white mb-3">Palavras-chave</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {d.keywords.map((keyword: string, idx: number) => (
-                      <span
-                        key={idx}
-                        className="bg-slate-100 dark:bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-full text-sm text-slate-700 dark:text-white/80 border border-slate-300 dark:border-white/20"
-                      >
-                        {keyword}
+                        {d.numberOfEpisodes ? `${d.numberOfEpisodes} eps` : ''}
                       </span>
-                    ))}
-                  </div>
-                  </div>
-                ) : null}
-
-              {d?.belongs_to_collection ? (
-                  <div>
-                  <h3 className="text-base md:text-lg font-semibold text-slate-900 dark:text-white mb-3">Faz parte da coleção</h3>
-                  <div className="bg-slate-50 dark:bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-slate-200 dark:border-white/10 inline-block">
-                    <p className="text-slate-900 dark:text-white font-semibold">{d.belongs_to_collection.name}</p>
-                  </div>
-                  </div>
-                ) : null}
-
-              {d?.networks?.length ? (
-                  <div>
-                  <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-3">Redes de TV</h3>
-                  <div className="flex flex-wrap gap-4 items-center">
-                    {d.networks.map((network: any) => (
-                      <div key={network.id} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/50 rounded-lg px-4 py-2 border border-slate-300 dark:border-slate-700">
-                        {network.logo_path ? (
-                          <img 
-                            src={`https://image.tmdb.org/t/p/w92${network.logo_path}`} 
-                            alt={network.name}
-                            className="h-8 object-contain"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = "none";
-                            }}
-                          />
-                        ) : null}
-                        <span className="text-slate-900 dark:text-white text-sm">{network.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                  </div>
-                ) : null}
-
-              {d?.external_ids && (d.external_ids.facebook_id || d.external_ids.instagram_id || d.external_ids.twitter_id || d.external_ids.wikidata_id) ? (
-                  <div>
-                  <h3 className="text-base md:text-lg font-semibold text-slate-900 dark:text-white mb-3">Links Externos</h3>
-                  <div className="flex flex-wrap gap-3">
-                    {d.external_ids.facebook_id ? (
-                      <a
-                        href={`https://www.facebook.com/${d.external_ids.facebook_id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-2 bg-slate-100 dark:bg-white/5 backdrop-blur-sm px-4 py-2 rounded-lg border border-slate-300 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 transition text-slate-900 dark:text-white"
-                      >
-                        <LinkIcon size={16} />
-                        <span className="text-sm">Facebook</span>
-                      </a>
-                    ) : null}
-                    {d.external_ids.instagram_id ? (
-                      <a
-                        href={`https://www.instagram.com/${d.external_ids.instagram_id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-2 bg-slate-100 dark:bg-white/5 backdrop-blur-sm px-4 py-2 rounded-lg border border-slate-300 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 transition text-slate-900 dark:text-white"
-                      >
-                        <LinkIcon size={16} />
-                        <span className="text-sm">Instagram</span>
-                      </a>
-                    ) : null}
-                    {d.external_ids.twitter_id ? (
-                      <a
-                        href={`https://twitter.com/${d.external_ids.twitter_id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-2 bg-slate-100 dark:bg-white/5 backdrop-blur-sm px-4 py-2 rounded-lg border border-slate-300 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 transition text-slate-900 dark:text-white"
-                      >
-                        <LinkIcon size={16} />
-                        <span className="text-sm">Twitter</span>
-                      </a>
-                    ) : null}
-                    {d.external_ids.wikidata_id ? (
-                      <a
-                        href={`https://www.wikidata.org/wiki/${d.external_ids.wikidata_id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-2 bg-slate-100 dark:bg-white/5 backdrop-blur-sm px-4 py-2 rounded-lg border border-slate-300 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 transition text-slate-900 dark:text-white"
-                      >
-                        <LinkIcon size={16} />
-                        <span className="text-sm">Wikidata</span>
-                      </a>
-                ) : null}
-              </div>
+                    </div>
+                  )}
+                  {d?.lastAirDate && (
+                    <div className="flex items-center gap-2">
+                      <Calendar size={16} className="text-slate-500 dark:text-gray-400 flex-shrink-0" />
+                      <span className="text-slate-700 dark:text-gray-300">Último episódio:</span>
+                      <span className="text-slate-900 dark:text-white">{formatDateShort(d.lastAirDate)}</span>
+                    </div>
+                  )}
                 </div>
-              ) : null}
+              )}
 
-              {d?.watch_providers && (d.watch_providers.streaming?.length || d.watch_providers.rent?.length || d.watch_providers.buy?.length) ? (
+              {activeTab === "reviews" && (
                 <div>
-                  <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-3">Onde assistir</h3>
-                  {d.watch_providers.streaming?.length ? (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-semibold text-slate-600 dark:text-gray-400 mb-2">Streaming</h4>
-                      <div className="flex flex-wrap gap-3">
-                        {d.watch_providers.streaming.map((provider) => (
-                          <div key={provider.provider_id} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/50 rounded-lg px-3 py-2 border border-slate-300 dark:border-slate-700 hover:border-cyan-500/50 transition">
-                            {provider.logo_path ? (
-                              <img 
-                                src={`https://image.tmdb.org/t/p/w45${provider.logo_path}`} 
-                                alt={provider.provider_name}
-                                className="h-6 object-contain"
-                                onError={(e) => {
-                                  const target = e.target as HTMLImageElement;
-                                  target.style.display = "none";
-                                }}
-                              />
-                            ) : null}
-                            <span className="text-slate-900 dark:text-white text-sm">{provider.provider_name}</span>
+                  {isLoggedIn ? (
+                    <div className="bg-white dark:bg-slate-800/50 rounded-lg p-3 mb-4 border border-slate-200 dark:border-slate-700">
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-cyan-500 to-purple-500 flex items-center justify-center flex-shrink-0">
+                            {user?.avatar_url ? (
+                              <img src={user.avatar_url} alt={user.name || ""} className="w-full h-full rounded-full object-cover" />
+                            ) : (
+                              <User size={16} className="text-white" />
+                            )}
                           </div>
-                        ))}
+                          <div className="flex-1 min-w-0">
+                            <textarea
+                              ref={textareaRef}
+                              value={newCommentText}
+                              onChange={handleTextareaChange}
+                              placeholder="Compartilhe sua opinião…"
+                              className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded-lg p-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent resize-none min-h-[72px] max-h-[192px]"
+                              rows={3}
+                              aria-label="Seu comentário"
+                            />
+                            <div className="flex items-center justify-between mt-2">
+                              <span className={`text-xs ${newCommentText.length > 500 ? "text-red-500 dark:text-red-400" : "text-slate-500 dark:text-gray-400"}`}>
+                                {newCommentText.length}/500
+                              </span>
+                            </div>
+                            {commentError && (
+                              <p className="text-xs text-red-500 dark:text-red-400 mt-2" role="alert">{commentError}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <label className="block text-xs font-medium text-slate-700 dark:text-gray-300 mb-1.5">Sua nota:</label>
+                            <div
+                              ref={ratingChipsRef}
+                              className="overflow-x-auto -mx-3 px-3 pb-2 scrollbar-hide scroll-smooth"
+                              role="group"
+                              aria-label="Selecione uma nota de 1 a 10"
+                            >
+                              <div className="flex gap-2 min-w-max">
+                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                                  <button
+                                    key={num}
+                                    onClick={() => setNewCommentRating(newCommentRating === num ? undefined : num)}
+                                    data-rating={num}
+                                    className={`min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
+                                      newCommentRating === num
+                                        ? "bg-cyan-500 text-white"
+                                        : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-gray-400 hover:bg-slate-300 dark:hover:bg-slate-600"
+                                    }`}
+                                    aria-label={`Nota ${num}${newCommentRating === num ? ", selecionado" : ""}`}
+                                    aria-pressed={newCommentRating === num}
+                                  >
+                                    {num}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={handleCreateComment}
+                            disabled={submittingComment || !newCommentText.trim() || newCommentText.length > 500}
+                            className="w-full sm:w-auto min-h-[44px] px-4 sm:px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-purple-500 text-white rounded-lg font-semibold hover:from-cyan-600 hover:to-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            aria-label="Enviar comentário"
+                          >
+                            {submittingComment ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                <span>Publicando...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Send size={18} />
+                                <span>Enviar</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  ) : null}
-                  {d.watch_providers.rent?.length ? (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-semibold text-slate-600 dark:text-gray-400 mb-2">Alugar</h4>
-                      <div className="flex flex-wrap gap-3">
-                        {d.watch_providers.rent.map((provider) => (
-                          <div key={provider.provider_id} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/50 rounded-lg px-3 py-2 border border-slate-300 dark:border-slate-700">
-                            {provider.logo_path ? (
-                              <img 
-                                src={`https://image.tmdb.org/t/p/w45${provider.logo_path}`} 
-                                alt={provider.provider_name}
-                                className="h-6 object-contain"
-                                onError={(e) => {
-                                  const target = e.target as HTMLImageElement;
-                                  target.style.display = "none";
-                                }}
-                              />
-                            ) : null}
-                            <span className="text-slate-900 dark:text-white text-sm">{provider.provider_name}</span>
-                          </div>
-                        ))}
-                      </div>
+                  ) : (
+                    <div className="bg-white dark:bg-slate-800/50 rounded-lg p-4 mb-4 border border-slate-200 dark:border-slate-700 text-center">
+                      <p className="text-sm text-slate-600 dark:text-gray-400 mb-3">Entre para comentar e avaliar.</p>
+                      <button
+                        onClick={() => {
+                          setShowLogin(true);
+                          setTimeout(() => {
+                            textareaRef.current?.focus();
+                          }, 500);
+                        }}
+                        className="min-h-[44px] px-6 py-2.5 rounded-lg bg-slate-700 dark:bg-slate-600 text-white font-semibold hover:bg-slate-600 dark:hover:bg-slate-500 transition-colors"
+                      >
+                        Entrar
+                      </button>
                     </div>
-                  ) : null}
-                  {d.watch_providers.buy?.length ? (
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-600 dark:text-gray-400 mb-2">Comprar</h4>
-                      <div className="flex flex-wrap gap-3">
-                        {d.watch_providers.buy.map((provider) => (
-                          <div key={provider.provider_id} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/50 rounded-lg px-3 py-2 border border-slate-300 dark:border-slate-700">
-                            {provider.logo_path ? (
-                              <img 
-                                src={`https://image.tmdb.org/t/p/w45${provider.logo_path}`} 
-                                alt={provider.provider_name}
-                                className="h-6 object-contain"
-                                onError={(e) => {
-                                  const target = e.target as HTMLImageElement;
-                                  target.style.display = "none";
-                                }}
-                              />
-                            ) : null}
-                            <span className="text-slate-900 dark:text-white text-sm">{provider.provider_name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
+                  )}
 
-              {d?.production_companies?.length ? (
-                <div>
-                  <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-3">Estúdios de produção</h3>
-                  <div className="flex flex-wrap gap-4 items-center">
-                    {d.production_companies.map((company) => (
-                      <div key={company.id} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/50 rounded-lg px-4 py-2 border border-slate-300 dark:border-slate-700">
-                        {company.logo_path ? (
-                          <img 
-                            src={`https://image.tmdb.org/t/p/w92${company.logo_path}`} 
-                            alt={company.name}
-                            className="h-8 object-contain"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = "none";
-                            }}
-                          />
-                        ) : null}
-                        <span className="text-slate-900 dark:text-white text-sm">{company.name}</span>
-                      </div>
-                    ))}
-                  </div>
+                  {commentsLoading ? (
+                    <div className="space-y-3">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="bg-white dark:bg-slate-800/50 rounded-lg p-3 border border-slate-200 dark:border-slate-700 animate-pulse">
+                          <div className="flex items-start gap-3">
+                            <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700"></div>
+                            <div className="flex-1 space-y-2">
+                              <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/4"></div>
+                              <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
+                              <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : comments.length === 0 ? (
+                    <div className="text-center py-8 text-slate-500 dark:text-gray-400">
+                      <MessageCircle size={40} className="mx-auto mb-3 opacity-50" />
+                      <p className="text-sm mb-3">Nenhum comentário ainda. Seja o primeiro a comentar!</p>
+                      {!isLoggedIn && (
+                        <button
+                          onClick={() => setShowLogin(true)}
+                          className="min-h-[44px] px-6 py-2.5 rounded-lg bg-slate-700 dark:bg-slate-600 text-white font-semibold hover:bg-slate-600 dark:hover:bg-slate-500 transition-colors text-sm"
+                        >
+                          Comentar
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {comments.slice(0, commentsToShow).map((comment) => {
+                        const isLiked = isLoggedIn && user?.email && comment.likes?.includes(user.email);
+                        const isOwner = isLoggedIn && user?.email && comment.userId === user.email;
+                        const isLongText = comment.text.length > 300;
+                        const isExpanded = expandedComments.has(comment.id);
+                        const displayText = isLongText && !isExpanded ? comment.text.substring(0, 300) + "..." : comment.text;
+
+                        return (
+                          <div key={comment.id} className="bg-white dark:bg-slate-800/50 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
+                            <div className="flex items-start gap-3">
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-purple-500 flex items-center justify-center flex-shrink-0">
+                                {comment.userAvatar ? (
+                                  <img src={comment.userAvatar} alt={comment.userName || ""} className="w-full h-full rounded-full object-cover" />
+                                ) : (
+                                  <User size={20} className="text-white" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                  <span className="font-semibold text-sm text-slate-900 dark:text-white">{comment.userName}</span>
+                                  {comment.rating !== null && comment.rating !== undefined && (
+                                    <div className="flex items-center gap-1 text-yellow-500 dark:text-yellow-400" aria-label={`Avaliação ${comment.rating} de 10`}>
+                                      <Star size={12} fill="currentColor" />
+                                      <span className="text-xs font-semibold">{comment.rating}</span>
+                                    </div>
+                                  )}
+                                  <span className="text-xs text-slate-500 dark:text-gray-400">
+                                    {formatDate(comment.createdAt, { day: 'numeric', month: 'short', year: 'numeric' }, lang)}
+                                  </span>
+                                  {isOwner && (
+                                    <button
+                                      onClick={() => {
+                                        if (confirm("Tem certeza que deseja excluir este comentário?")) {
+                                          handleDeleteComment(comment.id);
+                                        }
+                                      }}
+                                      className="ml-auto min-w-[36px] min-h-[36px] flex items-center justify-center text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                      title="Excluir comentário"
+                                      aria-label="Excluir comentário"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  )}
+                                </div>
+                                <p className="text-sm text-slate-700 dark:text-gray-300 mb-2 whitespace-pre-wrap leading-relaxed">{displayText}</p>
+                                {isLongText && (
+                                  <button
+                                    onClick={() => toggleCommentExpand(comment.id)}
+                                    className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline mb-2"
+                                  >
+                                    {isExpanded ? "Ver menos" : "Ver mais"}
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleLikeComment(comment.id)}
+                                  className={`min-h-[36px] flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 text-xs ${
+                                    isLiked
+                                      ? "bg-cyan-500/20 dark:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30"
+                                      : "bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-gray-400 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600"
+                                  }`}
+                                  aria-label={`${isLiked ? "Remover" : "Adicionar"} curtida`}
+                                  aria-pressed={isLiked}
+                                >
+                                  <ThumbsUp size={14} fill={isLiked ? "currentColor" : "none"} />
+                                  <span className="font-semibold">{comment.likes?.length || 0}</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {comments.length > commentsToShow && (
+                        <button
+                          onClick={() => setCommentsToShow(comments.length)}
+                          className="w-full min-h-[44px] px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-sm"
+                        >
+                          Carregar mais ({comments.length - commentsToShow})
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
-              ) : null}
+              )}
 
               {(d?.images?.backdrops?.length || d?.images?.posters?.length || d?.allVideos?.length) ? (
                 <div>
@@ -3382,7 +4464,7 @@ const AppShell: React.FC = () => {
                                   <h4 className="text-lg font-semibold text-slate-900 dark:text-white">{season.name}</h4>
                                   {season.air_date ? (
                                     <p className="text-sm text-slate-600 dark:text-gray-400">
-                                      {formatDate(season.air_date, { month: 'long', year: 'numeric' })}
+                                      {formatDate(season.air_date, { month: 'long', year: 'numeric' }, lang)}
                                     </p>
                                   ) : null}
                                 </div>
@@ -3447,64 +4529,121 @@ const AppShell: React.FC = () => {
                 </div>
               ) : null}
 
-              <div className="border-t border-slate-300 dark:border-slate-700 pt-8">
-                <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-6">Avaliações e Comentários</h3>
+              <div className="border-t border-slate-300 dark:border-slate-700 pt-6 md:pt-8">
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-4 md:mb-6">Avaliações e Comentários</h3>
                 
                 {isLoggedIn ? (
-                  <div className="bg-white dark:bg-slate-800/50 rounded-lg p-4 mb-6 border border-slate-200 dark:border-slate-700 shadow-sm dark:shadow-none">
-                    <div className="flex items-start gap-4">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-purple-500 flex items-center justify-center flex-shrink-0">
-                        {user?.avatar_url ? (
-                          <img src={user.avatar_url} alt={user.name || ""} className="w-full h-full rounded-full object-cover" />
-                        ) : (
-                          <User size={20} className="text-white" />
-                        )}
+                  <div className="bg-white dark:bg-slate-800/50 rounded-lg p-3 md:p-4 mb-6 border border-slate-200 dark:border-slate-700 shadow-sm dark:shadow-none">
+                    <div className="flex flex-col md:grid md:grid-cols-2 lg:flex lg:flex-row items-start gap-3 md:gap-4">
+                      <div className="flex items-start gap-3 md:gap-4 w-full md:col-span-2 lg:flex-1 lg:col-span-1">
+                        <div className="w-8 h-8 md:w-10 md:h-10 lg:w-12 lg:h-12 rounded-full bg-gradient-to-br from-cyan-500 to-purple-500 flex items-center justify-center flex-shrink-0">
+                          {user?.avatar_url ? (
+                            <img src={user.avatar_url} alt={user.name || ""} className="w-full h-full rounded-full object-cover" />
+                          ) : (
+                            <User size={16} className="md:w-5 md:h-5 lg:w-6 lg:h-6 text-white" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <textarea
+                            ref={textareaRef}
+                            value={newCommentText}
+                            onChange={handleTextareaChange}
+                            onFocus={() => {
+                              setTimeout(() => {
+                                ratingChipsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                              }, 300);
+                            }}
+                            placeholder="Compartilhe sua opinião…"
+                            className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded-lg p-3 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent resize-none min-h-[72px] max-h-[192px]"
+                            rows={3}
+                            aria-label="Seu comentário"
+                          />
+                          <div className="flex items-center justify-between mt-2">
+                            <span className={`text-xs ${newCommentText.length > 500 ? "text-red-500 dark:text-red-400" : "text-slate-500 dark:text-gray-400"}`}>
+                              {newCommentText.length}/500
+                            </span>
+                          </div>
+                          {commentError && (
+                            <p className="text-xs text-red-500 dark:text-red-400 mt-2" role="alert">{commentError}</p>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <textarea
-                          value={newCommentText}
-                          onChange={(e) => setNewCommentText(e.target.value)}
-                          placeholder="Compartilhe sua opinião sobre este título..."
-                          className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded-lg p-3 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent resize-none"
-                          rows={3}
-                        />
-                        <div className="flex items-center justify-between mt-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-slate-600 dark:text-gray-400">Sua nota:</span>
-                            <div className="flex gap-1">
+                      
+                      <div className="w-full md:col-span-2 lg:flex lg:flex-col lg:items-end lg:gap-3 lg:w-auto">
+                        <div className="w-full lg:w-auto">
+                          <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2" htmlFor="rating-chips">
+                            Sua nota:
+                          </label>
+                          <div
+                            id="rating-chips"
+                            ref={ratingChipsRef}
+                            className="overflow-x-auto -mx-3 px-3 pb-2 scrollbar-hide scroll-smooth md:overflow-x-visible md:mx-0 md:px-0"
+                            role="group"
+                            aria-label="Selecione uma nota de 1 a 10"
+                          >
+                            <div className="flex gap-2 min-w-max md:min-w-0 md:flex-wrap md:max-w-[280px] lg:max-w-none lg:flex-nowrap">
                               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
                                 <button
                                   key={num}
                                   onClick={() => setNewCommentRating(newCommentRating === num ? undefined : num)}
-                                  className={`w-8 h-8 rounded flex items-center justify-center text-sm font-semibold transition-colors ${
+                                  onKeyDown={(e) => {
+                                    if (e.key === "ArrowLeft" && num > 1) {
+                                      e.preventDefault();
+                                      const prev = document.querySelector(`[data-rating="${num - 1}"]`) as HTMLButtonElement;
+                                      prev?.focus();
+                                    } else if (e.key === "ArrowRight" && num < 10) {
+                                      e.preventDefault();
+                                      const next = document.querySelector(`[data-rating="${num + 1}"]`) as HTMLButtonElement;
+                                      next?.focus();
+                                    }
+                                  }}
+                                  data-rating={num}
+                                  className={`min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 ${
                                     newCommentRating === num
                                       ? "bg-cyan-500 text-white"
                                       : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-gray-400 hover:bg-slate-300 dark:hover:bg-slate-600"
                                   }`}
+                                  aria-label={`Nota ${num}${newCommentRating === num ? ", selecionado" : ""}`}
+                                  aria-pressed={newCommentRating === num}
                                 >
                                   {num}
                                 </button>
                               ))}
                             </div>
                           </div>
-                          <button
-                            onClick={handleCreateComment}
-                            disabled={submittingComment || !newCommentText.trim()}
-                            className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-purple-500 text-white rounded-lg font-semibold hover:from-cyan-600 hover:to-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                          >
-                            <Send size={16} />
-                            {submittingComment ? "Publicando..." : "Publicar"}
-                          </button>
                         </div>
+                        <button
+                          onClick={handleCreateComment}
+                          disabled={submittingComment || !newCommentText.trim() || newCommentText.length > 500}
+                          className="w-full md:w-auto lg:w-auto min-h-[44px] px-4 md:px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-purple-500 text-white rounded-lg font-semibold hover:from-cyan-600 hover:to-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-3 md:mt-0"
+                          aria-label="Enviar comentário"
+                        >
+                          {submittingComment ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                              <span>Publicando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Send size={18} />
+                              <span className="hidden md:inline">Enviar</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-white dark:bg-slate-800/50 rounded-lg p-4 mb-6 border border-slate-200 dark:border-slate-700 text-center shadow-sm dark:shadow-none">
-                    <p className="text-slate-600 dark:text-gray-400 mb-3">Faça login para comentar e avaliar</p>
+                  <div className="bg-white dark:bg-slate-800/50 rounded-lg p-4 md:p-6 mb-6 border border-slate-200 dark:border-slate-700 text-center shadow-sm dark:shadow-none">
+                    <p className="text-slate-600 dark:text-gray-400 mb-4">Entre para comentar e avaliar.</p>
                     <button
-                      onClick={() => setShowLogin(true)}
-                      className="px-4 py-2.5 rounded-xl bg-slate-700 dark:bg-slate-600 text-white font-semibold hover:bg-slate-600 dark:hover:bg-slate-500 shadow-md hover:shadow-lg border border-slate-600 dark:border-slate-500 hover:border-slate-500 dark:hover:border-slate-400 transition-all duration-200"
+                      onClick={() => {
+                        setShowLogin(true);
+                        setTimeout(() => {
+                          textareaRef.current?.focus();
+                        }, 500);
+                      }}
+                      className="min-h-[44px] px-6 py-2.5 rounded-lg bg-slate-700 dark:bg-slate-600 text-white font-semibold hover:bg-slate-600 dark:hover:bg-slate-500 transition-colors"
                     >
                       Entrar
                     </button>
@@ -3512,13 +4651,32 @@ const AppShell: React.FC = () => {
                 )}
 
                 {commentsLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="w-8 h-8 border-4 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin"></div>
+                  <div className="space-y-4">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="bg-white dark:bg-slate-800/50 rounded-lg p-4 border border-slate-200 dark:border-slate-700 animate-pulse">
+                        <div className="flex items-start gap-4">
+                          <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700"></div>
+                          <div className="flex-1 space-y-2">
+                            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/4"></div>
+                            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
+                            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : comments.length === 0 ? (
-                  <div className="text-center py-8 text-slate-500 dark:text-gray-400">
-                    <MessageCircle size={48} className="mx-auto mb-3 opacity-50" />
-                    <p>Nenhum comentário ainda. Seja o primeiro a comentar!</p>
+                  <div className="text-center py-12 text-slate-500 dark:text-gray-400">
+                    <MessageCircle size={48} className="mx-auto mb-4 opacity-50" />
+                    <p className="mb-4">Nenhum comentário ainda. Seja o primeiro a comentar!</p>
+                    {!isLoggedIn && (
+                      <button
+                        onClick={() => setShowLogin(true)}
+                        className="min-h-[44px] px-6 py-2.5 rounded-lg bg-slate-700 dark:bg-slate-600 text-white font-semibold hover:bg-slate-600 dark:hover:bg-slate-500 transition-colors"
+                      >
+                        Comentar
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -3530,10 +4688,13 @@ const AppShell: React.FC = () => {
                         acc[key] = users.length;
                         return acc;
                       }, {} as Record<string, number>);
+                      const isLongText = comment.text.length > 300;
+                      const isExpanded = expandedComments.has(comment.id);
+                      const displayText = isLongText && !isExpanded ? comment.text.substring(0, 300) + "..." : comment.text;
 
                       return (
-                        <div key={comment.id} className="bg-white dark:bg-slate-800/50 rounded-lg p-4 border border-slate-200 dark:border-slate-700 shadow-sm dark:shadow-none">
-                          <div className="flex items-start gap-4">
+                        <div key={comment.id} className="bg-white dark:bg-slate-800/50 rounded-lg p-3 md:p-4 border border-slate-200 dark:border-slate-700 shadow-sm dark:shadow-none">
+                          <div className="flex items-start gap-3 md:gap-4">
                             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-purple-500 flex items-center justify-center flex-shrink-0">
                               {comment.userAvatar ? (
                                 <img src={comment.userAvatar} alt={comment.userName || ""} className="w-full h-full rounded-full object-cover" />
@@ -3541,11 +4702,11 @@ const AppShell: React.FC = () => {
                                 <User size={20} className="text-white" />
                               )}
                             </div>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-2 flex-wrap">
                                 <span className="font-semibold text-slate-900 dark:text-white">{comment.userName}</span>
                                 {comment.rating !== null && comment.rating !== undefined && (
-                                  <div className="flex items-center gap-1 text-yellow-500 dark:text-yellow-400">
+                                  <div className="flex items-center gap-1 text-yellow-500 dark:text-yellow-400" aria-label={`Avaliação ${comment.rating} de 10`}>
                                     <Star size={14} fill="currentColor" />
                                     <span className="text-sm font-semibold">{comment.rating}</span>
                                   </div>
@@ -3554,30 +4715,47 @@ const AppShell: React.FC = () => {
                                   {formatDate(comment.createdAt, { day: 'numeric', month: 'short', year: 'numeric' })}
                                 </span>
                                 {isOwner && (
-                                  <button
-                                    onClick={() => handleDeleteComment(comment.id)}
-                                    className="ml-auto text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 transition-colors"
-                                    title="Deletar comentário"
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
+                                  <div className="ml-auto flex items-center gap-2">
+                                    <button
+                                      onClick={() => {
+                                        if (confirm("Tem certeza que deseja excluir este comentário?")) {
+                                          handleDeleteComment(comment.id);
+                                        }
+                                      }}
+                                      className="min-w-[44px] min-h-[44px] md:min-w-[36px] md:min-h-[36px] flex items-center justify-center text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                      title="Excluir comentário"
+                                      aria-label="Excluir comentário"
+                                    >
+                                      <Trash2 size={18} />
+                                    </button>
+                                  </div>
                                 )}
                               </div>
-                              <p className="text-slate-700 dark:text-gray-300 mb-3 whitespace-pre-wrap">{comment.text}</p>
-                              <div className="flex items-center gap-4">
+                              <p className="text-slate-700 dark:text-gray-300 mb-3 whitespace-pre-wrap leading-relaxed">{displayText}</p>
+                              {isLongText && (
+                                <button
+                                  onClick={() => toggleCommentExpand(comment.id)}
+                                  className="text-sm text-cyan-600 dark:text-cyan-400 hover:underline mb-3"
+                                >
+                                  {isExpanded ? "Ver menos" : "Ver mais"}
+                                </button>
+                              )}
+                              <div className="flex items-center gap-3 md:gap-4 flex-wrap">
                                 <button
                                   onClick={() => handleLikeComment(comment.id)}
-                                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors ${
+                                  className={`min-h-[44px] md:min-h-[36px] flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
                                     isLiked
                                       ? "bg-cyan-500/20 dark:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30"
                                       : "bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-gray-400 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600"
                                   }`}
+                                  aria-label={`${isLiked ? "Remover" : "Adicionar"} curtida`}
+                                  aria-pressed={isLiked}
                                 >
                                   <ThumbsUp size={16} fill={isLiked ? "currentColor" : "none"} />
                                   <span className="text-sm font-semibold">{comment.likes?.length || 0}</span>
                                 </button>
                                 {Object.keys(reactionCounts).length > 0 && (
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 flex-wrap">
                                     {Object.entries(reactionCounts).map(([reaction, count]) => (
                                       <span key={reaction} className="text-xs bg-slate-100 dark:bg-slate-700/50 px-2 py-1 rounded-full text-slate-600 dark:text-gray-300">
                                         {reaction}: {count}
@@ -3622,626 +4800,52 @@ const AppShell: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
-    );
-  };
 
-  // ======== Person Modal (rota /person/:id) ========
-  const PersonRouteModal: React.FC = () => {
-    const { id } = useParams();
-    const [person, setPerson] = useState<ApiPersonDetails | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-      (async () => {
-        if (!id) return;
-        setLoading(true);
-        setError(null);
-        try { 
-          const p = await apiPersonDetails(parseInt(id), lang); 
-          setPerson(p); 
-        } catch (e: any) {
-          setError(e?.message || "Erro ao carregar");
-          pushToast({ message: `Erro ao carregar pessoa: ${e?.message || "Falha"}`, tone: "err" });
-        } finally {
-          setLoading(false);
-        }
-      })();
-    }, [id, lang]);
-
-
-    useEffect(() => {
-      const prev = document.body.style.overflow;
-      document.body.style.overflow = "hidden";
-      return () => { document.body.style.overflow = prev; };
-    }, []);
-
-    if (!id) return null;
-    
-    if (loading) {
-    return (
-        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => navigate(-1)}>
-          <div className="text-white" onClick={(e) => e.stopPropagation()}>
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent mx-auto mb-4"></div>
-            <p>Carregando…</p>
-          </div>
-        </div>
-      );
-    }
-
-    if (error || !person) {
-      return (
-        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => navigate(-1)}>
-          <div className="bg-slate-900 rounded-lg p-8 text-center max-w-md" onClick={(e) => e.stopPropagation()}>
-            <p className="text-red-400 mb-4">{error || "Pessoa não encontrada"}</p>
-            <button onClick={() => navigate(-1)} className="px-4 py-2 bg-white text-slate-900 rounded-lg font-semibold">
-              Fechar
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-
-    const calculateAge = (birthday: string | null | undefined) => {
-      if (!birthday) return null;
-      try {
-        const birth = new Date(birthday);
-        const today = new Date();
-        let age = today.getFullYear() - birth.getFullYear();
-        const monthDiff = today.getMonth() - birth.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-          age--;
-        }
-        return age;
-      } catch {
-        return null;
-      }
-    };
-
-    const cast = person.combined_credits?.cast || [];
-    const crew = person.combined_credits?.crew || [];
-    const allCredits = [...cast, ...crew].sort((a: any, b: any) => {
-      const dateA = a.release_date || a.first_air_date || "";
-      const dateB = b.release_date || b.first_air_date || "";
-      return dateB.localeCompare(dateA);
-    });
-
-    // Agrupar créditos por ano
-    const creditsByYear: Record<string, any[]> = {};
-    allCredits.forEach((credit: any) => {
-      const year = credit.release_date || credit.first_air_date 
-        ? String(credit.release_date || credit.first_air_date).slice(0, 4) 
-        : "Sem data";
-      if (!creditsByYear[year]) {
-        creditsByYear[year] = [];
-      }
-      creditsByYear[year].push(credit);
-    });
-
-    // Obter trabalhos mais conhecidos (top rated ou mais populares)
-    const knownFor = [...cast, ...crew]
-      .filter((c: any) => c.vote_average && c.vote_average > 0)
-      .sort((a: any, b: any) => (b.vote_average || 0) - (a.vote_average || 0))
-      .slice(0, 8);
-
-
-    const KnownForSection: React.FC<{ items: any[] }> = ({ items }) => {
-      const scrollContainerRef = useRef<HTMLDivElement>(null);
-      const [showLeftArrow, setShowLeftArrow] = useState(false);
-      const [showRightArrow, setShowRightArrow] = useState(true);
-
-      const checkScroll = useCallback(() => {
-        if (!scrollContainerRef.current) return;
-        const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
-        setShowLeftArrow(scrollLeft > 0);
-        setShowRightArrow(scrollLeft < scrollWidth - clientWidth - 10);
-      }, []);
-
-      const scrollLeft = () => {
-        if (scrollContainerRef.current) {
-          scrollContainerRef.current.scrollBy({ left: -300, behavior: 'smooth' });
-        }
-      };
-
-      const scrollRight = () => {
-        if (scrollContainerRef.current) {
-          scrollContainerRef.current.scrollBy({ left: 300, behavior: 'smooth' });
-        }
-      };
-
-      useEffect(() => {
-        const container = scrollContainerRef.current;
-        if (!container) return;
-        checkScroll();
-        container.addEventListener('scroll', checkScroll);
-        window.addEventListener('resize', checkScroll);
-        return () => {
-          container.removeEventListener('scroll', checkScroll);
-          window.removeEventListener('resize', checkScroll);
-        };
-      }, [items, checkScroll]);
-
-      if (items.length === 0) return null;
-
-      return (
-        <div className="mb-8">
-          <h2 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white mb-3">Conhecido(a) por</h2>
-          <div className="relative">
-            {showLeftArrow && (
+        {showDock && (
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-700 shadow-lg sm:hidden">
+            <div className="flex items-center justify-around px-2 py-2 max-w-screen-sm mx-auto">
               <button
-                onClick={scrollLeft}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-slate-900/80 dark:bg-slate-800/80 backdrop-blur-sm text-white p-2 rounded-full hover:bg-slate-800 dark:hover:bg-slate-700 transition-all shadow-lg"
-                aria-label="Rolar para esquerda"
+                onClick={() => toggleFavorite(selectedMovie)}
+                className="flex flex-col items-center justify-center gap-1 min-w-[60px] min-h-[60px] px-3 py-2 rounded-lg transition-colors touch-manipulation active:scale-95"
+                aria-label={isFavorite(selectedMovie) ? "Remover dos favoritos" : "Adicionar aos favoritos"}
               >
-                <ChevronLeft size={24} />
-                    </button>
-            )}
-            <div
-              ref={scrollContainerRef}
-              className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide scroll-smooth"
-              style={{ scrollBehavior: 'smooth' }}
-            >
-              {items.map((credit: any) => {
-                const mediaType = credit.media || credit.media_type || "movie";
-                const title = credit.title || credit.name || "Sem título";
-                return (
-                  <button
-                    key={`${mediaType}-${credit.id}`}
-                    onClick={() => navigate(`/${mediaType}/${credit.id}`)}
-                    className="flex-shrink-0 text-left group w-[140px]"
-                  >
-                    <div className="relative overflow-hidden rounded-lg bg-slate-200 dark:bg-slate-800 mb-2 transition-transform duration-300 group-hover:scale-105" style={{ aspectRatio: "2/3" }}>
-                      {credit.poster_path ? (
-                        <img 
-                          src={poster(credit.poster_path)} 
-                          alt={title} 
-                          className="w-full h-full object-cover object-center" 
-                          style={{ objectFit: 'cover', objectPosition: 'center' }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Film size={32} className="text-slate-400 dark:text-slate-600" />
-                </div>
-                      )}
-                    </div>
-                    <div className="text-sm font-medium text-slate-900 dark:text-white line-clamp-2 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
-                      {title}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            {showRightArrow && (
-              <button
-                onClick={scrollRight}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-slate-900/80 dark:bg-slate-800/80 backdrop-blur-sm text-white p-2 rounded-full hover:bg-slate-800 dark:hover:bg-slate-700 transition-all shadow-lg"
-                aria-label="Rolar para direita"
-              >
-                <ChevronRight size={24} />
+                <Heart size={20} fill={isFavorite(selectedMovie) ? "currentColor" : "none"} className={isFavorite(selectedMovie) ? "text-red-500" : "text-slate-700 dark:text-gray-300"} />
+                <span className="text-xs font-medium text-slate-700 dark:text-gray-300">Favoritar</span>
               </button>
-            )}
-            <div className="absolute left-0 top-0 bottom-4 w-12 bg-gradient-to-r from-white dark:from-slate-950 to-transparent pointer-events-none" />
-            <div className="absolute right-0 top-0 bottom-4 w-12 bg-gradient-to-l from-white dark:from-slate-950 to-transparent pointer-events-none" />
-          </div>
-        </div>
-      );
-    };
-
-    return (
-      <div className="fixed inset-0 bg-white dark:bg-slate-900 z-50 overflow-y-auto" onClick={() => navigate(-1)}>
-        <div className="min-h-screen bg-white dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
-          <button 
-            onClick={() => navigate(-1)} 
-            className="fixed top-3 right-3 sm:top-4 sm:right-4 min-w-[44px] min-h-[44px] flex items-center justify-center bg-white dark:bg-slate-800 text-slate-900 dark:text-white p-2.5 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 active:bg-gray-200 dark:active:bg-slate-600 transition z-50 shadow-lg touch-manipulation"
-            aria-label="Fechar"
-          >
-            <X size={20} className="sm:w-[22px] sm:h-[22px]" />
-          </button>
-
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              <div className="lg:col-span-4">
-                <div className="sticky top-8">
-                  <div className="mb-6">
-            {person.profile_path ? (
-                      <img 
-                        src={`https://image.tmdb.org/t/p/w500${person.profile_path}`} 
-                        alt={person.name} 
-                        className="w-full rounded-lg shadow-lg"
-                        style={{ aspectRatio: "2/3", objectFit: 'cover', objectPosition: 'center top' }}
-                      />
-                    ) : (
-                      <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-lg flex items-center justify-center" style={{ aspectRatio: "2/3" }}>
-                        <User size={120} className="text-slate-400 dark:text-slate-600" />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="bg-white dark:bg-slate-800 rounded-lg p-6 border border-slate-200 dark:border-slate-700">
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Informações pessoais</h3>
-                    <div className="space-y-3 text-sm">
-                      <div>
-                        <div className="text-slate-600 dark:text-slate-400 mb-1">Conhecido(a) por</div>
-                        <div className="text-slate-900 dark:text-white font-medium">
-                          {person.known_for_department || "—"}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-slate-600 dark:text-slate-400 mb-1">Creditado(a) em</div>
-                        <div className="text-slate-900 dark:text-white font-medium">{allCredits.length}</div>
-                      </div>
-                      {person.birthday ? (
-                        <div>
-                          <div className="text-slate-600 dark:text-slate-400 mb-1">Nascimento</div>
-                          <div className="text-slate-900 dark:text-white font-medium">
-                            {person.birthday ? formatDate(person.birthday, { day: 'numeric', month: 'long', year: 'numeric' }) : null}
-                            {calculateAge(person.birthday) ? ` (${calculateAge(person.birthday)} anos)` : ""}
-                          </div>
-                        </div>
-                      ) : (
-                        <div>
-                          <div className="text-slate-600 dark:text-slate-400 mb-1">Nascimento</div>
-                          <div className="text-slate-900 dark:text-white font-medium">—</div>
-                        </div>
-                      )}
-                      {person.place_of_birth ? (
-                        <div>
-                          <div className="text-slate-600 dark:text-slate-400 mb-1">Local de nascimento</div>
-                          <div className="text-slate-900 dark:text-white font-medium">{person.place_of_birth}</div>
-              </div>
-            ) : null}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="lg:col-span-8">
-                <div className="mb-6">
-                  <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">
-                    {person.name}
-                  </h1>
-                  <div className="flex flex-wrap items-center gap-4 text-slate-600 dark:text-gray-400 text-sm md:text-base">
-                    {person.known_for_department ? (
-                      <span className="bg-slate-100 dark:bg-slate-700/50 px-3 py-1 rounded-full border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white">
-                        {person.known_for_department}
-                      </span>
-                    ) : null}
-                    {person.birthday ? (
-                      <span className="flex items-center gap-2">
-                        <Calendar size={16} />
-                        <span>
-                          {person.birthday ? formatDate(person.birthday, { day: 'numeric', month: 'long', year: 'numeric' }) : null}
-                          {calculateAge(person.birthday) ? ` (${calculateAge(person.birthday)} anos)` : ""}
-                        </span>
-                      </span>
-                    ) : null}
-                    {person.place_of_birth ? (
-                      <span className="flex items-center gap-2">
-                        <Globe size={16} />
-                        <span>{person.place_of_birth}</span>
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-
-                {person.biography ? (
-                  <div className="mb-8">
-                    <h2 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white mb-3">Biografia</h2>
-                    <p className="text-slate-700 dark:text-gray-300 leading-relaxed whitespace-pre-line">
-                      {person.biography}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="mb-8">
-                    <h2 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white mb-3">Biografia</h2>
-                    <p className="text-slate-600 dark:text-gray-400">
-                      Não temos uma biografia para {person.name}.
-                    </p>
-                  </div>
-                )}
-
-                <KnownForSection items={knownFor} />
-
-                {allCredits.length > 0 && (
-                  <div className="mb-8">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white">Filmografia</h2>
-                      <div className="flex gap-2">
-                        <select 
-                          onChange={(e) => {
-                            const filter = e.target.value;
-                           
-                          }}
-                          className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md px-3 py-1.5 text-sm"
-                        >
-                          <option value="all">Todos</option>
-                          <option value="cast">Atuação</option>
-                          <option value="crew">Equipe</option>
-                        </select>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-6">
-                      {Object.keys(creditsByYear).sort((a, b) => {
-                        if (a === "Sem data") return 1;
-                        if (b === "Sem data") return -1;
-                        return b.localeCompare(a);
-                      }).map((year) => {
-                        const yearCredits = creditsByYear[year];
-                        if (yearCredits.length === 0) return null;
-                        
-                        return (
-                          <div key={year} className="relative">
-                            <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gradient-to-b from-cyan-500 via-purple-500 to-lime-400 opacity-30" />
-                            
-                            <div className="flex items-center gap-4 mb-3">
-                              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-r from-cyan-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm shadow-lg">
-                                {year === "Sem data" ? "?" : year.slice(-2)}
-                              </div>
-                              <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                                {year}
-                              </h3>
-                              <span className="text-sm text-slate-600 dark:text-slate-400">
-                                ({yearCredits.length} {yearCredits.length === 1 ? "trabalho" : "trabalhos"})
-                              </span>
-                            </div>
-                            
-                            <div className="ml-12 space-y-3">
-                              {yearCredits.map((credit: any) => {
-                                const mediaType = credit.media || credit.media_type || "movie";
-                                const title = credit.title || credit.name || "Sem título";
-                                const character = credit.character || null;
-                                const job = credit.job || null;
-                                const department = credit.department || null;
-                                const creditYear = credit.release_date || credit.first_air_date 
-                                  ? String(credit.release_date || credit.first_air_date).slice(0, 4) 
-                                  : null;
-                                
-                                return (
-                                  <button
-                                    key={`${mediaType}-${credit.id}-${credit.character || credit.job || ""}`}
-                                    onClick={() => navigate(`/${mediaType}/${credit.id}`)}
-                                    className="w-full text-left flex items-start gap-4 p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 hover:shadow-lg transition-all group"
-                                  >
-                                    <div className="flex-shrink-0 w-16 h-24 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700">
-                                      {credit.poster_path ? (
-                                        <img 
-                                          src={poster(credit.poster_path)} 
-                                          alt={title}
-                                          className="w-full h-full object-cover"
-                                        />
-                                      ) : (
-                                        <div className="w-full h-full flex items-center justify-center">
-                                          <Film size={24} className="text-slate-400 dark:text-slate-500" />
-                                        </div>
-                                      )}
-                                    </div>
-                                    
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-start justify-between gap-2 mb-1">
-                                        <div className="flex-1 min-w-0">
-                                          <div className="text-slate-900 dark:text-white font-semibold group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors line-clamp-2">
-                                            {title}
-                                          </div>
-                                          <div className="flex items-center gap-2 mt-1">
-                                            <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                                              {mediaType === "tv" ? "Série" : "Filme"}
-                                            </span>
-                                            {creditYear && (
-                                              <span className="text-xs text-slate-600 dark:text-slate-400">
-                                                {creditYear}
-                                              </span>
-                                            )}
-                                            {credit.vote_average && credit.vote_average > 0 && (
-                                              <span className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1">
-                                                <Star size={12} fill="#FFD700" color="#FFD700" />
-                                                {credit.vote_average.toFixed(1)}
-                                              </span>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </div>
-                                      
-                                      {character && (
-                                        <div className="text-sm text-slate-700 dark:text-slate-300 mt-2">
-                                          <span className="font-medium">como</span> {character}
-                                        </div>
-                                      )}
-                                      {job && (
-                                        <div className="text-sm text-slate-700 dark:text-slate-300 mt-2">
-                                          <span className="font-medium">{job}</span>
-                                          {department && department !== job && (
-                                            <span className="text-slate-600 dark:text-slate-400"> • {department}</span>
-                                          )}
-                                        </div>
-                                      )}
-                                    </div>
-            </button>
-                                );
-                              })}
-          </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-                
-                {crew.length > 0 && (
-                  <div className="mb-8">
-                    <h2 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white mb-4">Equipe Técnica</h2>
-                    <div className="space-y-3">
-                      {crew.slice(0, 20).map((credit: any) => {
-                        const mediaType = credit.media || credit.media_type || "movie";
-                        const title = credit.title || credit.name || "Sem título";
-                        const job = credit.job || null;
-                        return (
-                          <button
-                            key={`crew-${mediaType}-${credit.id}-${job}`}
-                            onClick={() => navigate(`/${mediaType}/${credit.id}`)}
-                            className="w-full text-left flex items-center gap-3 p-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group"
-                          >
-                            <div className="flex-shrink-0 w-10 h-14 rounded bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
-                              {credit.poster_path ? (
-                                <img src={poster(credit.poster_path)} alt={title} className="w-full h-full object-cover" />
-                              ) : (
-                                <Film size={20} className="text-slate-400 dark:text-slate-500" />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-slate-900 dark:text-white font-medium group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
-                                {title}
-                              </div>
-                              {job && (
-                                <div className="text-sm text-slate-600 dark:text-gray-400 mt-0.5">
-                                  {job}
-                                </div>
-                              )}
-                            </div>
-                    </button>
-                        );
-                      })}
-                </div>
-              </div>
-                )}
-              </div>
+              <button
+                onClick={() => {
+                  if (!isLoggedIn) { setShowLogin(true); return; }
+                  setShowListPickerFor(selectedMovie);
+                }}
+                className="flex flex-col items-center justify-center gap-1 min-w-[60px] min-h-[60px] px-3 py-2 rounded-lg transition-colors touch-manipulation active:scale-95"
+                aria-label="Adicionar à lista"
+              >
+                <ListIcon size={20} className="text-slate-700 dark:text-gray-300" />
+                <span className="text-xs font-medium text-slate-700 dark:text-gray-300">Lista</span>
+              </button>
+              <button
+                onClick={handleRateMovie}
+                className="flex flex-col items-center justify-center gap-1 min-w-[60px] min-h-[60px] px-3 py-2 rounded-lg transition-colors touch-manipulation active:scale-95"
+                aria-label="Avaliar"
+              >
+                <Star size={20} className="text-slate-700 dark:text-gray-300" />
+                <span className="text-xs font-medium text-slate-700 dark:text-gray-300">Avaliar</span>
+              </button>
+              <button
+                onClick={handleShareMovie}
+                className="flex flex-col items-center justify-center gap-1 min-w-[60px] min-h-[60px] px-3 py-2 rounded-lg transition-colors touch-manipulation active:scale-95"
+                aria-label="Compartilhar"
+              >
+                <Share2 size={20} className="text-slate-700 dark:text-gray-300" />
+                <span className="text-xs font-medium text-slate-700 dark:text-gray-300">Compartilhar</span>
+              </button>
             </div>
           </div>
-        </div>
+        )}
       </div>
     );
   };
 
-
-  const MobileFooter: React.FC = () => (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-slate-300 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/90 dark:supports-[backdrop-filter]:bg-slate-900/90 safe-area-inset-bottom" aria-label="Navegação inferior" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 8px)' }}>
-      <div className="grid grid-cols-5 h-14 sm:h-16 gap-0.5">
-          <button onClick={() => setActiveTab("home")} className={`flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-h-[44px] touch-manipulation active:bg-slate-100 dark:active:bg-slate-800 transition-colors ${activeTab === "home" ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-gray-400"}`} title={t("home")}>
-            <Home size={18} className="sm:w-5 sm:h-5" /><span className="text-[9px] sm:text-[10px] font-medium leading-tight px-1 text-center">{t("home")}</span>
-          </button>
-          <button onClick={() => setActiveTab("favorites")} className={`flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-h-[44px] touch-manipulation active:bg-slate-100 dark:active:bg-slate-800 transition-colors ${activeTab === "favorites" ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-gray-400"}`} title={t("favorites")}>
-            <Heart size={18} className="sm:w-5 sm:h-5" /><span className="text-[9px] sm:text-[10px] font-medium leading-tight px-1 text-center">{t("favorites")}</span>
-          </button>
-          <button onClick={() => { setActiveListId(null); setActiveTab("lists"); }} className={`flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-h-[44px] touch-manipulation active:bg-slate-100 dark:active:bg-slate-800 transition-colors ${activeTab === "lists" ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-gray-400"}`} title={t("lists")}>
-            <ListIcon size={18} className="sm:w-5 sm:h-5" /><span className="text-[9px] sm:text-[10px] font-medium leading-tight px-1 text-center">{t("lists")}</span>
-          </button>
-            <button onClick={() => setActiveTab("watchlist")} className={`flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-h-[44px] touch-manipulation active:bg-slate-100 dark:active:bg-slate-800 transition-colors ${activeTab === "watchlist" || activeTab.startsWith("watchlist-") ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-gray-400"}`} title={t("collections")}>
-            <Bookmark size={18} className="sm:w-5 sm:h-5" /><span className="text-[9px] sm:text-[10px] font-medium leading-tight px-1 text-center">{t("collections")}</span>
-          </button>
-          <button onClick={() => setActiveTab("people")} className={`flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-h-[44px] touch-manipulation active:bg-slate-100 dark:active:bg-slate-800 transition-colors ${activeTab === "people" ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-gray-400"}`} title={t("people")}>
-            <Users size={18} className="sm:w-5 sm:h-5" /><span className="text-[9px] sm:text-[10px] font-medium leading-tight px-1 text-center">{t("people")}</span>
-          </button>
-      </div>
-    </nav>
-  );
-
-  const SiteFooter: React.FC = () => (
-    <footer className="mt-20 border-t border-slate-300 dark:border-slate-800/50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm">
-          <div className="container mx-auto px-6 lg:px-8 py-6 md:py-8">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 lg:gap-12 mb-12">
-          <div>
-            <h4 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 uppercase tracking-wider">Explorar</h4>
-            <ul className="space-y-3 text-sm text-slate-600 dark:text-gray-400">
-              <li>
-                <button onClick={() => goToHomeCategory("trending")} className="hover:text-slate-900 dark:hover:text-white transition-colors">
-                  Em alta
-                </button>
-              </li>
-              <li>
-                <button onClick={() => goToHomeCategory("popular")} className="hover:text-slate-900 dark:hover:text-white transition-colors">
-                  Populares
-                </button>
-              </li>
-              <li>
-                <button onClick={() => goToHomeCategory("top_rated")} className="hover:text-slate-900 dark:hover:text-white transition-colors">
-                  Mais bem avaliados
-                </button>
-              </li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 uppercase tracking-wider">Categorias</h4>
-            <ul className="space-y-3 text-sm text-slate-600 dark:text-gray-400">
-              <li>
-                <button onClick={() => goToHomeCategory("now_playing")} className="hover:text-slate-900 dark:hover:text-white transition-colors">
-                  Em cartaz
-                </button>
-              </li>
-              <li>
-                <button onClick={() => goToHomeCategory("upcoming")} className="hover:text-slate-900 dark:hover:text-white transition-colors">
-                  Em breve
-                </button>
-              </li>
-              <li>
-                <button onClick={() => setActiveTab("favorites")} className="hover:text-slate-900 dark:hover:text-white transition-colors">
-                  Meus favoritos
-                </button>
-              </li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 uppercase tracking-wider">Conta</h4>
-            <ul className="space-y-3 text-sm text-slate-600 dark:text-gray-400">
-              <li>
-                <button onClick={() => setShowProfileModal(true)} className="hover:text-slate-900 dark:hover:text-white transition-colors">
-                  Meu perfil
-                </button>
-              </li>
-              <li>
-                <button onClick={() => setActiveTab("lists")} className="hover:text-slate-900 dark:hover:text-white transition-colors">
-                  {t("lists")}
-                </button>
-              </li>
-              <li>
-                <button onClick={() => setActiveTab("watchlist")} className="hover:text-slate-900 dark:hover:text-white transition-colors">
-                  Coleções
-                </button>
-              </li>
-              <li>
-                <button onClick={() => setActiveTab("history")} className="hover:text-slate-900 dark:hover:text-white transition-colors">
-                  Histórico
-                </button>
-              </li>
-              <li>
-                <button onClick={() => setActiveTab("stats")} className="hover:text-slate-900 dark:hover:text-white transition-colors">
-                  Estatísticas
-                </button>
-              </li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 uppercase tracking-wider">Sobre</h4>
-            <ul className="space-y-3 text-sm text-slate-600 dark:text-gray-400">
-              <li>
-                <button className="hover:text-slate-900 dark:hover:text-white transition-colors">Sobre o VETRA</button>
-              </li>
-              <li>
-                <button className="hover:text-slate-900 dark:hover:text-white transition-colors">Ajuda</button>
-              </li>
-              <li>
-                <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer" className="hover:text-slate-900 dark:hover:text-white transition-colors">
-                  Dados por TMDB
-                </a>
-              </li>
-            </ul>
-        </div>
-        </div>
-        <div className="pt-8 border-t border-slate-300 dark:border-slate-800/50">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-xs text-slate-600 dark:text-gray-500">
-              © {new Date().getFullYear()} VETRA. Todos os direitos reservados.
-            </p>
-            <div className="flex items-center gap-6 text-xs text-slate-600 dark:text-gray-500">
-              <button className="hover:text-slate-900 dark:hover:text-gray-400 transition-colors">Termos de Uso</button>
-              <button className="hover:text-slate-900 dark:hover:text-gray-400 transition-colors">Privacidade</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </footer>
-  );
 
 
   const exportJSON = () => {
@@ -4310,15 +4914,45 @@ const AppShell: React.FC = () => {
 
   const ListDetail: React.FC<{ lst: UserList }> = ({ lst }) => {
     const [order, setOrder] = useState<"recent" | "year" | "rating">("recent");
+    const [searchQuery, setSearchQuery] = useState("");
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(() => {
+      const saved = localStorage.getItem(`vetra:listItemsPerPage:${lst.id}`);
+      return saved ? parseInt(saved, 10) : 24;
+    });
 
-    const sortedItems = useMemo(() => {
-      const arr = [...lst.items];
-      if (order === "year") return arr.sort((a, b) => parseInt(b.year || "0") - parseInt(a.year || "0"));
-      if (order === "rating") return arr.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-      return arr; 
-    }, [lst.items, order]);
+    const filteredAndSortedItems = useMemo(() => {
+      let filtered = [...lst.items];
+      
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
+        filtered = filtered.filter((m) => 
+          m.title?.toLowerCase().includes(query) ||
+          m.overview?.toLowerCase().includes(query)
+        );
+      }
+      
+      if (order === "year") {
+        filtered.sort((a, b) => parseInt(b.year || "0") - parseInt(a.year || "0"));
+      } else if (order === "rating") {
+        filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+      }
+      
+      return filtered;
+    }, [lst.items, order, searchQuery]);
 
-    const cover = lst.items.find((m) => m.poster_path) || lst.items[0];
+    const totalPages = Math.ceil(filteredAndSortedItems.length / itemsPerPage);
+    const paginatedItems = useMemo(() => {
+      const start = (currentPage - 1) * itemsPerPage;
+      return filteredAndSortedItems.slice(start, start + itemsPerPage);
+    }, [filteredAndSortedItems, currentPage, itemsPerPage]);
+
+    useEffect(() => {
+      setCurrentPage(1);
+    }, [searchQuery, order, itemsPerPage]);
+
+    const coverImageUrl = getListCoverImageUrl(lst, mediaKey, toPosterPath);
+    const fallbackPosters = getListFallbackPosters(lst, 4, toPosterPath);
 
     const openShare = async () => {
       try {
@@ -4332,105 +4966,209 @@ const AppShell: React.FC = () => {
           vote_average: m.rating ?? null, vote_count: m.voteCount ?? null,
           release_date: m.year ? `${m.year}-01-01` : null, first_air_date: null, overview: m.overview ?? "",
         }));
-        console.log("[shareListDetail] Criando compartilhamento:", { itemsCount: payload.length, type: 'list', listName: lst.name });
         const resp = await api.shareCreate(payload, 'list', lst.name);
-        if (!resp || !resp.url) {
+        if (!resp || !resp.slug) {
           throw new Error("Resposta inválida do servidor");
         }
-        setShareUrl(resp.url); 
+        setShareSlug(resp.slug || (resp.code ? resp.code.replace(/V9-|-/g, "").slice(0, 10) : ""));
         setShowShare(true);
-        try { 
-          await navigator.clipboard.writeText(resp.url); 
-          pushToast({ message: "Link copiado para a área de transferência!", tone: "ok" }); 
-        } catch {}
       } catch (e: any) {
         console.error("[shareListDetail] Erro ao compartilhar:", e);
-        const errorMsg = e?.message || t("share_fail") || "Erro ao compartilhar lista";
+        const errorMsg = e?.message || "Não foi possível gerar o link agora. Tente novamente.";
         pushToast({ message: errorMsg, tone: "err" });
       }
     };
 
     return (
       <div>
-        <div className="flex items-center justify-between mb-4 gap-3">
-          {viewingShared ? (
-            <h3 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white">{lst.name}</h3>
-          ) : (
-          <input
-            className="bg-transparent text-lg md:text-xl font-bold outline-none border-b border-transparent focus:border-slate-600"
-            value={lst.name}
-            onChange={(e) => renameList(lst.id, e.target.value)}
-            disabled={viewingShared}
-          />
-          )}
-          <div className="flex items-center gap-2">
-            <select value={order} onChange={(e)=>setOrder(e.target.value as any)} className="bg-slate-800 text-white border border-slate-600 rounded-md px-2 py-2">
-              <option value="recent">Recentes</option>
-              <option value="year">Ano</option>
-              <option value="rating">Nota</option>
-            </select>
-            {lst.items.length > 0 && !viewingShared && (
-              <button onClick={openShare} className="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 px-4 py-2 rounded-md text-sm" title={t("share")}>
-                <Share2 size={16} />{t("share")}
-              </button>
-            )}
-            {!viewingShared && (
-              <KebabMenu
-                items={[
-                  { key: "edit", label: t("edit_list"), icon: <Pencil size={14} />, onClick: () => {} },
-                  { key: "clear", label: t("clear_items"), icon: <Trash2 size={14} />, onClick: () => setConfirmModal({ show: true, message: t("clear_items_q"), onConfirm: () => { clearList(lst.id); setConfirmModal({ show: false, message: "", onConfirm: () => {} }); } }) },
-                  { key: "delete", label: t("delete_list"), icon: <Trash2 size={14} />, tone: "danger",
-                    onClick: () => setConfirmModal({ show: true, message: t("delete_list_q", { name: lst.name }), onConfirm: () => { deleteList(lst.id); setConfirmModal({ show: false, message: "", onConfirm: () => {} }); } }) },
-                ]}
+        {/* Cabeçalho compacto da lista */}
+        <div className="mb-6 sm:mb-8 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
+          <div className="flex items-center gap-4 sm:gap-6">
+            {/* Miniatura da capa */}
+            <div className="flex-shrink-0">
+              {coverImageUrl ? (
+                <img
+                  src={coverImageUrl}
+                  alt={`Capa da lista ${lst.name}`}
+                  className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl object-cover bg-slate-200 dark:bg-slate-700"
+                  style={{ aspectRatio: "1/1" }}
+                />
+              ) : fallbackPosters.length > 0 ? (
+                <div className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl overflow-hidden grid grid-cols-2 bg-slate-200 dark:bg-slate-700">
+                  {fallbackPosters.slice(0, 4).map((poster, idx) => (
+                    <img
+                      key={idx}
+                      src={poster.url}
+                      alt={poster.alt || ""}
+                      className="w-full h-full object-cover"
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
+                  <ListIcon size={24} className="text-slate-400 dark:text-slate-600 sm:w-8 sm:h-8 md:w-10 md:h-10" />
+                </div>
+              )}
+            </div>
+
+            {/* Título e contagem */}
+            <div className="flex-1 min-w-0">
+              <input
+                className="w-full bg-transparent text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white outline-none border-b-2 border-transparent focus:border-cyan-500 placeholder:text-slate-400 dark:placeholder:text-slate-500 mb-1"
+                value={lst.name}
+                onChange={(e) => renameList(lst.id, e.target.value)}
+                placeholder="Nome da lista"
               />
-            )}
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                {lst.items.length} {lst.items.length === 1 ? 'item' : 'itens'}
+              </p>
+            </div>
+
+            {/* Ações */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Botão de compartilhar - só aparece para listas do usuário (não compartilhadas) */}
+              {lst.id !== 'shared' && (
+                <button 
+                  onClick={openShare} 
+                  disabled={lst.items.length === 0}
+                  className="inline-flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 dark:text-slate-300 text-sm font-medium transition-all min-h-[44px] focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  title={lst.items.length === 0 ? "A lista está vazia" : "Compartilhar lista"}
+                  aria-label="Compartilhar lista"
+                >
+                  <Share2 size={18} />
+                  <span className="hidden sm:inline">Compartilhar</span>
+                </button>
+              )}
+              {/* Menu Kebab - só aparece para listas do usuário (não compartilhadas) */}
+              {lst.id !== 'shared' && (
+                <KebabMenu
+                  items={[
+                    { key: "clear", label: "Limpar itens", icon: <Trash2 size={14} />, onClick: () => setConfirmModal({ show: true, message: "Limpar todos os itens desta lista?", onConfirm: () => { clearList(lst.id); setConfirmModal({ show: false, message: "", onConfirm: () => {} }); } }) },
+                    { key: "delete", label: "Excluir lista", icon: <Trash2 size={14} />, tone: "danger",
+                      onClick: () => setConfirmModal({ show: true, message: `Excluir a lista "${lst.name}"? Esta ação não pode ser desfeita.`, onConfirm: () => { deleteList(lst.id); setConfirmModal({ show: false, message: "", onConfirm: () => {} }); } }) },
+                  ]}
+                />
+              )}
+            </div>
           </div>
         </div>
 
+        {/* Lista de itens */}
         {lst.items.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6"
-               onDragOver={onDragOver}>
-            {sortedItems.map((m, idx) => (
-              <div key={`${m.media}-${m.id}`} className="relative"
-                   draggable={!viewingShared}
-                   onDragStart={onDragStart(lst.id, idx)}
-                   onDrop={onDrop(lst.id, idx)}>
-                <MovieCard movie={m} />
-                {!viewingShared && (
-                  <button onClick={() => removeFromList(lst.id, m.id, m.media)}
-                    className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded hover:bg-black/80" title={t("remove")}>
-                    {t("remove")}
-                  </button>
-                )}
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
+              {paginatedItems.map((m, idx) => {
+              return (
+                <div key={`${m.media}-${m.id}`} className="relative group"
+                     draggable
+                     onDragStart={onDragStart(lst.id, idx)}
+                     onDrop={onDrop(lst.id, idx)}>
+                  <MovieCard movie={m} />
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <KebabMenu
+                      items={[
+                        { 
+                          key: "setCover", 
+                          label: "Definir como capa", 
+                          icon: <ImageIcon size={14} />,
+                          onClick: async () => {
+                            const itemKey = mediaKey(m);
+                            await setListCover(lst.id, "item", itemKey);
+                            pushToast({ message: "Capa definida", tone: "ok" });
+                          }
+                        },
+                        { 
+                          key: "remove", 
+                          label: "Remover da lista", 
+                          icon: <Trash2 size={14} />, 
+                          tone: "danger",
+                          onClick: () => {
+                            removeFromList(lst.id, m.id, m.media);
+                          }
+                        },
+                      ]}
+                    />
+                  </div>
+                </div>
+              );
+              })}
+            </div>
+
+            {/* Paginação */}
+            {totalPages > 1 && (
+              <div className="mt-6 flex items-center justify-center gap-2 flex-wrap">
+                <button
+                  onClick={() => {
+                    setCurrentPage(prev => Math.max(1, prev - 1));
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  disabled={currentPage === 1}
+                  className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => {
+                        setCurrentPage(pageNum);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                      disabled={currentPage === pageNum}
+                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${
+                        currentPage === pageNum
+                          ? "bg-cyan-600 text-white border-cyan-600"
+                          : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700"
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => {
+                    setCurrentPage(prev => Math.min(totalPages, prev + 1));
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                >
+                  <ChevronRight size={18} />
+                </button>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         ) : (
-          <div className="text-slate-600 dark:text-gray-400">{t("list_empty")}</div>
+          <div className="text-center py-12 md:py-16 bg-gradient-to-br from-slate-900/90 to-slate-800/90 backdrop-blur-md rounded-3xl border border-slate-700/50 shadow-2xl">
+            <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500/20 via-purple-500/20 to-lime-400/20 mb-6 ring-4 ring-cyan-500/10">
+              <ListIcon size={48} className="text-cyan-400" />
+            </div>
+            <p className="text-white text-xl font-bold mb-2">{t("none_item_in_list")}</p>
+            <p className="text-gray-400">{t("add_items_hint")}</p>
+          </div>
         )}
 
-          {!viewingShared && (
-          <div className="mt-6 flex items-center gap-2">
-              <button onClick={() => { setRenameInput(lst.name); setRenameModal({ show: true, listId: lst.id, currentName: lst.name }); }}
-                className="text-sm px-3 py-2 rounded-md border border-slate-600 bg-slate-800 hover:bg-slate-700" title="Renomear lista">
-                Renomear
-              </button>
-              <button onClick={() => setConfirmModal({ show: true, message: `Excluir a lista "${lst.name}"?`, onConfirm: () => { deleteList(lst.id); setConfirmModal({ show: false, message: "", onConfirm: () => {} }); } })}
-                className="text-sm px-3 py-2 rounded-md border border-rose-600 text-rose-200 bg-rose-900/30 hover:bg-rose-900/50" title="Excluir lista">
-                Excluir
-              </button>
-          <button onClick={() => setActiveListId(null)} className="ml-auto text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white underline">
+        <div className="mt-6 flex items-center gap-2 flex-wrap">
+          <button onClick={() => setActiveListId(null)} className="text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white underline min-h-[44px]">
             {t("back_all_lists")}
           </button>
         </div>
-        )}
-
-        {cover ? (
-          <div className="mt-6 text-sm text-gray-400">Capa automática: <span className="text-white">{cover!.title}</span></div>
-        ) : null}
       </div>
     );
   };
+
+
 
   const handlePeoplePageChange = (page: number) => {
     setPeoplePage(page);
@@ -4457,7 +5195,7 @@ const AppShell: React.FC = () => {
             <div key={mediaKey(entry.movie)}>
               <MovieCard movie={entry.movie} />
               <p className="text-xs text-gray-400 mt-2 text-center">
-                {formatDate(entry.watchedAt, { day: 'numeric', month: 'short', year: 'numeric' })}
+                {formatDate(entry.watchedAt, { day: 'numeric', month: 'short', year: 'numeric' }, lang)}
               </p>
             </div>
             ));
@@ -4519,7 +5257,17 @@ const AppShell: React.FC = () => {
         }
         
 
-        let peopleResults = allResults.filter((x: any) => {
+        // Garantir que profile_path está presente
+        const allResultsWithImages = allResults.map((person: any) => ({
+          ...person,
+          profile_path: person.profile_path || null,
+          name: person.name || "",
+          known_for_department: person.known_for_department || null,
+          known_for: person.known_for || [],
+          popularity: person.popularity || 0,
+        }));
+        
+        let peopleResults = allResultsWithImages.filter((x: any) => {
           const hasName = x.name && x.name.trim() !== "";
           return hasName;
         });
@@ -4675,62 +5423,78 @@ const AppShell: React.FC = () => {
         </div>
       ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
+            {/* Grid responsivo: 2 colunas no mobile, 3 no tablet, 4 no desktop */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 md:gap-5">
               {filteredPeople.map((person: any) => (
               <Link
                 key={person.id}
                 to={`/person/${person.id}`}
-                className="group bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 transition-all duration-300 shadow-lg hover:shadow-xl"
+                className="group bg-white dark:bg-slate-800 rounded-xl overflow-hidden relative transition-all duration-300 shadow-md hover:shadow-xl"
               >
-                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 p-3 sm:p-4">
-                  <div className="flex-shrink-0 mx-auto sm:mx-0">
+                {/* Container da imagem */}
+                <div className="relative w-full overflow-hidden bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800" style={{ aspectRatio: "2/3" }}>
                   {person.profile_path ? (
-                    <img
-                        src={`https://image.tmdb.org/t/p/w300${person.profile_path}`}
-                      alt={person.name}
-                        className="w-20 h-28 sm:w-24 sm:h-32 md:w-28 md:h-40 rounded-lg object-cover object-center shadow-md group-hover:scale-105 transition-transform duration-300"
-                      style={{ aspectRatio: "2/3" }}
-                      onError={(e) => {
-                          (e.target as HTMLImageElement).src = "https://via.placeholder.com/300x450?text=No+Image";
-                      }}
-                    />
+                    <>
+                      <img
+                        src={person.profile_path ? `https://image.tmdb.org/t/p/w185/${person.profile_path.replace(/^\//, '')}` : undefined}
+                        srcSet={person.profile_path ? `
+                          https://image.tmdb.org/t/p/w185/${person.profile_path.replace(/^\//, '')} 185w,
+                          https://image.tmdb.org/t/p/w300/${person.profile_path.replace(/^\//, '')} 300w,
+                          https://image.tmdb.org/t/p/w500/${person.profile_path.replace(/^\//, '')} 500w
+                        ` : undefined}
+                        sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 20vw, 16vw"
+                        alt={person.name || "Pessoa"}
+                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
+                        loading="lazy"
+                        decoding="async"
+                        fetchPriority="low"
+                        onError={(e) => {
+                          console.error('[PeopleContent] Erro ao carregar imagem:', person.profile_path);
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const fallback = target.nextElementSibling as HTMLElement;
+                          if (fallback) {
+                            fallback.style.display = 'flex';
+                            fallback.classList.remove('hidden');
+                          }
+                        }}
+                        onLoad={() => {
+                          console.log('[PeopleContent] Imagem carregada:', person.profile_path);
+                        }}
+                      />
+                      <div className="absolute inset-0 w-full h-full flex items-center justify-center hidden bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800" style={{ aspectRatio: "2/3" }}>
+                        <User size={48} className="text-slate-400 dark:text-gray-600" />
+                      </div>
+                    </>
                   ) : (
-                      <div className="w-20 h-28 sm:w-24 sm:h-32 md:w-28 md:h-40 bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 rounded-lg flex items-center justify-center shadow-md" style={{ aspectRatio: "2/3" }}>
-                        <User size={28} className="sm:w-8 sm:h-8 text-slate-400 dark:text-gray-600" />
+                    <div className="w-full h-full flex items-center justify-center" style={{ aspectRatio: "2/3" }}>
+                      <User size={48} className="text-slate-400 dark:text-gray-600" />
                     </div>
                   )}
                 </div>
                   
-                  <div className="flex-1 min-w-0 text-center sm:text-left">
-                    <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mb-2 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors line-clamp-2">
-                  {person.name}
-                    </h3>
-                    
-                    {person.known_for_department && (
-                      <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mb-2">
-                        <span className="font-semibold">Departamento:</span> {person.known_for_department}
-                      </p>
-                    )}
-                    
-                {person.known_for && person.known_for.length > 0 && (
-                      <div className="mb-2">
-                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-500 mb-1">Conhecido por:</p>
-                        <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 line-clamp-2 sm:line-clamp-3">
-                    {person.known_for.map((kf: any) => kf.title || kf.name).join(", ")}
-                        </p>
-                  </div>
-                )}
-                    
-                    {person.popularity && (
-                      <div className="flex items-center justify-center sm:justify-start gap-2 mt-2">
-                        <TrendingUp size={12} className="sm:w-3.5 sm:h-3.5 text-cyan-500" />
-                        <span className="text-xs text-slate-600 dark:text-slate-400">
-                          Popularidade: {Math.round(person.popularity)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                {/* Informações abaixo da imagem */}
+                <div className="p-3 sm:p-4 text-center">
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white mb-1 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors line-clamp-2">
+                    {person.name}
+                  </h3>
+                  
+                  {person.known_for_department && (
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mb-1 line-clamp-1">
+                      {person.known_for_department}
+                    </p>
+                  )}
+                  
+                  {person.known_for && person.known_for.length > 0 && (
+                    <p className="text-xs text-slate-500 dark:text-slate-500 line-clamp-2 mt-1">
+                      {person.known_for.map((kf: any) => kf.title || kf.name).slice(0, 2).join(", ")}
+                      {person.known_for.length > 2 && "..."}
+                    </p>
+                  )}
                 </div>
+                
+                {/* Traço colorido embaixo no hover */}
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               </Link>
             ))}
           </div>
@@ -4751,6 +5515,880 @@ const AppShell: React.FC = () => {
   );
 
   // Modal de Edição de Perfil
+  const ProfilePageContent: React.FC<{
+    user: UserProfile | null;
+    setUser: React.Dispatch<React.SetStateAction<UserProfile | null>>;
+    profileLoading: boolean;
+    saveProfile: (profileData: { name: string; avatar_url?: string | null }) => Promise<void>;
+    pushToast: (toast: { message: string; tone: "ok" | "err" | "info" }) => void;
+    t: (key: string, params?: any) => string;
+    favorites: MovieT[];
+    lists: Array<{ id: string; name: string; items: MovieT[] }>;
+    userStates: UserStateMap;
+    setIsLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
+    setShowDeleteAccountModal: React.Dispatch<React.SetStateAction<boolean>>;
+    darkEnabled: boolean;
+    toggleDark: () => void;
+    lang: Lang;
+    setLang: (lang: Lang) => void;
+    changePassword: (newPassword: string, idToken: string) => Promise<any>;
+    exportJSON: () => void;
+    exportCSV: () => void;
+    importJSON: (file: File) => void;
+  }> = ({
+    user, setUser, profileLoading, saveProfile, pushToast, t, favorites, lists, userStates,
+    setIsLoggedIn, setShowDeleteAccountModal, darkEnabled, toggleDark, lang, setLang,
+    changePassword, exportJSON, exportCSV, importJSON
+  }) => {
+    const navigate = useNavigate();
+    const [activeTab, setActiveTab] = useState<"geral" | "preferencias" | "seguranca" | "dados">("geral");
+    const [editFirstName, setEditFirstName] = useState("");
+    const [editLastName, setEditLastName] = useState("");
+    const [editNickname, setEditNickname] = useState("");
+    const [editAvatar, setEditAvatar] = useState<string | null>(null);
+    const [avatarFile, setAvatarFile] = useState<File | null>(null);
+    const [avatarUploadProgress, setAvatarUploadProgress] = useState(0);
+    const [saving, setSaving] = useState(false);
+    const [hasChanges, setHasChanges] = useState(false);
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+    const [showPasswordSection, setShowPasswordSection] = useState(false);
+    const [currentPassword, setCurrentPassword] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [changingPassword, setChangingPassword] = useState(false);
+    const [showPasswords, setShowPasswords] = useState(false);
+    const [profileError, setProfileError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const saveBarRef = useRef<HTMLDivElement>(null);
+    const [lastToastMessage, setLastToastMessage] = useState<string>("");
+    const [toastCount, setToastCount] = useState(0);
+
+    useEffect(() => {
+      if (user) {
+        const fullName = user.name || "";
+        const nameParts = fullName.split(' ');
+        setEditFirstName(nameParts[0] || "");
+        setEditLastName(nameParts.slice(1).join(' ') || "");
+        setEditAvatar(user.avatar_url || null);
+        setHasChanges(false);
+        setFieldErrors({});
+        setProfileError(null);
+      }
+    }, [user]);
+
+    useEffect(() => {
+      if (hasChanges && saveBarRef.current) {
+        saveBarRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    }, [hasChanges]);
+
+    const handleFieldChange = (field: string, value: string) => {
+      if (field === "firstName") {
+        setEditFirstName(value);
+        if (value.trim()) {
+          setFieldErrors((prev) => ({ ...prev, firstName: "" }));
+        }
+      } else if (field === "lastName") {
+        setEditLastName(value);
+      } else if (field === "nickname") {
+        if (value.length <= 30) {
+          setEditNickname(value);
+        }
+      }
+      setHasChanges(true);
+    };
+
+    const validateField = (field: string, value: string): string => {
+      if (field === "firstName" && !value.trim()) {
+        return "Nome é obrigatório";
+      }
+      if (field === "nickname" && value.length > 30) {
+        return "Apelido deve ter no máximo 30 caracteres";
+      }
+      return "";
+    };
+
+    const handleFieldBlur = (field: string, value: string) => {
+      const error = validateField(field, value);
+      if (error) {
+        setFieldErrors((prev) => ({ ...prev, [field]: error }));
+      } else {
+        setFieldErrors((prev => {
+          const newErrors = { ...prev };
+          delete newErrors[field];
+          return newErrors;
+        }));
+      }
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      if (file.size > 5 * 1024 * 1024) {
+        const msg = "Arquivo muito grande. Tamanho máximo: 5 MB.";
+        if (lastToastMessage !== msg) {
+          setLastToastMessage(msg);
+          setToastCount(1);
+          pushToast({ message: msg, tone: "err" });
+        }
+        return;
+      }
+      
+      const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+      if (!validTypes.includes(file.type)) {
+        const msg = "Formato não suportado. Escolha JPG, PNG ou WebP.";
+        if (lastToastMessage !== msg) {
+          setLastToastMessage(msg);
+          setToastCount(1);
+          pushToast({ message: msg, tone: "err" });
+        }
+        return;
+      }
+
+      setAvatarFile(file);
+      setAvatarUploadProgress(0);
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const size = 512;
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, size, size);
+            const cropped = canvas.toDataURL('image/jpeg', 0.9);
+            setEditAvatar(cropped);
+            setHasChanges(true);
+            setAvatarUploadProgress(100);
+            setTimeout(() => setAvatarUploadProgress(0), 1000);
+          }
+        };
+        img.src = reader.result as string;
+      };
+      
+      reader.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 50);
+          setAvatarUploadProgress(percent);
+        }
+      };
+      
+      reader.readAsDataURL(file);
+    };
+
+    const handleRemoveAvatar = () => {
+      if (window.confirm("Tem certeza que deseja remover sua foto?")) {
+        setEditAvatar(null);
+        setAvatarFile(null);
+        setHasChanges(true);
+      }
+    };
+
+
+    const handleChangePassword = async () => {
+      if (!newPassword || !confirmPassword) {
+        pushToast({ message: "Preencha todos os campos", tone: "err" });
+        return;
+      }
+      if (newPassword.length < 8) {
+        pushToast({ message: "A senha deve ter no mínimo 8 caracteres", tone: "err" });
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        pushToast({ message: "As senhas não coincidem", tone: "err" });
+        return;
+      }
+      setChangingPassword(true);
+      try {
+        const idToken = localStorage.getItem('vetra:idToken');
+        if (!idToken) {
+          pushToast({ message: "Você precisa estar autenticado. Faça login novamente.", tone: "err" });
+          setChangingPassword(false);
+          return;
+        }
+        
+        const result = await changePassword(newPassword, idToken);
+        if (result.ok) {
+          pushToast({ message: "Senha alterada com sucesso! Faça login novamente.", tone: "ok" });
+          setShowPasswordSection(false);
+          setCurrentPassword("");
+          setNewPassword("");
+          setConfirmPassword("");
+          setIsLoggedIn(false);
+          setUser(null);
+          localStorage.removeItem('vetra:idToken');
+          localStorage.removeItem('vetra:refreshToken');
+        } else {
+          const errorMsg = result.error || result.message || "Erro ao alterar senha";
+          pushToast({ message: errorMsg, tone: "err" });
+        }
+      } catch (e: any) {
+        pushToast({ message: e?.message || "Erro ao alterar senha", tone: "err" });
+      } finally {
+        setChangingPassword(false);
+      }
+    };
+
+    const handleDiscard = () => {
+      if (window.confirm("Descartar todas as alterações não salvas?")) {
+        const fullName = user?.name || "";
+        const nameParts = fullName.split(' ');
+        setEditFirstName(nameParts[0] || "");
+        setEditLastName(nameParts.slice(1).join(' ') || "");
+        setEditAvatar(user?.avatar_url || null);
+        setAvatarFile(null);
+        setHasChanges(false);
+        setFieldErrors({});
+        setProfileError(null);
+      }
+    };
+
+    const stats = {
+      favorites: favorites.length,
+      lists: lists.length,
+      watched: Object.values(userStates).filter(s => s.state === "watched").length,
+      want: Object.values(userStates).filter(s => s.state === "want").length,
+    };
+
+    if (profileLoading && !user) {
+      return (
+        <div className="min-h-screen bg-white dark:bg-slate-900 py-6 sm:py-8 md:py-12">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8" style={{ maxWidth: "1040px" }}>
+            <div className="animate-pulse space-y-6 sm:space-y-8">
+              {/* Header skeleton */}
+              <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 pb-6 sm:pb-8 border-b border-slate-200 dark:border-slate-800">
+                <div className="w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 rounded-full bg-slate-200 dark:bg-slate-800"></div>
+                <div className="flex-1 space-y-3 text-center sm:text-left">
+                  <div className="h-6 sm:h-8 bg-slate-200 dark:bg-slate-800 rounded w-48 mx-auto sm:mx-0"></div>
+                  <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-32 mx-auto sm:mx-0"></div>
+                  <div className="flex gap-2 justify-center sm:justify-start mt-4">
+                    <div className="h-10 bg-slate-200 dark:bg-slate-800 rounded w-32"></div>
+                    <div className="h-10 bg-slate-200 dark:bg-slate-800 rounded w-32"></div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Stats skeleton */}
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-20 sm:h-24 md:h-28 bg-slate-200 dark:bg-slate-800 rounded-lg"></div>
+                ))}
+              </div>
+              
+              {/* Tabs skeleton */}
+              <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-10 bg-slate-200 dark:bg-slate-800 rounded-t w-24"></div>
+                ))}
+              </div>
+              
+              {/* Form skeleton */}
+              <div className="space-y-4">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="space-y-2">
+                    <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-24"></div>
+                    <div className="h-12 bg-slate-200 dark:bg-slate-800 rounded"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const handleSaveWithToast = async () => {
+      const firstNameError = validateField("firstName", editFirstName);
+      if (firstNameError) {
+        setFieldErrors((prev) => ({ ...prev, firstName: firstNameError }));
+        const msg = firstNameError;
+        if (lastToastMessage !== msg) {
+          setLastToastMessage(msg);
+          setToastCount(1);
+          pushToast({ message: msg, tone: "err" });
+        }
+        return;
+      }
+
+      setSaving(true);
+      setProfileError(null);
+      try {
+        const fullName = editLastName.trim() 
+          ? `${editFirstName.trim()} ${editLastName.trim()}`
+          : editFirstName.trim();
+        await saveProfile({ name: fullName, avatar_url: editAvatar });
+        setHasChanges(false);
+        const msg = "Perfil atualizado";
+        if (lastToastMessage !== msg) {
+          setLastToastMessage(msg);
+          setToastCount(1);
+          pushToast({ message: msg, tone: "ok" });
+        }
+      } catch (e: any) {
+        const errorMsg = e?.message || "Erro ao salvar perfil";
+        setProfileError(errorMsg);
+        if (lastToastMessage !== errorMsg) {
+          setLastToastMessage(errorMsg);
+          setToastCount(1);
+          pushToast({ message: errorMsg, tone: "err" });
+        }
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    return (
+      <div className="min-h-screen bg-white dark:bg-slate-900 py-6 sm:py-8 md:py-12">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8" style={{ maxWidth: "1040px" }}>
+          {profileError && (
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg" role="alert" aria-live="polite">
+              <div className="flex items-start gap-3">
+                <X size={20} className="text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-red-800 dark:text-red-200 mb-2">
+                    Não conseguimos carregar seus dados.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setProfileError(null);
+                      window.location.reload();
+                    }}
+                    className="text-sm text-red-600 dark:text-red-400 hover:underline font-medium min-h-[44px] flex items-center"
+                  >
+                    Tentar novamente
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Header do Perfil */}
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 pb-6 sm:pb-8 mb-6 sm:mb-8 border-b border-slate-200 dark:border-slate-800">
+            <label className="cursor-pointer group relative">
+              {editAvatar ? (
+                <div className="relative">
+                  <img
+                    src={editAvatar}
+                    alt="Avatar"
+                    className="w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 rounded-full object-cover border-4 border-slate-300 dark:border-slate-700 shadow-lg group-hover:border-cyan-500/50 transition-all duration-300"
+                  />
+                  {avatarUploadProgress > 0 && avatarUploadProgress < 100 && (
+                    <div className="absolute inset-0 rounded-full bg-black/60 flex flex-col items-center justify-center">
+                      <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mb-2" />
+                      <span className="text-white text-xs font-medium">{avatarUploadProgress}%</span>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <Pencil size={24} className="text-white" />
+                  </div>
+                </div>
+              ) : (
+                <div className="relative w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 rounded-full bg-gradient-to-br from-cyan-400 via-purple-500 to-lime-400 flex items-center justify-center text-white font-bold text-2xl sm:text-3xl md:text-4xl border-4 border-slate-300 dark:border-slate-700 shadow-lg group-hover:border-cyan-500/50 transition-all duration-300">
+                  {avatarUploadProgress > 0 && avatarUploadProgress < 100 && (
+                    <div className="absolute inset-0 rounded-full bg-black/60 flex flex-col items-center justify-center">
+                      <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mb-2" />
+                      <span className="text-white text-xs font-medium">{avatarUploadProgress}%</span>
+                    </div>
+                  )}
+                  {editFirstName.charAt(0)?.toUpperCase() || user?.name?.charAt(0)?.toUpperCase() || "U"}
+                </div>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/webp"
+                className="hidden"
+                onChange={handleImageUpload}
+              />
+            </label>
+            
+            <div className="flex-1 min-w-0 text-center sm:text-left">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-1 sm:mb-2">
+                {editFirstName && editLastName ? `${editFirstName} ${editLastName}` : editFirstName || user?.name || "Usuário"}
+              </h1>
+              {editNickname && (
+                <p className="text-sm sm:text-base text-slate-600 dark:text-gray-400 mb-2">@{editNickname}</p>
+              )}
+              <div className="flex flex-col sm:flex-row gap-2 justify-center sm:justify-start mt-3 sm:mt-4">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 bg-cyan-50 dark:bg-cyan-900/20 hover:bg-cyan-100 dark:hover:bg-cyan-900/30 rounded-lg transition-all min-h-[44px]"
+                >
+                  <Pencil size={16} />
+                  {editAvatar ? "Alterar foto" : "Adicionar foto"}
+                </button>
+                {editAvatar && (
+                  <button
+                    onClick={handleRemoveAvatar}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-all min-h-[44px]"
+                  >
+                    <Trash2 size={16} />
+                    Remover foto
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Cards de Estatísticas */}
+          <div className="mb-6 sm:mb-8">
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-gray-300 mb-4 uppercase tracking-wide">
+              Estatísticas
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+              <button
+                className="text-center p-4 sm:p-5 md:p-6 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-purple-400 dark:hover:border-purple-500 transition-all min-h-[80px] sm:min-h-[100px] md:min-h-[120px] flex flex-col items-center justify-center"
+                onClick={() => navigate("/favorites")}
+              >
+                <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-purple-600 dark:text-purple-400">{stats.favorites}</div>
+                <div className="text-xs sm:text-sm text-slate-600 dark:text-gray-400 mt-1">Favoritos</div>
+              </button>
+              <button
+                className="text-center p-4 sm:p-5 md:p-6 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-purple-400 dark:hover:border-purple-500 transition-all min-h-[80px] sm:min-h-[100px] md:min-h-[120px] flex flex-col items-center justify-center"
+                onClick={() => navigate("/lists")}
+              >
+                <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-purple-600 dark:text-purple-400">{stats.lists}</div>
+                <div className="text-xs sm:text-sm text-slate-600 dark:text-gray-400 mt-1">Listas</div>
+              </button>
+              <button
+                className="text-center p-4 sm:p-5 md:p-6 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-green-400 dark:hover:border-green-500 transition-all min-h-[80px] sm:min-h-[100px] md:min-h-[120px] flex flex-col items-center justify-center"
+              >
+                <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-green-600 dark:text-green-400">{stats.watched}</div>
+                <div className="text-xs sm:text-sm text-slate-600 dark:text-gray-400 mt-1">Assistidos</div>
+              </button>
+              <button
+                className="text-center p-4 sm:p-5 md:p-6 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-yellow-400 dark:hover:border-yellow-500 transition-all min-h-[80px] sm:min-h-[100px] md:min-h-[120px] flex flex-col items-center justify-center"
+              >
+                <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-yellow-600 dark:text-yellow-400">{stats.want}</div>
+                <div className="text-xs sm:text-sm text-slate-600 dark:text-gray-400 mt-1">Quero ver</div>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid min-[1280px]:grid-cols-[2fr_1fr] gap-6 sm:gap-8">
+            <div className="space-y-6 sm:space-y-8">
+              <div className="flex overflow-x-auto scrollbar-hide border-b border-slate-200 dark:border-slate-800 -mx-4 px-4 md:mx-0 md:px-0 snap-x snap-mandatory">
+                {(["geral", "preferencias", "seguranca", "dados"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors min-h-[44px] flex items-center ${
+                      activeTab === tab
+                        ? "border-cyan-500 text-cyan-600 dark:text-cyan-400"
+                        : "border-transparent text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    {tab === "geral" && "Geral"}
+                    {tab === "preferencias" && "Preferências"}
+                    {tab === "seguranca" && "Segurança"}
+                    {tab === "dados" && "Dados & Conta"}
+                  </button>
+                ))}
+              </div>
+
+              {activeTab === "geral" && (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Dados pessoais</h2>
+                    <p className="text-sm text-slate-600 dark:text-gray-400 mb-6">
+                      Atualize suas informações pessoais
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="firstName" className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
+                        Nome <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        id="firstName"
+                        type="text"
+                        value={editFirstName}
+                        onChange={(e) => handleFieldChange("firstName", e.target.value)}
+                        onBlur={(e) => handleFieldBlur("firstName", e.target.value)}
+                        className={`w-full px-4 py-3 rounded-lg border bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 min-h-[44px] ${
+                          fieldErrors.firstName
+                            ? "border-red-500 focus:ring-red-500"
+                            : "border-slate-300 dark:border-slate-700"
+                        }`}
+                        placeholder="Seu nome"
+                        aria-invalid={!!fieldErrors.firstName}
+                        aria-describedby={fieldErrors.firstName ? "firstName-error" : undefined}
+                      />
+                      {fieldErrors.firstName && (
+                        <p id="firstName-error" className="mt-1 text-sm text-red-600 dark:text-red-400" role="alert" aria-live="polite">
+                          {fieldErrors.firstName}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label htmlFor="lastName" className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
+                        Sobrenome
+                      </label>
+                      <input
+                        id="lastName"
+                        type="text"
+                        value={editLastName}
+                        onChange={(e) => handleFieldChange("lastName", e.target.value)}
+                        className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 min-h-[44px]"
+                        placeholder="Seu sobrenome"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="nickname" className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
+                        Apelido <span className="text-xs text-slate-500">(opcional)</span>
+                      </label>
+                      <input
+                        id="nickname"
+                        type="text"
+                        value={editNickname}
+                        onChange={(e) => handleFieldChange("nickname", e.target.value)}
+                        onBlur={(e) => handleFieldBlur("nickname", e.target.value)}
+                        maxLength={30}
+                        className={`w-full px-4 py-3 rounded-lg border bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 min-h-[44px] ${
+                          fieldErrors.nickname
+                            ? "border-red-500 focus:ring-red-500"
+                            : "border-slate-300 dark:border-slate-700"
+                        }`}
+                        placeholder="Seu apelido"
+                        aria-invalid={!!fieldErrors.nickname}
+                        aria-describedby={fieldErrors.nickname ? "nickname-error" : undefined}
+                      />
+                      {fieldErrors.nickname && (
+                        <p id="nickname-error" className="mt-1 text-sm text-red-600 dark:text-red-400" role="alert" aria-live="polite">
+                          {fieldErrors.nickname}
+                        </p>
+                      )}
+                      <p className="mt-1 text-xs text-slate-500 dark:text-gray-500">
+                        {editNickname.length}/30 caracteres
+                      </p>
+                    </div>
+
+                    <div>
+                      <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
+                        Email
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="email"
+                          type="email"
+                          value={user?.email || ""}
+                          disabled
+                          className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-gray-500 cursor-not-allowed min-h-[44px]"
+                          aria-label="Email (somente leitura)"
+                        />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <Lock size={18} className="text-slate-400" />
+                        </div>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-500 dark:text-gray-500 flex items-center gap-1">
+                        <Lock size={12} />
+                        O email não pode ser alterado
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "preferencias" && (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Preferências</h2>
+                    <p className="text-sm text-slate-600 dark:text-gray-400 mb-6">
+                      Personalize sua experiência
+                    </p>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-3">
+                        Tema
+                      </label>
+                      <div className="flex gap-3">
+                        {(["escuro", "claro", "sistema"] as const).map((theme) => (
+                          <button
+                            key={theme}
+                            onClick={() => {
+                              if (theme === "escuro") toggleDark();
+                              else if (theme === "claro") {
+                                if (darkEnabled) toggleDark();
+                              }
+                            }}
+                            className={`px-4 py-2 rounded-lg border transition-all min-h-[44px] ${
+                              (theme === "escuro" && darkEnabled) || (theme === "claro" && !darkEnabled)
+                                ? "bg-cyan-600 text-white border-cyan-600"
+                                : "bg-white dark:bg-slate-800 text-slate-700 dark:text-gray-300 border-slate-300 dark:border-slate-700 hover:border-cyan-500"
+                            }`}
+                          >
+                            {theme === "escuro" && "Escuro"}
+                            {theme === "claro" && "Claro"}
+                            {theme === "sistema" && "Sistema"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-3">
+                        {t("common.language")}
+                      </label>
+                      <div className="flex items-center">
+                        <LanguageMenu lang={lang as Lang} onChange={(l) => setLang(l)} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "seguranca" && (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Segurança</h2>
+                    <p className="text-sm text-slate-600 dark:text-gray-400 mb-6">
+                      Gerencie sua senha e autenticação
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-gray-300 mb-2">
+                        Email
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="email"
+                          value={user?.email || ""}
+                          disabled
+                          className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-gray-500 cursor-not-allowed min-h-[44px]"
+                        />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <Lock size={18} className="text-slate-400" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 dark:text-gray-300">
+                            Senha
+                          </label>
+                          <p className="text-xs text-slate-500 dark:text-gray-500 mt-1">
+                            Altere sua senha para manter sua conta segura
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowPasswordSection(!showPasswordSection)}
+                          className="text-sm text-cyan-600 dark:text-cyan-400 hover:underline font-medium min-h-[44px] flex items-center"
+                        >
+                          {showPasswordSection ? "Cancelar" : "Alterar senha"}
+                        </button>
+                      </div>
+                      {showPasswordSection && (
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-xs text-slate-600 dark:text-gray-400 mb-2">
+                              Senha atual
+                            </label>
+                            <div className="relative">
+                              <input
+                                type={showPasswords ? "text" : "password"}
+                                value={currentPassword}
+                                onChange={(e) => setCurrentPassword(e.target.value)}
+                                className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 min-h-[44px]"
+                                placeholder="Digite sua senha atual"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPasswords(!showPasswords)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 min-h-[44px] flex items-center"
+                                aria-label={showPasswords ? "Ocultar senha" : "Mostrar senha"}
+                              >
+                                {showPasswords ? <EyeOff size={18} /> : <Eye size={18} />}
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs text-slate-600 dark:text-gray-400 mb-2">
+                              Nova senha
+                            </label>
+                            <input
+                              type={showPasswords ? "text" : "password"}
+                              value={newPassword}
+                              onChange={(e) => setNewPassword(e.target.value)}
+                              className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 min-h-[44px]"
+                              placeholder="Mínimo 8 caracteres"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-slate-600 dark:text-gray-400 mb-2">
+                              Confirmar nova senha
+                            </label>
+                            <input
+                              type={showPasswords ? "text" : "password"}
+                              value={confirmPassword}
+                              onChange={(e) => setConfirmPassword(e.target.value)}
+                              className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 min-h-[44px]"
+                              placeholder="Digite a senha novamente"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleChangePassword}
+                            disabled={changingPassword || !currentPassword || !newPassword || !confirmPassword}
+                            className="w-full px-4 py-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all min-h-[44px] flex items-center justify-center"
+                          >
+                            {changingPassword ? (
+                              <span className="flex items-center gap-2">
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                Alterando...
+                              </span>
+                            ) : (
+                              "Alterar senha"
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "dados" && (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Dados & Conta</h2>
+                    <p className="text-sm text-slate-600 dark:text-gray-400 mb-6">
+                      Exporte seus dados ou exclua sua conta
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-slate-700 dark:text-gray-300 mb-3">
+                        Exportar dados
+                      </h3>
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          onClick={exportJSON}
+                          className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all min-h-[44px] flex items-center"
+                        >
+                          Exportar JSON
+                        </button>
+                        <button
+                          onClick={exportCSV}
+                          className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all min-h-[44px] flex items-center"
+                        >
+                          Exportar CSV
+                        </button>
+                        <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all cursor-pointer min-h-[44px]">
+                          <input
+                            type="file"
+                            accept="application/json"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.currentTarget.files?.[0];
+                              if (f) importJSON(f);
+                              e.currentTarget.value = "";
+                            }}
+                          />
+                          Importar JSON
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-slate-200 dark:border-slate-800 pt-6">
+                      <h3 className="text-sm font-medium text-red-600 dark:text-red-400 mb-3">
+                        Zona de Perigo
+                      </h3>
+                      <button
+                        onClick={() => setShowDeleteAccountModal(true)}
+                        className="px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold transition-all min-h-[44px] flex items-center gap-2"
+                      >
+                        <Trash2 size={18} />
+                        Excluir conta
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-6 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  onClick={handleDiscard}
+                  disabled={!hasChanges || saving}
+                  className="px-6 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all min-h-[44px] flex items-center"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveWithToast}
+                  disabled={saving || !hasChanges || !editFirstName.trim()}
+                  className="flex-1 px-6 py-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all min-h-[44px] flex items-center justify-center"
+                >
+                  {saving ? (
+                    <span className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Salvando...
+                    </span>
+                  ) : (
+                    "Salvar alterações"
+                  )}
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          {hasChanges && (
+            <div
+              ref={saveBarRef}
+              className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-lg z-40 p-4 md:hidden"
+              style={{ paddingBottom: `max(env(safe-area-inset-bottom), 16px)` }}
+            >
+              <div className="container mx-auto px-4 max-w-6xl">
+                <p className="text-sm text-slate-600 dark:text-gray-400 mb-3">
+                  Você tem alterações não salvas
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleDiscard}
+                    disabled={saving}
+                    className="flex-1 px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all min-h-[44px] flex items-center justify-center"
+                  >
+                    Descartar
+                  </button>
+                  <button
+                    onClick={handleSaveWithToast}
+                    disabled={saving || !editFirstName.trim()}
+                    className="flex-1 px-4 py-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all min-h-[44px] flex items-center justify-center"
+                  >
+                    {saving ? (
+                      <span className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Salvando...
+                      </span>
+                    ) : (
+                      "Salvar"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const ProfileEditModal: React.FC = () => {
     const [editFirstName, setEditFirstName] = useState("");
     const [editLastName, setEditLastName] = useState("");
@@ -5214,6 +6852,17 @@ const AppShell: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <div className="mt-8 pt-8 border-t border-slate-800">
+        <h3 className="text-lg font-semibold mb-4 text-red-400">Zona de Perigo</h3>
+        <button
+          onClick={() => setShowDeleteAccountModal(true)}
+          className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold transition-all duration-200 shadow-md hover:shadow-lg border border-red-700 hover:border-red-800"
+        >
+          <Trash2 size={16} className="inline mr-2" />
+          Excluir conta
+        </button>
+      </div>
     </section>
   );
 
@@ -5247,7 +6896,7 @@ const AppShell: React.FC = () => {
                 )}
                 </h2>
               <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 mb-6 md:mb-8 font-normal">
-                {t("millions_movies")}
+                {t("home.millions_movies")}
               </p>
               
               <div className="flex flex-col gap-3 max-w-2xl">
@@ -5259,184 +6908,95 @@ const AppShell: React.FC = () => {
               <input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder={t("search_placeholder_full")}
+                      placeholder={t("home.search_placeholder_full")}
                       className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 pl-12 pr-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 transition-all duration-200 text-base font-normal"
                       style={{ lineHeight: '1.6', minHeight: '48px' }}
-                onKeyDown={(e) => e.key === "Enter" && runSearch(searchTerm)}
+                onKeyDown={(e) => e.key === "Enter" && runSearch()}
+                      aria-label={t("home.search_placeholder_full")}
               />
             </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-2">
                     <button
                       onClick={() => setShowSearchFilters(!showSearchFilters)}
-                      className="px-4 py-3 rounded-lg font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200 text-base whitespace-nowrap min-h-[48px] flex items-center gap-2"
+                      className="px-3 sm:px-4 py-3 rounded-lg font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200 text-sm sm:text-base whitespace-nowrap min-h-[44px] sm:min-h-[48px] flex items-center justify-center gap-1.5 sm:gap-2"
                     >
-                      <ChevronDown className={`transition-transform ${showSearchFilters ? 'rotate-180' : ''}`} size={18} />
-                      {t("filters")}
+                      <ChevronDown className={`transition-transform ${showSearchFilters ? 'rotate-180' : ''}`} size={16} />
+                      <span className="hidden min-[361px]:inline">{t("filters")}</span>
+                      <span className="min-[361px]:hidden">Filtros</span>
                     </button>
             <button
-              onClick={() => runSearch(searchTerm)}
-                      className="px-6 py-3 rounded-lg font-semibold text-white bg-slate-700 dark:bg-slate-600 hover:bg-slate-600 dark:hover:bg-slate-500 transition-all duration-200 shadow-md hover:shadow-lg text-base whitespace-nowrap min-h-[48px] border border-slate-600 dark:border-slate-500"
+              onClick={() => runSearch()}
+                      className="px-4 sm:px-6 py-3 rounded-lg font-semibold text-white bg-slate-700 dark:bg-slate-600 hover:bg-slate-600 dark:hover:bg-slate-500 transition-all duration-200 shadow-md hover:shadow-lg text-sm sm:text-base whitespace-nowrap min-h-[44px] sm:min-h-[48px] border border-slate-600 dark:border-slate-500"
             >
               {t("search_button")}
             </button>
           </div>
         </div>
-                
-                {/* Painel de Filtros Expandível */}
-                {showSearchFilters && (
-                  <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 p-4 shadow-lg">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {/* Tipo */}
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Tipo</label>
-                        <select
-                          value={searchType}
-                          onChange={(e) => setSearchType(e.target.value as "all" | "movie" | "tv" | "person")}
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
-                        >
-                          <option value="all">{t("tudo")}</option>
-                          <option value="movie">{t("movies")}</option>
-                          <option value="tv">{t("tv_series")}</option>
-                          <option value="person">{t("people")}</option>
-              </select>
-            </div>
-                      
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Ano De</label>
-              <input
-                type="number"
-                value={searchYear}
-                onChange={(e) => setSearchYear(e.target.value)}
-                          placeholder="Ex: 2020"
-                min="1900"
-                max={new Date().getFullYear() + 1}
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
-              />
-            </div>
-                      
-                      {/* Ano Até */}
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Ano Até</label>
-                        <input
-                          type="number"
-                          value={searchYearTo}
-                          onChange={(e) => setSearchYearTo(e.target.value)}
-                          placeholder="Ex: 2024"
-                          min="1900"
-                          max={new Date().getFullYear() + 1}
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
-                        />
-                      </div>
-                      
-                      {/* Ordenar por */}
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Ordenar por</label>
-                        <select
-                          value={searchSort}
-                          onChange={(e) => setSearchSort(e.target.value as "relevance" | "rating" | "year")}
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
-                        >
-                          <option value="relevance">Relevância</option>
-                          <option value="rating">Avaliação</option>
-                          <option value="year">Ano</option>
-                        </select>
-                      </div>
-                      
-                      {/* Mín. de Votos */}
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Mín. de Votos</label>
-                        <input
-                          type="number"
-                          value={searchMinVotes}
-                          onChange={(e) => setSearchMinVotes(e.target.value)}
-                          placeholder="Ex: 100"
-                          min="0"
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
-                        />
-                      </div>
-                      
-                      {/* Mín. de Avaliação */}
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Mín. de Avaliação</label>
-              <input
-                type="number"
-                value={searchMinRating}
-                onChange={(e) => setSearchMinRating(e.target.value)}
-                placeholder="Ex: 7.0"
-                min="0"
-                max="10"
-                step="0.1"
-                          className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm"
-              />
-            </div>
-                      
-                      {/* Apenas com pôster */}
-                      <div className="flex items-center">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={searchOnlyWithPoster}
-                            onChange={(e) => setSearchOnlyWithPoster(e.target.checked)}
-                            className="w-4 h-4 text-cyan-600 rounded border-slate-300 dark:border-slate-600 focus:ring-cyan-500"
-                          />
-                          <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Apenas com pôster</span>
-                        </label>
-          </div>
-        </div>
-                    
-                    {/* Botão Limpar */}
-                    <div className="mt-4 flex justify-end">
-                      <button
-                        onClick={() => {
-                          setSearchType("all");
-                          setSearchYear("");
-                          setSearchYearTo("");
-                          setSearchMinRating("");
-                          setSearchMinVotes("");
-                          setSearchGenre([]);
-                          setSearchOnlyWithPoster(true);
-                          setSearchSort("relevance");
-                        }}
-                        className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-all"
-                      >
-                        {t("clear_filters")}
-                      </button>
-            </div>
-          </div>
-                )}
-              </div>
-            </div>
-          </div>
-          </div>
+                        </div>
+                        </div>
+                        </div>
+                        </div>
         </section>
+        
+        {/* Search Filters Panel - Outside hero section */}
+        <SearchFiltersPanel
+          isOpen={showSearchFilters}
+          onClose={() => setShowSearchFilters(false)}
+          appliedFilters={appliedSearchFilters}
+          onApply={handleApplyFilters}
+          onClearAll={handleClearAllFilters}
+          searchTerm={searchTerm}
+          t={t}
+          normalizeNumber={normalizeNumber}
+          snapRating={snapRating}
+          snapVotes={snapVotes}
+          linearToLog={linearToLog}
+          logToLinear={logToLinear}
+        />
 
       {/* Container para as outras seções */}
-      <div className="container mx-auto px-3 sm:px-4 md:px-6">
-        {/* Recomendações Personalizadas - apenas quando não há busca */}
-        {!searchTerm && isLoggedIn && watchHistory.length > 0 && (
-        <HorizontalCarousel
-          title="Recomendados para você"
-          subtitle="Baseado no seu histórico e favoritos"
-          items={getPersonalizedRecommendations()}
-          loading={false}
-          renderItem={(m) => <MovieCard movie={m} />}
-        />
-      )}
+      <div className="container mx-auto px-[var(--container-gutter-mobile)] md:px-[var(--container-gutter-desktop)] pb-16 md:pb-24" style={{ scrollMarginTop: useBottomNav ? 'calc(var(--appbar-h-mobile) + max(env(safe-area-inset-top), 0px))' : 'calc(var(--app-header-h) + max(env(safe-area-inset-top), 0px))' }}>
+        {/* 1) Recomendados para você - apenas quando não há busca e há sinais do usuário */}
+        {!searchTerm && !hasActiveFilters && isLoggedIn && (favorites.length > 0 || Object.keys(userStates).length > 0) && (
+          <HorizontalCarousel
+            title={t("home.recommended_for_you")}
+            items={getPersonalizedRecommendations()}
+            loading={false}
+            renderItem={(m) => <MovieCard movie={m} />}
+            limit={20}
+          />
+        )}
 
-      {searchTerm ? (
+      {(searchTerm || hasActiveFilters) ? (
         <section className="mb-6 md:mb-8">
-          <h2 className="text-base sm:text-lg md:text-xl font-bold mb-3 md:mb-4">{t("results_for", { q: searchTerm })}</h2>
+          <div className="flex flex-col gap-3 mb-3 md:mb-4">
+            <div className="flex items-center justify-between">
+            <h2 className="text-base sm:text-lg md:text-xl font-bold">
+                {searchTerm ? t("empty.no_results_for", { q: searchTerm }) : t("empty.no_results")}
+            </h2>
+            {!loading && searchTotalResults > 0 && (
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                  {t("common.showing", { from: ((searchPage - 1) * 20) + 1, to: Math.min(searchPage * 20, searchTotalResults), total: searchTotalResults })}
+              </p>
+            )}
+            </div>
+            <FilterChips
+              filters={appliedSearchFilters}
+              onRemoveFilter={handleRemoveFilter}
+              onClearAll={handleClearAllFilters}
+              t={t}
+            />
+          </div>
           {loading ? (
             <div className="text-center py-6 md:mb-8">
               <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-slate-300 border-t-cyan-500 dark:border-slate-700" />
             </div>
           ) : (
             <>
-              {/* Filmes e Séries - sempre mostrar TODOS quando houver busca ativa, independente do filtro */}
               {movies.length > 0 && (
                 <>
-                  <h3 className="text-xl font-semibold mb-3 text-slate-900 dark:text-white">{t("movies_and_series")}</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6 mb-10">
+                  <h3 className="text-xl font-semibold mb-3 text-slate-900 dark:text-white">{t("movie.movies_and_series")}</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 min-[1201px]:grid-cols-6 gap-2 sm:gap-2 md:gap-3 lg:gap-4 mb-10">
                     {movies.map((m) => (
                       <MovieCard key={`${m.media}-${m.id}`} movie={m} />
                     ))}
@@ -5444,10 +7004,9 @@ const AppShell: React.FC = () => {
                 </>
               )}
               
-              {/* Pessoas - sempre mostrar quando houver busca, independente do filtro */}
               {people.length > 0 && (
                 <>
-                  <h3 className="text-xl font-semibold mb-3 text-slate-900 dark:text-white">Pessoas</h3>
+                  <h3 className="text-xl font-semibold mb-3 text-slate-900 dark:text-white">{t("nav.people")}</h3>
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-2 md:gap-3">
                     {people.map((p:any)=>(
                       <Link key={p.id} to={`/person/${p.id}`} className="group">
@@ -5472,148 +7031,171 @@ const AppShell: React.FC = () => {
                 </>
               )}
               
-              {/* Mensagem quando não há resultados */}
               {!loading && movies.length === 0 && people.length === 0 && (
                 <div className="text-center py-12">
-                  <p className="text-slate-600 dark:text-slate-400 text-lg">{t("no_results_found", { q: searchTerm })}</p>
-                  <p className="text-slate-500 dark:text-slate-500 text-sm mt-2">{t("try_adjust_filters")}</p>
+                  <p className="text-slate-900 dark:text-white text-lg font-semibold mb-2">{t("empty.no_results_filters")}</p>
+                  <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">
+                    {searchTerm 
+                      ? t("empty.no_results_hint")
+                      : t("empty.no_results_hint_no_search")}
+                  </p>
+                  <div className="flex flex-wrap gap-3 justify-center">
+                  <button
+                      onClick={handleClearAllFilters}
+                    className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-all"
+                  >
+                      {t("filters.clear_all")}
+                    </button>
+                    <button
+                      onClick={() => setShowSearchFilters(true)}
+                      className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-all"
+                    >
+                      {t("empty.edit_filters")}
+                  </button>
+                  </div>
                 </div>
+              )}
+              
+              {/* Pagination for search results */}
+              {!loading && searchTotalResults > 0 && (
+                <Pagination
+                  currentPage={searchPage}
+                  totalPages={Math.ceil(searchTotalResults / 20)}
+                  onPageChange={(page) => {
+                    setSearchPage(page);
+                    runSearch(searchTerm, appliedSearchFilters, page);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  loading={loading}
+                />
               )}
             </>
           )}
         </section>
       ) : (
         <>
-          {/* Carrossel de Tendências */}
+          {/* 2) Mais bem avaliados */}
           <div className="mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t("trending")}</h2>
-              </div>
-              <div className="flex gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl p-1 border border-slate-200 dark:border-slate-700 shadow-lg">
-                <button
-                  onClick={() => setTrendingWindow("day")}
-                  className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 ${
-                    trendingWindow === "day"
-                      ? "bg-gradient-to-r from-cyan-500 to-purple-500 text-white shadow-lg shadow-cyan-500/30"
-                      : "text-slate-700 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-slate-700/50"
-                  }`}
-                >
-                  {t("today")}
-                </button>
-                <button
-                  onClick={() => setTrendingWindow("week")}
-                  className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 ${
-                    trendingWindow === "week"
-                      ? "bg-gradient-to-r from-cyan-500 to-purple-500 text-white shadow-lg shadow-cyan-500/30"
-                      : "text-slate-700 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-slate-700/50"
-                  }`}
-                >
-                  {t("this_week")}
-                </button>
-              </div>
+            <div className="mb-4">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t("nav.top_rated")}</h2>
             </div>
-            <HorizontalCarousel
-              title=""
-              subtitle=""
-              items={cats.trending?.items || []}
-              loading={cats.trending?.loading && cats.trending.items.length === 0}
-              renderItem={(m) => <MovieCard movie={m} />}
-            />
+            {topRatedMovies.items.length > 0 ? (
+              <HorizontalCarousel
+                title=""
+                subtitle=""
+                items={(topRatedMovies.items || []).slice(0, 20)}
+                loading={topRatedMovies.loading}
+                renderItem={(m) => <MovieCard movie={m} />}
+                limit={20}
+                ariaLabel="Carrossel: Mais bem avaliados"
+              />
+            ) : topRatedMovies.loading ? (
+              <div className="text-center py-6" role="status" aria-label="Carregando Mais bem avaliados">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-slate-300 border-t-cyan-500 dark:border-slate-700" />
+              </div>
+            ) : topRatedMovies.error ? (
+              <div className="text-center py-6 bg-slate-100 dark:bg-slate-800 rounded-lg" role="alert">
+                <p className="text-slate-600 dark:text-slate-400 mb-2">Falha ao carregar Mais bem avaliados.</p>
+                <button
+                  onClick={() => loadTopRatedSection(1, new Set())}
+                  className="text-cyan-600 dark:text-cyan-400 hover:underline min-h-[44px]"
+                  aria-label="Recarregar Mais bem avaliados"
+                >
+                  Recarregar
+                </button>
+              </div>
+            ) : (
+              <div className="text-center py-6 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                <p className="text-slate-600 dark:text-slate-400 mb-2">Não encontramos títulos para esta seção agora.</p>
+                <button
+                  onClick={() => loadTopRatedSection(1, new Set())}
+                  className="text-cyan-600 dark:text-cyan-400 hover:underline min-h-[44px]"
+                  aria-label="Tentar novamente Mais bem avaliados"
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            )}
           </div>
 
+          {/* 3) Populares */}
           <div className="mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t("cat_popular")}</h2>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                  {popularFilter === "streaming" ? t("movies_streaming") : 
-                   popularFilter === "tv" ? t("series_tv") :
-                   popularFilter === "rent" ? t("movies_rent") :
-                   t("movies_theaters")}
-                </p>
-              </div>
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl p-1 border border-slate-200 dark:border-slate-700 shadow-lg">
-                <button
-                  onClick={() => setPopularFilter("streaming")}
-                  className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 whitespace-nowrap ${
-                    popularFilter === "streaming"
-                      ? "bg-gradient-to-r from-cyan-500 to-purple-500 text-white shadow-lg shadow-cyan-500/30"
-                      : "text-slate-700 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-slate-700/50"
-                  }`}
-                >
-                  Streaming
-                </button>
-                <button
-                  onClick={() => setPopularFilter("tv")}
-                  className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 whitespace-nowrap ${
-                    popularFilter === "tv"
-                      ? "bg-gradient-to-r from-cyan-500 to-purple-500 text-white shadow-lg shadow-cyan-500/30"
-                      : "text-slate-700 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-slate-700/50"
-                  }`}
-                >
-                  Na TV
-                </button>
-                <button
-                  onClick={() => setPopularFilter("rent")}
-                  className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 whitespace-nowrap ${
-                    popularFilter === "rent"
-                      ? "bg-gradient-to-r from-cyan-500 to-purple-500 text-white shadow-lg shadow-cyan-500/30"
-                      : "text-slate-700 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-slate-700/50"
-                  }`}
-                >
-                  Para Alugar
-                </button>
-                <button
-                  onClick={() => setPopularFilter("cinema")}
-                  className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 whitespace-nowrap ${
-                    popularFilter === "cinema"
-                      ? "bg-gradient-to-r from-cyan-500 to-purple-500 text-white shadow-lg shadow-cyan-500/30"
-                      : "text-slate-700 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-slate-700/50"
-                  }`}
-                >
-                  Nos Cinemas
-                </button>
-              </div>
+            <div className="mb-4">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t("nav.popular")}</h2>
             </div>
-            <HorizontalCarousel
-              title=""
-              subtitle=""
-              items={filteredPopular.items}
-              loading={filteredPopular.loading && filteredPopular.items.length === 0}
-              renderItem={(m) => <MovieCard movie={m} />}
-            />
+            {homeSections.popularMovies.items.length > 0 ? (
+              <HorizontalCarousel
+                title=""
+                subtitle=""
+                items={(homeSections.popularMovies.items || []).slice(0, 20)}
+                loading={homeSections.popularMovies.loading}
+                renderItem={(m) => <MovieCard movie={m} />}
+                limit={20}
+                ariaLabel="Carrossel: Populares"
+              />
+            ) : homeSections.popularMovies.loading ? (
+              <div className="text-center py-6" role="status" aria-label="Carregando Populares">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-slate-300 border-t-cyan-500 dark:border-slate-700" />
+              </div>
+            ) : homeSections.popularMovies.error ? (
+              <div className="text-center py-6 bg-slate-100 dark:bg-slate-800 rounded-lg" role="alert">
+                <p className="text-slate-600 dark:text-slate-400 mb-2">Falha ao carregar Populares.</p>
+                <button
+                  onClick={() => loadPopularSection(1, new Set())}
+                  className="text-cyan-600 dark:text-cyan-400 hover:underline min-h-[44px]"
+                  aria-label="Recarregar Populares"
+                >
+                  Recarregar
+                </button>
+              </div>
+            ) : (
+              <div className="text-center py-6 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                <p className="text-slate-600 dark:text-slate-400 mb-2">Não encontramos títulos para esta seção agora.</p>
+                <button
+                  onClick={() => loadPopularSection(1, new Set())}
+                  className="text-cyan-600 dark:text-cyan-400 hover:underline min-h-[44px]"
+                  aria-label="Tentar novamente Populares"
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            )}
           </div>
 
-          {cats.top_rated && (
+          {/* 4) Lançamentos recentes */}
+          {homeSections.recentReleases.items.length > 0 && (
             <HorizontalCarousel
-              title={t(CAT_META.top_rated.title_key as string)}
-              subtitle={t("best_movies")}
-              items={cats.top_rated.items.slice(0, 20)}
-              loading={cats.top_rated.loading && cats.top_rated.page === 0}
+              title={t("home.recent_releases")}
+              items={homeSections.recentReleases.items.slice(0, 20)}
+              loading={homeSections.recentReleases.loading}
               renderItem={(m) => <MovieCard movie={m} />}
             />
           )}
 
-          {cats.now_playing && (
+          {/* 5) Em breve */}
+          {homeSections.comingSoon.items.length > 0 && (
             <HorizontalCarousel
-              title={t(CAT_META.now_playing.title_key as string)}
-              subtitle={t("movies_in_theaters")}
-              items={cats.now_playing.items.slice(0, 20)}
-              loading={cats.now_playing.loading && cats.now_playing.page === 0}
+              title={t("home.coming_soon")}
+              items={homeSections.comingSoon.items.slice(0, 20)}
+              loading={homeSections.comingSoon.loading}
               renderItem={(m) => <MovieCard movie={m} />}
             />
           )}
 
-          {cats.upcoming && (
-            <HorizontalCarousel
-              title={t(CAT_META.upcoming.title_key as string)}
-              subtitle="Próximos lançamentos"
-              items={cats.upcoming.items.slice(0, 20)}
-              loading={cats.upcoming.loading && cats.upcoming.page === 0}
-              renderItem={(m) => <MovieCard movie={m} />}
-            />
-          )}
+          {/* 6) Por gênero (opcional, rotativo) */}
+          {homeSections.byGenre.map((genreSection, idx) => (
+            genreSection.items.length > 0 && (
+              <HorizontalCarousel
+                key={`genre-${idx}-${genreSection.genre}`}
+                title={genreSection.genre || t("home.by_genre")}
+                items={genreSection.items.slice(0, 15)}
+                loading={genreSection.loading}
+                renderItem={(m) => <MovieCard movie={m} />}
+              />
+            )
+          ))}
+
+
         </>
       )}
       </div>
@@ -5623,86 +7205,19 @@ const AppShell: React.FC = () => {
   // Conteúdo da Watchlist (Quero ver, Assisti, Não assisti, Abandonei com notas)
   const WatchlistContent = (
     <section className="max-w-7xl mx-auto px-4 sm:px-6">
-      {viewingShared && sharedCollection ? (
-        <>
-          <div className="mb-8">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-2">{sharedCollection.listName}</h2>
-            <p className="text-slate-600 dark:text-slate-400 text-sm">{sharedCollection.items.length} {sharedCollection.items.length === 1 ? 'item' : 'itens'}</p>
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-2">{t("collections")}</h2>
+            <p className="text-slate-600 dark:text-slate-400 text-sm">{t("organize_by_status")}</p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {sharedCollection.items.map(({ movie, meta }, idx) => (
-              <div key={`${movie.media}-${movie.id}`} className="group animate-fade-in-up" style={{ animationDelay: `${idx * 50}ms` }}>
-                <div className="relative bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
-                  {/* Poster */}
-                  <div className="relative aspect-[2/3] overflow-hidden bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-800 dark:to-slate-900">
-                    <img
-                      src={poster(movie.poster_path || movie.image, "w500")}
-                      alt={movie.title}
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                      loading="lazy"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                    
-                    {/* Badge de nota */}
-                    {meta.rating !== undefined && (
-                      <div className="absolute top-3 right-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-1.5 shadow-lg">
-                        <Star size={14} className="text-yellow-500 fill-yellow-500" />
-                        <span className="text-slate-900 dark:text-white font-bold text-sm">{meta.rating}/10</span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Conteúdo */}
-                  <div className="p-5">
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white mb-2 line-clamp-2 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
-                      {movie.title}
-                    </h3>
-                    
-                    <div className="flex items-center gap-3 mb-3">
-                      {movie.year && (
-                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
-                          {movie.year}
-                        </span>
-                      )}
-                    </div>
-                    
-                    {/* Descrição */}
-                    {meta.description && (
-                      <p className="text-sm text-slate-600 dark:text-slate-300 mb-4 line-clamp-3 leading-relaxed">
-                        {meta.description}
-                      </p>
-                    )}
-                    
-                    <button
-                      onClick={() => {
-                        const mediaType = (movie.media || "movie") as "movie" | "tv";
-                        navigate(`/${mediaType}/${movie.id}`);
-                      }}
-                      className="w-full py-2.5 rounded-xl bg-slate-700 dark:bg-slate-600 hover:bg-slate-600 dark:hover:bg-slate-500 text-white font-semibold text-sm transition-all duration-200 shadow-md hover:shadow-lg"
-                    >
-                      Ver detalhes
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-2">{t("collections")}</h2>
-                <p className="text-slate-600 dark:text-slate-400 text-sm">{t("organize_by_status")}</p>
-              </div>
-              <div className="flex items-center gap-3">
-          {(() => {
-            const currentState = activeTab === "watchlist" ? "want" : (activeTab.startsWith("watchlist-") ? activeTab.replace("watchlist-", "") : "want") as UserState;
-            const stateLabels = { want: "Quero assistir", watched: "Assisti", not_watched: "Não assisti", abandoned: "Abandonei" };
-            const itemsCount = Object.entries(userStates).filter(([_, meta]) => meta.state === currentState).length;
-            
-            if (itemsCount > 0 && !viewingShared) {
+          <div className="flex items-center gap-3">
+      {(() => {
+        const currentState = activeTab === "watchlist" ? "want" : (activeTab.startsWith("watchlist-") ? activeTab.replace("watchlist-", "") : "want") as UserState;
+        const stateLabels = { want: "Quero assistir", watched: "Assisti", not_watched: "Não assisti", abandoned: "Abandonei" };
+        const itemsCount = Object.entries(userStates).filter(([_, meta]) => meta.state === currentState).length;
+        
+        if (itemsCount > 0) {
               return (
                 <button
                   onClick={() => {
@@ -5829,16 +7344,12 @@ const AppShell: React.FC = () => {
                 console.log("[shareCollection] Criando compartilhamento:", { itemsCount: payload.length, type: 'collection', category: stateLabels[currentState] });
                 const resp = await api.shareCreate(payload, 'collection', stateLabels[currentState]);
                 
-                if (!resp || !resp.url) {
+                if (!resp || !resp.slug) {
                   throw new Error("Resposta inválida do servidor");
                 }
                 
-                setShareUrl(resp.url);
+                setShareSlug(resp.slug || (resp.code ? resp.code.replace(/V9-|-/g, "").slice(0, 10) : ""));
                 setShowShare(true);
-                try {
-                  await navigator.clipboard.writeText(resp.url);
-                  pushToast({ message: "Link copiado para a área de transferência!", tone: "ok" });
-                } catch {}
               } catch (e: any) {
                 console.error("[shareCollection] Erro ao compartilhar:", e);
                 const errorMsg = e?.message?.includes("listId_obrigatorio") 
@@ -5856,9 +7367,8 @@ const AppShell: React.FC = () => {
             </div>
           </div>
       
-      {/* Abas - Ocultar quando visualizando coleção compartilhada */}
-      {!viewingShared && (
-        <div className="flex flex-wrap gap-3 mb-8 border-b-2 border-slate-200 dark:border-slate-800 pb-1">
+      {/* Abas */}
+      <div className="flex flex-wrap gap-3 mb-8 border-b-2 border-slate-200 dark:border-slate-800 pb-1">
           {(["want", "watched", "not_watched", "abandoned"] as const).map((state) => {
           const stateLabels = { want: "Quero ver", watched: "Assisti", not_watched: "Não assisti", abandoned: "Abandonei" };
           const items = Object.entries(userStates)
@@ -5924,7 +7434,6 @@ const AppShell: React.FC = () => {
           );
         })}
         </div>
-      )}
 
       {/* Conteúdo das abas */}
       {(() => {
@@ -6101,30 +7610,30 @@ const AppShell: React.FC = () => {
                             setConfirmModal({
                               show: true,
                               message: `Tem certeza que deseja remover "${movie.title}" desta coleção?`,
-                              onConfirm: () => {
-                                const k = mediaKey(movie);
-                                const prevState = userStates[k]?.state;
-                                
-                                if (prevState === "watched") {
-                                  removeFromWatchHistory(movie);
+                                onConfirm: () => {
+                                  const k = mediaKey(movie);
+                                  const prevState = userStates[k]?.state;
+                                  
+                                  if (prevState === "watched") {
+                                    removeFromWatchHistory(movie);
+                                  }
+                                  
+                                  setUserStates((prev) => {
+                                    const updated = { ...prev };
+                                    delete updated[k];
+                                    return updated;
+                                  });
+                                  
+                                  pushToast({ message: `"${movie.title}" removido da coleção`, tone: "ok" });
+                                  setConfirmModal({ show: false, message: "", onConfirm: () => {} });
                                 }
-                                
-                                setUserStates((prev) => {
-                                  const updated = { ...prev };
-                                  delete updated[k];
-                                  return updated;
-                                });
-                                
-                                pushToast({ message: `"${movie.title}" removido da coleção`, tone: "ok" });
-                                setConfirmModal({ show: false, message: "", onConfirm: () => {} });
-                              }
-                            });
-                          }}
-                          className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white transition-all duration-200 shadow-md hover:shadow-lg"
-                          title="Remover da coleção"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                              });
+                            }}
+                            className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white transition-all duration-200 shadow-md hover:shadow-lg"
+                            title="Remover da coleção"
+                          >
+                            <Trash2 size={16} />
+                          </button>
                       )}
                     </div>
                   </div>
@@ -6134,8 +7643,6 @@ const AppShell: React.FC = () => {
           </div>
         );
       })()}
-        </>
-      )}
     </section>
   );
 
@@ -6143,10 +7650,10 @@ const AppShell: React.FC = () => {
     <section>
       <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">{viewingShared ? t("shared_list") : t("my_favorites")}</h2>
+          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">{t("nav.my_favorites")}</h2>
         </div>
 
-        {favorites.length > 0 && !viewingShared && (
+        {favorites.length > 0 && (
           <button
             onClick={async () => {
               try {
@@ -6169,17 +7676,13 @@ const AppShell: React.FC = () => {
                 console.log("[shareFavorites] Criando compartilhamento:", { itemsCount: payload.length, type: 'favorites' });
                 const resp = await api.shareCreate(payload, 'favorites');
                 
-                if (!resp || !resp.url) {
+                if (!resp || !resp.slug) {
                   throw new Error("Resposta inválida do servidor");
                 }
                 
-                setShareUrl(resp.url); 
+                setShareSlug(resp.slug || (resp.code ? resp.code.replace(/V9-|-/g, "").slice(0, 10) : ""));
                 setShowShare(true);
-                try { 
-                  await navigator.clipboard.writeText(resp.url); 
-                  pushToast({ message: "Link copiado para a área de transferência!", tone: "ok" }); 
-                } catch {}
-              } catch (e: any) { 
+              } catch (e: any) {
                 console.error("[shareFavorites] Erro ao compartilhar:", e);
                 const errorMsg = e?.message?.includes("listId_obrigatorio") 
                   ? "Erro ao gerar link. Tente novamente." 
@@ -6197,7 +7700,7 @@ const AppShell: React.FC = () => {
       </div>
 
       {favorites.length > 0 ? (
-        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 min-[1201px]:grid-cols-6 gap-2 sm:gap-2 md:gap-3 lg:gap-4">
           {favorites.map((m, idx) => (
             <div key={`${m.media}-${m.id}`} className="animate-fade-in-up" style={{ animationDelay: `${idx * 50}ms` }}>
               <MovieCard movie={m} />
@@ -6216,24 +7719,97 @@ const AppShell: React.FC = () => {
     </section>
   );
 
-  const listCover = (l: UserList) => l.items.find((m) => m.poster_path) || l.items[0];
+  const listCover = (l: UserList): MovieT | null => {
+    if (!l.items || l.items.length === 0) return null;
+    
+    if (l.cover?.type === "item" && l.cover.itemId) {
+      const coverItem = l.items.find((m) => mediaKey(m) === l.cover!.itemId || String(m.id) === l.cover!.itemId);
+      if (coverItem) return coverItem;
+    }
+    
+    if (l.cover?.type === "upload" && l.cover.url) {
+      return null;
+    }
+    
+    const bestRated = l.items
+      .filter((m) => m.rating && m.rating > 0)
+      .slice(0, 10)
+      .sort((a, b) => (b.rating || 0) - (a.rating || 0))[0];
+    
+    return bestRated || l.items.find((m) => m.poster_path) || l.items[0];
+  };
+  
+  const getListCoverImage = (l: UserList): string | null => {
+    if (l.cover?.type === "upload" && l.cover.url) {
+      return l.cover.url;
+    }
+    const cover = listCover(l);
+    if (cover) {
+      return cover.image || poster(cover.poster_path);
+    }
+    return null;
+  };
+  
+  const formatListUpdatedAt = (updatedAt?: string): string => {
+    if (!updatedAt) return "";
+    const date = new Date(updatedAt);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return "Hoje";
+    if (diffDays === 1) return "Ontem";
+    if (diffDays < 7) return `Há ${diffDays}d`;
+    if (diffDays < 30) return `Há ${Math.floor(diffDays / 7)}sem`;
+    if (diffDays < 365) return `Há ${Math.floor(diffDays / 30)}mes`;
+    return `Há ${Math.floor(diffDays / 365)}a`;
+  };
+  
+  const filteredAndSortedLists = useMemo(() => {
+    let filtered = lists;
+    
+    if (listSearchQuery.trim()) {
+      const query = listSearchQuery.toLowerCase().trim();
+      filtered = filtered.filter((l) => l.name.toLowerCase().includes(query));
+    }
+    
+    const sorted = [...filtered].sort((a, b) => {
+      if (listSortOrder === "az") {
+        return a.name.localeCompare(b.name);
+      }
+      if (listSortOrder === "items") {
+        return b.items.length - a.items.length;
+      }
+      if (listSortOrder === "updated") {
+        const aDate = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const bDate = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return bDate - aDate;
+      }
+      return 0;
+    });
+    
+    return sorted;
+  }, [lists, listSearchQuery, listSortOrder]);
 
   const ListsContent = (
     <section>
       <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-        <div>
+        <div className="flex-1 min-w-0">
           <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">
             {viewingShared && sharedList ? sharedList.listName : t("lists")}
           </h2>
         </div>
         {!viewingShared && (
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto flex-shrink-0">
           <button
             onClick={() => {
               const defaultName = `Minha lista ${lists.length + 1}`;
-              const id = createList(defaultName); setActiveListId(id);
+              const id = createList(defaultName);
+              setActiveListId(id);
+              pushToast({ message: t("created_list_ok", { name: defaultName }), tone: "ok" });
             }}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-slate-700 dark:bg-slate-600 text-white px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold hover:bg-slate-600 dark:hover:bg-slate-500 shadow-md hover:shadow-lg border border-slate-600 dark:border-slate-500 hover:border-slate-500 dark:hover:border-slate-400 transition-all duration-200 active:scale-95 sm:hover:scale-105">
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 active:scale-95 sm:hover:scale-105 min-h-[44px]"
+          >
             <Plus size={16} className="sm:w-4.5 sm:h-4.5" />{t("new_list")}
           </button>
         </div>
@@ -6241,16 +7817,49 @@ const AppShell: React.FC = () => {
       </div>
 
       {viewingShared && sharedList ? (
-        // Mostrar lista compartilhada
-        <ListDetail lst={{ id: 'shared', name: sharedList.listName, items: sharedList.items }} />
+        <>
+          <div className="mb-4 flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400 text-xs font-medium rounded-full border border-cyan-200 dark:border-cyan-800" title="Qualquer pessoa com o link pode ver.">
+              <LinkIcon size={12} />
+              Link público
+            </span>
+          </div>
+          <ListDetail lst={{ id: 'shared', name: sharedList.listName, items: sharedList.items }} />
+        </>
       ) : activeListId ? (() => {
         const lst = lists.find((l) => l.id === activeListId);
         if (!lst) return <div className="text-slate-600 dark:text-gray-400">{t("list_not_found")}</div>;
         return <ListDetail lst={lst} />;
       })() : (
         lists.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-            {lists.map((l) => {
+          <>
+            <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <input
+                  type="text"
+                  placeholder="Buscar listas..."
+                  value={listSearchQuery}
+                  onChange={(e) => setListSearchQuery(e.target.value)}
+                  className="w-full sm:w-auto sm:min-w-[200px] max-w-md px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 min-h-[44px]"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={listSortOrder}
+                  onChange={(e) => setListSortOrder(e.target.value as "recent" | "az" | "items" | "updated")}
+                  className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 min-h-[44px]"
+                >
+                  <option value="recent">Recentes</option>
+                  <option value="az">A–Z</option>
+                  <option value="items">Mais itens</option>
+                  <option value="updated">Última atualização</option>
+                </select>
+              </div>
+            </div>
+            
+            {filteredAndSortedLists.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 min-[1280px]:grid-cols-4 gap-4 sm:gap-6">
+                {filteredAndSortedLists.map((l) => {
               const shareList = async () => {
                 try {
                   if (l.items.length === 0) {
@@ -6272,16 +7881,12 @@ const AppShell: React.FC = () => {
                   console.log("[shareList] Criando compartilhamento:", { itemsCount: payload.length, type: 'list', listName: l.name });
                   const resp = await api.shareCreate(payload, 'list', l.name);
                   
-                  if (!resp || !resp.url) {
+                  if (!resp || !resp.slug) {
                     throw new Error("Resposta inválida do servidor");
                   }
                   
-                  setShareUrl(resp.url); 
+                  setShareSlug(resp.slug || (resp.code ? resp.code.replace(/V9-|-/g, "").slice(0, 10) : ""));
                   setShowShare(true);
-                  try { 
-                    await navigator.clipboard.writeText(resp.url); 
-                    pushToast({ message: "Link copiado para a área de transferência!", tone: "ok" }); 
-                  } catch {}
                 } catch (e: any) { 
                   console.error("[shareList] Erro ao compartilhar:", e);
                   const errorMsg = e?.message?.includes("listId_obrigatorio") 
@@ -6290,87 +7895,106 @@ const AppShell: React.FC = () => {
                   pushToast({ message: errorMsg, tone: "err" }); 
                 }
               };
-              const cover = listCover(l);
+              const coverImageUrl = getListCoverImageUrl(l, mediaKey, toPosterPath);
+              const fallbackPosters = getListFallbackPosters(l, 4, toPosterPath);
 
               return (
-                <div key={l.id} className="group relative bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
-                  {/* Imagem de capa */}
-                  <div className="relative h-48 overflow-hidden bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-800 dark:to-slate-900">
-                  {cover ? (
-                      <>
-                        <img 
-                          src={cover.image} 
-                          alt={cover.title} 
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-                      </>
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <ListIcon size={56} className="text-slate-400 dark:text-slate-600" />
-                    </div>
-                  )}
-                    
-                    {/* Overlay com informações no hover */}
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/60">
-                      <button 
-                        onClick={() => setActiveListId(l.id)}
-                        className="px-6 py-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-white font-semibold hover:bg-white/20 transition-all duration-200"
-                      >
-                        Ver lista
-                      </button>
-                        </div>
+                <div key={l.id} className="group relative bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 hover:scale-[1.02]">
+                  {/* Capa da lista - destaque visual */}
+                  <div className="relative aspect-[16/9] overflow-hidden bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-800 dark:to-slate-900">
+                    <ListCover
+                      title={l.name}
+                      itemsCount={l.items.length}
+                      imageUrl={coverImageUrl}
+                      fallbackPosters={fallbackPosters}
+                      focalPoint={l.cover?.focalPoint}
+                      mode="grid"
+                      showOverlay={true}
+                      onClick={() => setActiveListId(l.id)}
+                      onShare={l.items.length > 0 ? shareList : undefined}
+                      onMore={() => {
+                        setRenameInput(l.name);
+                        setRenameModal({ show: true, listId: l.id, currentName: l.name });
+                      }}
+                      className="cursor-pointer h-full"
+                    />
                   </div>
-
-                  {/* Conteúdo do card */}
-                  <div className="p-5">
-                    <button 
-                      onClick={() => setActiveListId(l.id)} 
-                      className="w-full text-left group/btn"
-                      title="Abrir lista"
-                    >
-                      <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1.5 line-clamp-2 group-hover/btn:text-cyan-600 dark:group-hover/btn:text-cyan-400 transition-colors">
-                        {l.name}
-                      </h3>
-                      <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                        <ListIcon size={14} className="text-slate-400 dark:text-slate-500" />
-                        <span>{l.items.length} {l.items.length === 1 ? 'item' : 'itens'}</span>
-                      </p>
-                      </button>
-
-                    {/* Botões de ação */}
-                      {!viewingShared && (
-                      <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2">
-                        <button 
-                          onClick={shareList} 
-                          disabled={l.items.length === 0}
-                          className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 dark:text-slate-300 transition-all duration-200"
-                          title={t("share")}
-                        >
-                            <Share2 size={14} />
-                            <span>Compartilhar</span>
-                          </button>
-                        <button 
-                          onClick={() => { setRenameInput(l.name); setRenameModal({ show: true, listId: l.id, currentName: l.name }); }}
-                          className="inline-flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all duration-200"
-                          title="Renomear"
-                        >
-                            <Pencil size={14} />
-                          </button>
-                        <button 
-                          onClick={() => setConfirmModal({ show: true, message: `Excluir a lista "${l.name}"?`, onConfirm: () => { deleteList(l.id); setConfirmModal({ show: false, message: "", onConfirm: () => {} }); } })}
-                          className="inline-flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg bg-rose-50 dark:bg-rose-900/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 transition-all duration-200"
-                          title="Excluir"
-                        >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
+                  
+                  {/* Informações da lista */}
+                  <div className="p-4 sm:p-5 bg-white dark:bg-slate-900">
+                    <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white mb-2 line-clamp-2 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
+                      {l.name}
+                    </h3>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                        <span className="font-medium">{l.items.length} {l.items.length === 1 ? "item" : "itens"}</span>
+                        {l.updatedAt && (
+                          <>
+                            <span>•</span>
+                            <span>{formatListUpdatedAt(l.updatedAt)}</span>
+                          </>
+                        )}
+                      </div>
+                      {l.isPublic !== undefined && (
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium shrink-0 ${
+                          l.isPublic 
+                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                        }`}>
+                          {l.isPublic ? "Pública" : "Privada"}
+                        </span>
                       )}
+                    </div>
                   </div>
+
+                  {/* Ações no hover (para grid, mostrar em overlay) */}
+                  <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRenameInput(l.name);
+                          setRenameModal({ show: true, listId: l.id, currentName: l.name });
+                        }}
+                        className="p-2 rounded-lg bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all min-h-[44px] min-w-[44px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        title="Editar"
+                        aria-label="Editar lista"
+                      >
+                        <Pencil size={18} />
+                      </button>
+                      <KebabMenu
+                        items={[
+                          { 
+                            key: "chooseCover", 
+                            label: "Escolher capa", 
+                            icon: <ImageIcon size={14} />,
+                            onClick: () => {
+                              setCoverSelectorListId(l.id);
+                              setShowCoverSelector(true);
+                            }
+                          },
+                          { key: "delete", label: "Excluir", icon: <Trash2 size={14} />, tone: "danger",
+                            onClick: () => setConfirmModal({ 
+                              show: true, 
+                              message: `Excluir a lista "${l.name}"? Esta ação não pode ser desfeita.`, 
+                              onConfirm: () => { 
+                                deleteList(l.id); 
+                                setConfirmModal({ show: false, message: "", onConfirm: () => {} }); 
+                              } 
+                            }) 
+                          },
+                        ]}
+                      />
+                    </div>
                 </div>
               );
             })}
-          </div>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-slate-600 dark:text-slate-400">Nenhuma lista encontrada.</p>
+              </div>
+            )}
+          </>
         ) : (
           <div className="text-center py-12 md:py-16 bg-gradient-to-br from-slate-900/90 to-slate-800/90 backdrop-blur-md rounded-3xl border border-slate-700/50 shadow-2xl">
             <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500/20 via-purple-500/20 to-lime-400/20 mb-6 ring-4 ring-cyan-500/10">
@@ -6385,20 +8009,18 @@ const AppShell: React.FC = () => {
   );
 
   // Calcular texto do badge da API (após todos os hooks)
-  const apiBadgeText = apiStatus === "ok" ? (tmdb.apiBase ? t("api_badge_ok_backend") : t("api_badge_ok_tmdb")) : apiStatus;
+  const apiBadgeText = apiStatus === "ok" ? (tmdb.apiBase ? t("api.api_badge_ok_backend") : t("api.api_badge_ok_tmdb")) : apiStatus;
 
-  // ---------- Landing (pré-login) ----------
   // Verificar se há um compartilhamento na URL antes de decidir mostrar LandingScreen
   const urlParams = new URLSearchParams(window.location.search);
   const hasShareSlug = urlParams.get("share");
   
-  if (!isLoggedIn && !viewingShared && !hasShareSlug) {
+  if (!isLoggedIn && !viewingShared && !hasShareSlug && !resolvingShare) {
     return (
       <>
         <LandingScreen
           onSignIn={() => { setLoginType("signin"); setShowLogin(true); }}
           onSignUp={() => { setLoginType("signup"); setShowLogin(true); }}
-          t={t} lang={lang} onChangeLang={(l) => setLang(l)}
         />
         {showLogin && <LoginModal
           formData={formData}
@@ -6408,6 +8030,10 @@ const AppShell: React.FC = () => {
           passwordError={passwordError}
           loginError={loginError}
           passwordErrors={passwordErrors}
+          passwordStrength={passwordStrength}
+          showPasswordTips={showPasswordTips}
+          confirmPasswordError={confirmPasswordError}
+          confirmPasswordTouched={confirmPasswordTouched}
           authLoading={authLoading}
           showForgotPassword={showForgotPassword}
           forgotPasswordEmail={forgotPasswordEmail}
@@ -6419,6 +8045,7 @@ const AppShell: React.FC = () => {
           handleInputBlur={handleInputBlur}
           handleSubmit={handleSubmit}
           setShowLogin={setShowLogin}
+          setLoginType={setLoginType}
           setLoginError={setLoginError}
           setEmailError={setEmailError}
           setPasswordError={setPasswordError}
@@ -6432,6 +8059,10 @@ const AppShell: React.FC = () => {
           setForgotPasswordNewPassword={setForgotPasswordNewPassword}
           setForgotPasswordConfirmPassword={setForgotPasswordConfirmPassword}
           setForgotPasswordShowPassword={setForgotPasswordShowPassword}
+          generatePassword={generatePassword}
+          setShowPasswordTips={setShowPasswordTips}
+          setConfirmPasswordError={setConfirmPasswordError}
+          setConfirmPasswordTouched={setConfirmPasswordTouched}
           forgotPasswordStep={forgotPasswordStep}
           forgotPasswordNewPassword={forgotPasswordNewPassword}
           forgotPasswordConfirmPassword={forgotPasswordConfirmPassword}
@@ -6446,147 +8077,77 @@ const AppShell: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 dark:bg-gradient-to-b dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-white">
-      {/* HEADER */}
-      <header className="fixed top-0 left-0 right-0 z-40 backdrop-blur-xl bg-white/95 dark:bg-slate-950/95 border-b border-slate-200 dark:border-white/10 shadow-lg safe-area-inset-top" style={{ paddingTop: 'max(env(safe-area-inset-top), 0px)' }}>
-        <div className="container mx-auto px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 md:py-4">
-          <div className="flex items-center justify-between gap-2 sm:gap-4">
-            <div className="flex items-center gap-2 sm:gap-4 md:gap-8 min-w-0 flex-1">
-              {isLoggedIn && (
-                <button
-                  onClick={() => setShowMobileMenu(!showMobileMenu)}
-                  className="md:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
-                  aria-label="Menu"
-                >
-                  <Menu size={24} className="text-slate-900 dark:text-white" />
-                </button>
-              )}
-              <div className="flex items-center gap-2 sm:gap-3 cursor-pointer flex-shrink-0" onClick={() => { setActiveTab("home"); setActiveCategory("home"); setShowMobileMenu(false); }}>
-                <svg width="32" height="32" className="sm:w-10 sm:h-10" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M8 8 L8 32 L20 20 Z" fill="#00BCD4" />
-                  <path d="M12 12 L12 28 L24 20 Z" fill="#7B3FF2" />
-                  <path d="M16 8 L32 20 L16 32 Z" fill="#C6D800" />
-                </svg>
-                <h1 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 bg-clip-text text-transparent whitespace-nowrap">VETRA</h1>
-                <span
-                  className={`hidden sm:inline-block ml-2 md:ml-4 text-xs px-2 py-1 rounded border flex-shrink-0 ${
-                    apiStatus === "ok"
-                      ? "bg-emerald-600/10 text-emerald-700 border-emerald-500/30 dark:bg-emerald-600/20 dark:text-emerald-200 dark:border-emerald-500/40"
-                      : apiStatus === "falhou"
-                      ? "bg-rose-600/10 text-rose-700 border-rose-500/30 dark:bg-rose-600/20 dark:text-rose-200 dark:border-rose-500/40"
-                      : "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-700/40 dark:text-slate-300 dark:border-slate-500/40"
-                  }`}
-                  title={`TMDB: ${tmdb.hasBearer ? "v4" : tmdb.hasV3 ? "v3" : "—"} · Lang: ${tmdb.lang} · ${tmdb.apiBase ? "com backend" : "TMDB direto"}`}>
-                  {t("api_title")}: {apiBadgeText}
-                </span>
-              </div>
+    <div className="min-h-screen bg-white text-slate-900 dark:bg-gradient-to-b dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-white" style={{ '--app-header-h': '64px', '--app-header-h-sm': '72px', '--app-header-h-md': '80px' } as React.CSSProperties}>
+      {/* HEADER - Aparece quando logado OU quando visualizando conteúdo compartilhado */}
+      {(isLoggedIn || viewingShared || hasShareSlug || resolvingShare) && (
+        <>
+          <header 
+            className="fixed top-0 left-0 right-0 z-[1000] backdrop-blur-xl bg-white/95 dark:bg-slate-950/95 border-b border-slate-200 dark:border-white/10 shadow-lg" 
+            style={{ 
+              paddingTop: 'max(env(safe-area-inset-top), 0px)',
+            }}
+          >
+            <div className="container mx-auto px-3 sm:px-4 md:px-6">
+              {/* Linha 1: Logo e Utils */}
+              <div className="flex items-center justify-between py-2 gap-3 min-h-[48px]">
+                {/* Logo */}
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink">
+                  {isLoggedIn && !useBottomNav && (
+                    <button
+                      onClick={() => setShowMobileMenu(!showMobileMenu)}
+                      className="min-[760px]:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                      aria-label="Menu"
+                    >
+                      <Menu size={24} className="text-slate-900 dark:text-white" />
+                    </button>
+                  )}
+                  <div className="flex items-center gap-2 sm:gap-3 cursor-pointer flex-shrink-0" onClick={() => { setActiveTab("home"); setActiveCategory("home"); setShowMobileMenu(false); }}>
+                    <svg width="32" height="32" className="sm:w-9 sm:h-9 flex-shrink-0" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M8 8 L8 32 L20 20 Z" fill="#00BCD4" />
+                      <path d="M12 12 L12 28 L24 20 Z" fill="#7B3FF2" />
+                      <path d="M16 8 L32 20 L16 32 Z" fill="#C6D800" />
+                    </svg>
+                    <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 bg-clip-text text-transparent whitespace-nowrap">VETRA</h1>
+                    <span
+                      className={`hidden min-[1100px]:inline-block ml-2 text-xs px-2 py-1 rounded border flex-shrink-0 ${
+                        apiStatus === "ok"
+                          ? "bg-emerald-600/10 text-emerald-700 border-emerald-500/30 dark:bg-emerald-600/20 dark:text-emerald-200 dark:border-emerald-500/40"
+                          : apiStatus === "falhou"
+                          ? "bg-rose-600/10 text-rose-700 border-rose-500/30 dark:bg-rose-600/20 dark:text-rose-200 dark:border-rose-500/40"
+                          : "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-700/40 dark:text-slate-300 dark:border-slate-500/40"
+                      }`}
+                      title={`TMDB: ${tmdb.hasBearer ? "v4" : tmdb.hasV3 ? "v3" : "—"} · Lang: ${tmdb.lang} · ${tmdb.apiBase ? "com backend" : "TMDB direto"}`}>
+                      {t("api.api_title")}: {apiBadgeText}
+                    </span>
+                  </div>
+                </div>
 
-              <nav className="hidden md:flex gap-2">
-                <button onClick={() => { setActiveTab("home"); setActiveCategory("home"); }}
-                  className={`relative px-4 py-2 rounded-lg transition-all duration-200 ${
-                    activeTab==="home" && activeCategory==="home"
-                      ? "text-slate-900 dark:text-white font-semibold bg-slate-200 dark:bg-slate-800/50" 
-                      : "text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/30"
-                  }`}>
-                  {t("home")}
-                  {activeTab==="home" && activeCategory==="home" && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full" />
-                  )}
-                </button>
-                <button onClick={() => { setActiveTab("home"); setActiveCategory("movies"); }}
-                  className={`relative px-4 py-2 rounded-lg transition-all duration-200 ${
-                    activeTab==="home" && activeCategory==="movies"
-                      ? "text-slate-900 dark:text-white font-semibold bg-slate-200 dark:bg-slate-800/50" 
-                      : "text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/30"
-                  }`}>
-                  {t("movies")}
-                  {activeTab==="home" && activeCategory==="movies" && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full" />
-                  )}
-                </button>
-                <button onClick={() => { setActiveTab("home"); setActiveCategory("tv"); }}
-                  className={`relative px-4 py-2 rounded-lg transition-all duration-200 ${
-                    activeTab==="home" && activeCategory==="tv"
-                      ? "text-slate-900 dark:text-white font-semibold bg-slate-200 dark:bg-slate-800/50" 
-                      : "text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/30"
-                  }`}>
-                  {t("tv_series")}
-                  {activeTab==="home" && activeCategory==="tv" && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full" />
-                  )}
-                </button>
-                <button onClick={() => setActiveTab("favorites")}
-                  className={`relative px-4 py-2 rounded-lg transition-all duration-200 ${
-                    activeTab==="favorites" 
-                      ? "text-slate-900 dark:text-white font-semibold bg-slate-200 dark:bg-slate-800/50" 
-                      : "text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/30"
-                  }`}>
-                  {viewingShared ? t("shared_list") : t("favorites")}
-                  {activeTab==="favorites" && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full" />
-                  )}
-                </button>
-                <button onClick={() => setActiveTab("lists")}
-                  className={`relative px-4 py-2 rounded-lg transition-all duration-200 ${
-                    activeTab==="lists" 
-                      ? "text-slate-900 dark:text-white font-semibold bg-slate-200 dark:bg-slate-800/50" 
-                      : "text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/30"
-                  }`}>
-                  {t("lists")}
-                  {activeTab==="lists" && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full" />
-                  )}
-                </button>
-                <button onClick={() => setActiveTab("watchlist")}
-                  className={`relative px-4 py-2 rounded-lg transition-all duration-200 ${
-                    activeTab==="watchlist" || activeTab.startsWith("watchlist-")
-                      ? "text-slate-900 dark:text-white font-semibold bg-slate-200 dark:bg-slate-800/50" 
-                      : "text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/30"
-                  }`}>
-                  Coleções
-                  {(activeTab==="watchlist" || activeTab.startsWith("watchlist-")) && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full" />
-                  )}
-                </button>
-                <button onClick={() => setActiveTab("people")}
-                  className={`relative px-4 py-2 rounded-lg transition-all duration-200 ${
-                    activeTab==="people" 
-                      ? "text-slate-900 dark:text-white font-semibold bg-slate-200 dark:bg-slate-800/50" 
-                      : "text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/30"
-                  }`}>
-                  {t("people")}
-                  {activeTab==="people" && (
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full" />
-                  )}
-                </button>
-              </nav>
-            </div>
-
-            <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 flex-shrink-0">
-              <LanguageMenu lang={lang as Lang} onChange={(l) => setLang(l)} />
-              {isLoggedIn && <ThemeButton enabled={darkEnabled} onToggle={toggleDark} />}
-              {isLoggedIn && !viewingShared && (
-                <div className="relative" ref={setProfileMenuRef}>
-                  <button
-                    onClick={() => setShowProfileMenu(!showProfileMenu)}
-                    className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-300 dark:border-slate-700"
-                  >
-                    {user?.avatar_url ? (
-                      <img
-                        src={user.avatar_url}
-                        alt={user.name || "Usuário"}
-                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-cyan-400 via-purple-500 to-lime-400 flex items-center justify-center text-white font-semibold text-xs sm:text-sm">
-                        {user?.name?.charAt(0)?.toUpperCase() || "U"}
-                      </div>
-                    )}
-                    <ChevronDown size={14} className={`hidden sm:block transition-transform ${showProfileMenu ? "rotate-180" : ""}`} />
-                  </button>
-                  {showProfileMenu && (
-                    <div className="absolute right-0 mt-2 w-48 sm:w-56 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-300 dark:border-slate-700 py-2 z-50">
-                      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+                {/* Utils */}
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                  <LanguageMenu lang={lang as Lang} onChange={(l) => setLang(l)} />
+                  {(isLoggedIn || viewingShared || hasShareSlug) && <ThemeButton enabled={darkEnabled} onToggle={toggleDark} />}
+                  {isLoggedIn && !viewingShared && (
+                    <div className="relative" ref={setProfileMenuRef}>
+                      <button
+                        onClick={() => setShowProfileMenu(!showProfileMenu)}
+                        className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-300 dark:border-slate-700 flex-shrink-0"
+                      >
+                        {user?.avatar_url ? (
+                          <img
+                            src={user.avatar_url}
+                            alt={user.name || "Usuário"}
+                            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-cyan-400 via-purple-500 to-lime-400 flex items-center justify-center text-white font-semibold text-xs sm:text-sm flex-shrink-0">
+                            {user?.name?.charAt(0)?.toUpperCase() || "U"}
+                          </div>
+                        )}
+                        <ChevronDown size={14} className={`hidden sm:block transition-transform flex-shrink-0 ${showProfileMenu ? "rotate-180" : ""}`} />
+                      </button>
+                      {showProfileMenu && (
+                        <div className="absolute right-0 mt-2 w-48 sm:w-56 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-300 dark:border-slate-700 py-2 z-50">
+                          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
                         <div className="flex items-center gap-3">
                           {user?.avatar_url ? (
                             <img
@@ -6640,12 +8201,39 @@ const AppShell: React.FC = () => {
                         <BarChart3 size={16} />
                         <span>Estatísticas</span>
                       </button>
+                      <div className="border-t border-slate-200 dark:border-slate-700 my-2"></div>
+                      <Link
+                        to="/privacy"
+                        target="_blank"
+                        onClick={() => setShowProfileMenu(false)}
+                        className="w-full px-4 py-2 text-left text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors"
+                      >
+                        <Lock size={16} />
+                        Privacidade
+                      </Link>
+                      <Link
+                        to="/terms"
+                        target="_blank"
+                        onClick={() => setShowProfileMenu(false)}
+                        className="w-full px-4 py-2 text-left text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors"
+                      >
+                        <FileText size={16} />
+                        Termos de Uso
+                      </Link>
+                      <div className="border-t border-slate-200 dark:border-slate-700 my-2"></div>
+                      <button
+                        onClick={() => {
+                          setShowDeleteAccountModal(true);
+                          setShowProfileMenu(false);
+                        }}
+                        className="w-full px-4 py-2 text-left text-red-600 dark:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                        Excluir conta
+                      </button>
                       <button
                         onClick={() => {
                           setIsLoggedIn(false);
-                          setViewingShared(false);
-                          setSharedList(null);
-                          setSharedCollection(null);
                           setUser(null);
                           setShowProfileMenu(false);
                         }}
@@ -6654,14 +8242,172 @@ const AppShell: React.FC = () => {
                         <LogOut size={16} />
                         {t("signout")}
                       </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Linha 2: Navegação */}
+              {!useBottomNav && (
+                <nav 
+                  ref={headerNavRef} 
+                  style={{ 
+                    WebkitOverflowScrolling: 'touch',
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none'
+                  } as React.CSSProperties & { WebkitOverflowScrolling?: string; scrollbarWidth?: string; msOverflowStyle?: string }}
+                  className="hidden min-[760px]:flex items-center gap-2 md:gap-3 w-full overflow-x-auto scrollbar-hide pb-2 shrink-0"
+                  role="tablist"
+                  aria-label={t("nav.main_navigation")}
+                >
+                  <button 
+                    onClick={() => { setActiveTab("home"); setActiveCategory("home"); }}
+                    role="tab"
+                    aria-selected={activeTab==="home" && activeCategory==="home"}
+                    aria-controls="home-content"
+                    className={`nav-tab-button relative px-3 py-2 pb-3 transition-all duration-200 flex items-center justify-center gap-1.5 min-h-[40px] shrink-0 font-medium text-sm md:text-base ${
+                      activeTab==="home" && activeCategory==="home"
+                        ? "text-slate-900 dark:text-white font-semibold" 
+                        : "text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
+                    } focus:outline-none focus-visible:outline-none`}
+                  >
+                    <Home size={16} className="min-[900px]:hidden flex-shrink-0" />
+                    <span className="hidden min-[900px]:inline">{t("home")}</span>
+                    <span className="min-[900px]:hidden">{t("home").substring(0, 3)}</span>
+                    {activeTab==="home" && activeCategory==="home" && (
+                      <div className="nav-tab-indicator-active absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full transition-all duration-200" />
+                    )}
+                    {!(activeTab==="home" && activeCategory==="home") && (
+                      <div className="nav-tab-indicator-focus absolute bottom-0 left-0 right-0 h-0 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full transition-all duration-200 pointer-events-none" />
+                    )}
+                  </button>
+                  <button 
+                    onClick={() => { setActiveTab("home"); setActiveCategory("movies"); }}
+                    role="tab"
+                    aria-selected={activeTab==="home" && activeCategory==="movies"}
+                    aria-controls="movies-content"
+                    className={`nav-tab-button relative px-3 py-2 pb-3 transition-all duration-200 flex items-center justify-center gap-1.5 min-h-[40px] shrink-0 font-medium text-sm md:text-base ${
+                      activeTab==="home" && activeCategory==="movies"
+                        ? "text-slate-900 dark:text-white font-semibold" 
+                        : "text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
+                    } focus:outline-none focus-visible:outline-none`}
+                  >
+                    <Film size={16} className="min-[900px]:hidden flex-shrink-0" />
+                    <span className="hidden min-[900px]:inline">{t("movies")}</span>
+                    <span className="min-[900px]:hidden">{t("movies").substring(0, 4)}</span>
+                    {activeTab==="home" && activeCategory==="movies" && (
+                      <div className="nav-tab-indicator-active absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full transition-all duration-200" />
+                    )}
+                    {!(activeTab==="home" && activeCategory==="movies") && (
+                      <div className="nav-tab-indicator-focus absolute bottom-0 left-0 right-0 h-0 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full transition-all duration-200 pointer-events-none" />
+                    )}
+                  </button>
+                  <button 
+                    onClick={() => { setActiveTab("home"); setActiveCategory("tv"); }}
+                    role="tab"
+                    aria-selected={activeTab==="home" && activeCategory==="tv"}
+                    aria-controls="tv-content"
+                    className={`nav-tab-button relative px-3 py-2 pb-3 transition-all duration-200 flex items-center justify-center gap-1.5 min-h-[40px] shrink-0 font-medium text-sm md:text-base ${
+                      activeTab==="home" && activeCategory==="tv"
+                        ? "text-slate-900 dark:text-white font-semibold" 
+                        : "text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
+                    } focus:outline-none focus-visible:outline-none`}
+                  >
+                    <Tv size={16} className="min-[900px]:hidden flex-shrink-0" />
+                    <span className="hidden min-[900px]:inline">{t("tv_series")}</span>
+                    <span className="min-[900px]:hidden">{t("tv_series").substring(0, 4)}</span>
+                    {activeTab==="home" && activeCategory==="tv" && (
+                      <div className="nav-tab-indicator-active absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full transition-all duration-200" />
+                    )}
+                    {!(activeTab==="home" && activeCategory==="tv") && (
+                      <div className="nav-tab-indicator-focus absolute bottom-0 left-0 right-0 h-0 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full transition-all duration-200 pointer-events-none" />
+                    )}
+                  </button>
+                  <button 
+                    onClick={() => { setActiveTab("favorites"); }}
+                    role="tab"
+                    aria-selected={activeTab==="favorites"}
+                    aria-controls="favorites-content"
+                    className={`nav-tab-button relative px-3 py-2 pb-3 transition-all duration-200 flex items-center justify-center gap-1.5 min-h-[40px] shrink-0 font-medium text-sm md:text-base ${
+                      activeTab==="favorites" 
+                        ? "text-slate-900 dark:text-white font-semibold" 
+                        : "text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
+                    } focus:outline-none focus-visible:outline-none`}
+                  >
+                    <Heart size={16} className="min-[900px]:hidden flex-shrink-0" />
+                    <span className="hidden min-[900px]:inline">{t("nav.favorites")}</span>
+                    <span className="hidden min-[520px]:inline min-[900px]:hidden">{t("nav.favorites").substring(0, 4)}</span>
+                    <span className="min-[520px]:hidden">{t("nav.favorites").substring(0, 3)}</span>
+                    {activeTab==="favorites" && (
+                      <div className="nav-tab-indicator-active absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full transition-all duration-200" />
+                    )}
+                    {activeTab!=="favorites" && (
+                      <div className="nav-tab-indicator-focus absolute bottom-0 left-0 right-0 h-0 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full transition-all duration-200 pointer-events-none" />
+                    )}
+                  </button>
+                  <button 
+                    onClick={() => { setActiveTab("lists"); }}
+                    role="tab"
+                    aria-selected={activeTab==="lists"}
+                    aria-controls="lists-content"
+                    className={`nav-tab-button relative px-3 py-2 pb-3 transition-all duration-200 flex items-center justify-center gap-1.5 min-h-[40px] shrink-0 font-medium text-sm md:text-base ${
+                      activeTab==="lists" 
+                        ? "text-slate-900 dark:text-white font-semibold" 
+                        : "text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
+                    } focus:outline-none focus-visible:outline-none`}
+                  >
+                    {t("lists")}
+                    {activeTab==="lists" && (
+                      <div className="nav-tab-indicator-active absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full transition-all duration-200" />
+                    )}
+                    {activeTab!=="lists" && (
+                      <div className="nav-tab-indicator-focus absolute bottom-0 left-0 right-0 h-0 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full transition-all duration-200 pointer-events-none" />
+                    )}
+                  </button>
+                  <button 
+                    onClick={() => { setActiveTab("watchlist"); }}
+                    role="tab"
+                    aria-selected={activeTab==="watchlist" || activeTab.startsWith("watchlist-")}
+                    aria-controls="watchlist-content"
+                    className={`nav-tab-button relative px-3 py-2 pb-3 transition-all duration-200 flex items-center justify-center gap-1.5 min-h-[40px] shrink-0 font-medium text-sm md:text-base ${
+                      activeTab==="watchlist" || activeTab.startsWith("watchlist-")
+                        ? "text-slate-900 dark:text-white font-semibold" 
+                        : "text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
+                    } focus:outline-none focus-visible:outline-none`}
+                  >
+                    Coleções
+                    {(activeTab==="watchlist" || activeTab.startsWith("watchlist-")) && (
+                      <div className="nav-tab-indicator-active absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full transition-all duration-200" />
+                    )}
+                    {!(activeTab==="watchlist" || activeTab.startsWith("watchlist-")) && (
+                      <div className="nav-tab-indicator-focus absolute bottom-0 left-0 right-0 h-0 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full transition-all duration-200 pointer-events-none" />
+                    )}
+                  </button>
+                  <button 
+                    onClick={() => { setActiveTab("people"); }}
+                    role="tab"
+                    aria-selected={activeTab==="people"}
+                    aria-controls="people-content"
+                    className={`nav-tab-button relative px-3 py-2 pb-3 transition-all duration-200 flex items-center justify-center gap-1.5 min-h-[40px] shrink-0 font-medium text-sm md:text-base ${
+                      activeTab==="people" 
+                        ? "text-slate-900 dark:text-white font-semibold" 
+                        : "text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
+                    } focus:outline-none focus-visible:outline-none`}
+                  >
+                    {t("people")}
+                    {activeTab==="people" && (
+                      <div className="nav-tab-indicator-active absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full transition-all duration-200" />
+                    )}
+                    {activeTab!=="people" && (
+                      <div className="nav-tab-indicator-focus absolute bottom-0 left-0 right-0 h-0 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full transition-all duration-200 pointer-events-none" />
+                    )}
+                  </button>
+                </nav>
               )}
             </div>
-          </div>
-        </div>
-
+          </header>
         {isLoggedIn && showMobileMenu && (
           <div className="md:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={() => setShowMobileMenu(false)}>
             <div className="fixed left-0 top-0 bottom-0 w-64 bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -6678,88 +8424,109 @@ const AppShell: React.FC = () => {
               <nav className="p-2">
                 <button
                   onClick={() => { setActiveTab("home"); setActiveCategory("home"); setShowMobileMenu(false); }}
-                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                  className={`relative w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${
                     activeTab === "home" && activeCategory === "home"
-                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
-                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? "text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
                   <Home size={20} />
                   <span>{t("home")}</span>
+                  {activeTab === "home" && activeCategory === "home" && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full" />
+                  )}
                 </button>
                 <button
                   onClick={() => { setActiveTab("home"); setActiveCategory("movies"); setShowMobileMenu(false); }}
-                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                  className={`relative w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${
                     activeTab === "home" && activeCategory === "movies"
-                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
-                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? "text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
                   <Film size={20} />
                   <span>{t("movies")}</span>
+                  {activeTab === "home" && activeCategory === "movies" && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full" />
+                  )}
                 </button>
                 <button
                   onClick={() => { setActiveTab("home"); setActiveCategory("tv"); setShowMobileMenu(false); }}
-                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                  className={`relative w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${
                     activeTab === "home" && activeCategory === "tv"
-                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
-                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? "text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
                   <Tv size={20} />
                   <span>{t("tv_series")}</span>
+                  {activeTab === "home" && activeCategory === "tv" && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full" />
+                  )}
                 </button>
                 <button
                   onClick={() => { setActiveTab("favorites"); setShowMobileMenu(false); }}
-                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                  className={`relative w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${
                     activeTab === "favorites"
-                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
-                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? "text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
                   <Heart size={20} />
-                  <span>{viewingShared ? t("shared_list") : t("favorites")}</span>
+                  <span>{t("nav.favorites")}</span>
+                  {activeTab === "favorites" && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full" />
+                  )}
                 </button>
                 <button
                   onClick={() => { setActiveListId(null); setActiveTab("lists"); setShowMobileMenu(false); }}
-                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                  className={`relative w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${
                     activeTab === "lists"
-                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
-                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? "text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
                   <ListIcon size={20} />
                   <span>{t("lists")}</span>
+                  {activeTab === "lists" && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full" />
+                  )}
                 </button>
                 <button
                   onClick={() => { setActiveTab("watchlist"); setShowMobileMenu(false); }}
-                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                  className={`relative w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${
                     activeTab === "watchlist" || activeTab.startsWith("watchlist-")
-                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
-                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? "text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
                   <Bookmark size={20} />
                   <span>Coleções</span>
+                  {(activeTab === "watchlist" || activeTab.startsWith("watchlist-")) && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full" />
+                  )}
                 </button>
                 <button
                   onClick={() => { setActiveTab("people"); setShowMobileMenu(false); }}
-                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                  className={`relative w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${
                     activeTab === "people"
-                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
-                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? "text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
                   <Users size={20} />
                   <span>{t("people")}</span>
+                  {activeTab === "people" && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full" />
+                  )}
                 </button>
                 <div className="border-t border-slate-200 dark:border-slate-700 my-2"></div>
                 <button
                   onClick={() => { setActiveTab("history"); setShowMobileMenu(false); }}
-                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                  className={`relative w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${
                     activeTab === "history"
-                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
-                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? "text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
                   <Clock size={20} />
@@ -6769,17 +8536,23 @@ const AppShell: React.FC = () => {
                       {watchHistory.length}
                     </span>
                   )}
+                  {activeTab === "history" && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full" />
+                  )}
                 </button>
                 <button
                   onClick={() => { setActiveTab("stats"); setShowMobileMenu(false); }}
-                  className={`w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 ${
+                  className={`relative w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${
                     activeTab === "stats"
-                      ? "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold"
-                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? "text-slate-900 dark:text-white font-semibold"
+                      : "text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
                   <BarChart3 size={20} />
                   <span>Estatísticas</span>
+                  {activeTab === "stats" && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 rounded-full" />
+                  )}
                 </button>
                 <div className="border-t border-slate-200 dark:border-slate-700 my-2"></div>
                 <button
@@ -6795,9 +8568,6 @@ const AppShell: React.FC = () => {
                 <button
                   onClick={() => {
                     setIsLoggedIn(false);
-                    setViewingShared(false);
-                    setSharedList(null);
-                    setSharedCollection(null);
                     setUser(null);
                     setShowMobileMenu(false);
                   }}
@@ -6810,193 +8580,456 @@ const AppShell: React.FC = () => {
             </div>
           </div>
         )}
-      </header>
+        </>
+      )}
 
       {/* MAIN */}
       {/* Padding-top para header fixo, padding-bottom para navegação mobile */}
-      <main className={`pt-16 sm:pt-20 md:pt-24 ${isLoggedIn ? "pb-16 sm:pb-20 md:pb-24" : "pb-12"}`}>
-        {/* Conteúdo compartilhado é sempre exibido, mesmo sem login */}
-        {!isLoggedIn && !viewingShared && !hasShareSlug ? (
-          <div className="container mx-auto px-3 sm:px-4 md:px-6 text-center py-12 md:py-16 pt-20 sm:pt-24 px-4">
-            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 dark:text-white mb-4">Faça login para continuar</h2>
-            <p className="text-slate-600 dark:text-slate-400 mb-6 text-sm sm:text-base">Você precisa estar logado para acessar o conteúdo.</p>
-            <button
-              onClick={() => { setShowLogin(true); setLoginType("signin"); setLoginError(""); setEmailError(""); setPasswordError(""); }}
-              className="min-h-[44px] px-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-cyan-500 via-purple-600 to-lime-500 hover:opacity-90 active:opacity-80 transition-all touch-manipulation"
-            >
-              Fazer Login
-            </button>
-          </div>
-        ) : (
-          <>
-              {activeTab === "home" && activeCategory === "home" && HomeContent}
-              {activeTab === "home" && activeCategory !== "home" && (
-                <div className="container mx-auto px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-8">
+      {(isLoggedIn || viewingShared || hasShareSlug || resolvingShare) && (
+        <main 
+          className={`${isLoggedIn && useBottomNav ? "pb-20" : isLoggedIn ? "pb-16 sm:pb-20 md:pb-24" : "pb-12"}`} 
+          style={{
+            paddingTop: 'calc(80px + max(env(safe-area-inset-top), 0px))',
+            scrollMarginTop: 'calc(80px + max(env(safe-area-inset-top), 0px))',
+            ...(isLoggedIn && useBottomNav ? { paddingBottom: `calc(56px + max(env(safe-area-inset-bottom), 0px))` } : {})
+          }}
+        >
+          {activeTab === "home" && activeCategory === "home" && HomeContent}
+          {activeTab === "home" && activeCategory !== "home" && (
+            <div className={`container mx-auto px-3 sm:px-4 md:px-6 pt-12 sm:pt-14 md:pt-16 lg:pt-20 ${viewingShared && !isLoggedIn ? "pt-20 sm:pt-24" : ""}`}>
                 {activeTab === "home" && activeCategory === "movies" && (
-                  <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
+                  <div className="flex flex-col min-[1280px]:flex-row gap-4 sm:gap-6">
                     {/* Filtros Laterais */}
                     <DiscoverFiltersPanel
                       media="movie"
                       filters={moviesFilters}
-                      onFiltersChange={setMoviesFilters}
-                      onReset={() => setMoviesFilters({ sortBy: "popularity.desc", region: "BR" })}
+                      onFiltersChange={(newFilters) => {
+                        setMoviesFilters(newFilters);
+                        setDiscoverMovies((prev) => ({ ...prev, page: 1 }));
+                        loadDiscoverMovies(1, newFilters);
+                      }}
+                      onReset={() => {
+                        const defaultFilters = { sortBy: "popularity.desc", region: "BR", withPoster: true };
+                        setMoviesFilters(defaultFilters);
+                        setDiscoverMovies((prev) => ({ ...prev, page: 1 }));
+                        loadDiscoverMovies(1, defaultFilters);
+                      }}
+                      onApply={() => {
+                        setDiscoverMovies((prev) => ({ ...prev, page: 1 }));
+                        loadDiscoverMovies(1, moviesFilters);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                      facets={moviesFacets}
                     />
                     
                     {/* Grid de Resultados */}
                     <div className="flex-1 min-w-0">
                       <div className="mb-4 sm:mb-6">
-                        <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">{t("movies")}</h2>
-                        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                          {discoverMovies.loading ? t("loading") : discoverMovies.items.length > 0 ? t("movies_found", { count: discoverMovies.items.length }) : t("no_movies_found")}
-                        </p>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                          <div>
+                            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">{t("movies")}</h2>
+                            {discoverMovies.total > 0 && (
+                              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                                {discoverMovies.total} resultados • Mostrando {((discoverMovies.page - 1) * moviesPerPage) + 1}–{Math.min(discoverMovies.page * moviesPerPage, discoverMovies.total)} de {discoverMovies.total}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <label className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">Itens por página:</label>
+                            <select
+                              value={moviesPerPage}
+                              onChange={(e) => {
+                                const newPerPage = parseInt(e.target.value, 10);
+                                setMoviesPerPage(newPerPage);
+                                localStorage.setItem("vetra:moviesPerPage", String(newPerPage));
+                                setDiscoverMovies((prev) => ({ ...prev, page: 1 }));
+                                loadDiscoverMovies(1, moviesFilters);
+                              }}
+                              className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 min-h-[44px]"
+                            >
+                              <option value="12">12</option>
+                              <option value="24">24</option>
+                              <option value="36">36</option>
+                              <option value="48">48</option>
+                            </select>
+                          </div>
+                        </div>
+                        
+                        {discoverMovies.totalPages > 1 && (
+                          <div className="flex items-center justify-center gap-2 mb-4 flex-wrap">
+                            <button
+                              onClick={() => {
+                                const prevPage = discoverMovies.page - 1;
+                                if (prevPage >= 1) {
+                                  loadDiscoverMovies(prevPage, moviesFilters);
+                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                }
+                              }}
+                              disabled={discoverMovies.page === 1 || discoverMovies.loading}
+                              className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                            >
+                              <ChevronLeft size={18} />
+                            </button>
+                            {Array.from({ length: Math.min(5, discoverMovies.totalPages) }, (_, i) => {
+                              let pageNum;
+                              if (discoverMovies.totalPages <= 5) {
+                                pageNum = i + 1;
+                              } else if (discoverMovies.page <= 3) {
+                                pageNum = i + 1;
+                              } else if (discoverMovies.page >= discoverMovies.totalPages - 2) {
+                                pageNum = discoverMovies.totalPages - 4 + i;
+                              } else {
+                                pageNum = discoverMovies.page - 2 + i;
+                              }
+                              return (
+                                <button
+                                  key={pageNum}
+                                  onClick={() => {
+                                    loadDiscoverMovies(pageNum, moviesFilters);
+                                    window.scrollTo({ top: 0, behavior: "smooth" });
+                                  }}
+                                  disabled={discoverMovies.loading}
+                                  className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${
+                                    discoverMovies.page === pageNum
+                                      ? "bg-cyan-600 text-white border-cyan-600"
+                                      : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700"
+                                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                >
+                                  {pageNum}
+                                </button>
+                              );
+                            })}
+                            <button
+                              onClick={() => {
+                                const nextPage = discoverMovies.page + 1;
+                                if (nextPage <= discoverMovies.totalPages) {
+                                  loadDiscoverMovies(nextPage, moviesFilters);
+                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                }
+                              }}
+                              disabled={discoverMovies.page === discoverMovies.totalPages || discoverMovies.loading}
+                              className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                            >
+                              <ChevronRight size={18} />
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {discoverMovies.loading && discoverMovies.items.length === 0 ? (
-                        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 min-[1280px]:grid-cols-5 min-[1536px]:grid-cols-6 gap-3 sm:gap-4">
                           {[...Array(12)].map((_, i) => (
                             <div key={i} className="aspect-[2/3] bg-slate-200 dark:bg-slate-800 animate-pulse rounded-lg" />
                           ))}
                         </div>
                       ) : discoverMovies.items.length > 0 ? (
                         <>
-                          <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+                          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 min-[1201px]:grid-cols-6 gap-2 sm:gap-2 md:gap-3 lg:gap-4">
                             {discoverMovies.items.map((movie) => (
                               <MovieCard key={mediaKey(movie)} movie={movie} />
                             ))}
                           </div>
-                          {discoverMovies.totalPages > 1 && discoverMovies.page < discoverMovies.totalPages && (
-                            <div className="mt-4 sm:mt-6 text-center">
-                              <button
-                                onClick={() => {
-                                  const nextPage = discoverMovies.page + 1;
-                                  api.discover("movie", moviesFilters, nextPage)
-                                    .then((data) => {
-                                      const results = (data?.results || []) as ApiMovie[];
-                                      const filtered = results.filter((x: any) => {
-                                        const hasImage = (x.poster_path && x.poster_path.trim() !== "") || 
-                                                        (x.backdrop_path && x.backdrop_path.trim() !== "");
-                                        const hasTitle = (x.title && x.title.trim() !== "") || 
-                                                        (x.name && x.name.trim() !== "");
-                                        const hasInfo = (x.overview && x.overview.trim() !== "") || 
-                                                       x.release_date || 
-                                                       x.first_air_date ||
-                                                       x.vote_average !== null;
-                                        return hasImage && hasTitle && hasInfo;
-                                      });
-                                      const mapped = mapRows(filtered);
-                                      setDiscoverMovies({
-                                        items: [...discoverMovies.items, ...mapped],
-                                        loading: false,
-                                        page: nextPage,
-                                        totalPages: (data as any)?.total_pages ?? 1,
-                                      });
-                                    })
-                                    .catch((e: any) => {
-                                      console.error("Erro ao carregar mais filmes:", e);
-                                      pushToast({ message: t("error_load_more_movies"), tone: "err" });
-                                    });
-                                }}
-                                disabled={discoverMovies.loading}
-                                className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-cyan-500 to-purple-500 text-white text-sm sm:text-base font-semibold rounded-lg hover:from-cyan-600 hover:to-purple-600 transition-all disabled:opacity-50 active:scale-95 sm:hover:scale-105"
-                              >
-                                {discoverMovies.loading ? "Carregando..." : "Carregar Mais"}
-                              </button>
-                            </div>
-                          )}
+                        {discoverMovies.totalPages > 1 && (
+                          <div className="flex items-center justify-center gap-2 mt-6 flex-wrap">
+                            <button
+                              onClick={() => {
+                                const prevPage = discoverMovies.page - 1;
+                                if (prevPage >= 1) {
+                                  loadDiscoverMovies(prevPage, moviesFilters);
+                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                }
+                              }}
+                              disabled={discoverMovies.page === 1 || discoverMovies.loading}
+                              className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                            >
+                              <ChevronLeft size={18} />
+                            </button>
+                            {Array.from({ length: Math.min(5, discoverMovies.totalPages) }, (_, i) => {
+                              let pageNum;
+                              if (discoverMovies.totalPages <= 5) {
+                                pageNum = i + 1;
+                              } else if (discoverMovies.page <= 3) {
+                                pageNum = i + 1;
+                              } else if (discoverMovies.page >= discoverMovies.totalPages - 2) {
+                                pageNum = discoverMovies.totalPages - 4 + i;
+                              } else {
+                                pageNum = discoverMovies.page - 2 + i;
+                              }
+                              return (
+                                <button
+                                  key={pageNum}
+                                  onClick={() => {
+                                    loadDiscoverMovies(pageNum, moviesFilters);
+                                    window.scrollTo({ top: 0, behavior: "smooth" });
+                                  }}
+                                  disabled={discoverMovies.loading}
+                                  className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${
+                                    discoverMovies.page === pageNum
+                                      ? "bg-cyan-600 text-white border-cyan-600"
+                                      : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700"
+                                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                >
+                                  {pageNum}
+                                </button>
+                              );
+                            })}
+                            <button
+                              onClick={() => {
+                                const nextPage = discoverMovies.page + 1;
+                                if (nextPage <= discoverMovies.totalPages) {
+                                  loadDiscoverMovies(nextPage, moviesFilters);
+                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                }
+                              }}
+                              disabled={discoverMovies.page === discoverMovies.totalPages || discoverMovies.loading}
+                              className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                            >
+                              <ChevronRight size={18} />
+                            </button>
+                          </div>
+                        )}
                         </>
                       ) : (
                         <div className="text-center py-12">
                           <p className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-                            Nenhum filme encontrado
+                            Nenhum título encontrado para estes filtros.
                           </p>
-                          <p className="text-sm text-slate-600 dark:text-slate-400">
-                            {t("try_adjust_filters")}
-                          </p>
+                          <div className="flex flex-col sm:flex-row gap-3 justify-center items-center mt-4">
+                            <button
+                              onClick={() => setMoviesFilters({ sortBy: "popularity.desc", region: "BR", withPoster: true })}
+                              className="px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-medium hover:bg-cyan-700 transition-colors min-h-[44px]"
+                            >
+                              Limpar filtros
+                            </button>
+                            <button
+                              onClick={() => {
+                                setMoviesFilters({ sortBy: "popularity.desc", region: "BR", withPoster: true });
+                                loadDiscoverMovies(1, { sortBy: "popularity.desc", region: "BR", withPoster: true });
+                              }}
+                              className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors min-h-[44px]"
+                            >
+                              Voltar para populares
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
                   </div>
                 )}
                 {activeTab === "home" && activeCategory === "tv" && (
-                  <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
+                  <div className="flex flex-col min-[1280px]:flex-row gap-4 sm:gap-6">
                     {/* Filtros Laterais */}
                     <DiscoverFiltersPanel
                       media="tv"
                       filters={tvFilters}
-                      onFiltersChange={setTvFilters}
-                      onReset={() => setTvFilters({ sortBy: "popularity.desc", region: "BR" })}
+                      onFiltersChange={(newFilters) => {
+                        setTvFilters(newFilters);
+                        setDiscoverTv((prev) => ({ ...prev, page: 1 }));
+                        loadDiscoverTv(1, newFilters);
+                      }}
+                      onReset={() => {
+                        const defaultFilters = { sortBy: "popularity.desc", region: "BR", withPoster: true };
+                        setTvFilters(defaultFilters);
+                        setDiscoverTv((prev) => ({ ...prev, page: 1 }));
+                        loadDiscoverTv(1, defaultFilters);
+                      }}
+                      onApply={() => {
+                        setDiscoverTv((prev) => ({ ...prev, page: 1 }));
+                        loadDiscoverTv(1, tvFilters);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                      facets={tvFacets}
                     />
                     
                     {/* Grid de Resultados */}
                     <div className="flex-1 min-w-0">
                       <div className="mb-4 sm:mb-6">
-                        <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">{t("tv_series")}</h2>
-                        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                          {discoverTv.loading ? t("loading") : discoverTv.items.length > 0 ? t("series_found", { count: discoverTv.items.length }) : t("no_series_found")}
-                        </p>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                          <div>
+                            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">{t("tv_series")}</h2>
+                            {discoverTv.total > 0 && (
+                              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                                {discoverTv.total} resultados • Mostrando {((discoverTv.page - 1) * tvPerPage) + 1}–{Math.min(discoverTv.page * tvPerPage, discoverTv.total)} de {discoverTv.total}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <label className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">Itens por página:</label>
+                            <select
+                              value={tvPerPage}
+                              onChange={(e) => {
+                                const newPerPage = parseInt(e.target.value, 10);
+                                setTvPerPage(newPerPage);
+                                localStorage.setItem("vetra:tvPerPage", String(newPerPage));
+                                setDiscoverTv((prev) => ({ ...prev, page: 1 }));
+                                loadDiscoverTv(1, tvFilters);
+                              }}
+                              className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 min-h-[44px]"
+                            >
+                              <option value="12">12</option>
+                              <option value="24">24</option>
+                              <option value="36">36</option>
+                              <option value="48">48</option>
+                            </select>
+                          </div>
+                        </div>
+                        
+                        {discoverTv.totalPages > 1 && (
+                          <div className="flex items-center justify-center gap-2 mb-4 flex-wrap">
+                            <button
+                              onClick={() => {
+                                const prevPage = discoverTv.page - 1;
+                                if (prevPage >= 1) {
+                                  loadDiscoverTv(prevPage, tvFilters);
+                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                }
+                              }}
+                              disabled={discoverTv.page === 1 || discoverTv.loading}
+                              className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                            >
+                              <ChevronLeft size={18} />
+                            </button>
+                            {Array.from({ length: Math.min(5, discoverTv.totalPages) }, (_, i) => {
+                              let pageNum;
+                              if (discoverTv.totalPages <= 5) {
+                                pageNum = i + 1;
+                              } else if (discoverTv.page <= 3) {
+                                pageNum = i + 1;
+                              } else if (discoverTv.page >= discoverTv.totalPages - 2) {
+                                pageNum = discoverTv.totalPages - 4 + i;
+                              } else {
+                                pageNum = discoverTv.page - 2 + i;
+                              }
+                              return (
+                                <button
+                                  key={pageNum}
+                                  onClick={() => {
+                                    loadDiscoverTv(pageNum, tvFilters);
+                                    window.scrollTo({ top: 0, behavior: "smooth" });
+                                  }}
+                                  disabled={discoverTv.loading}
+                                  className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${
+                                    discoverTv.page === pageNum
+                                      ? "bg-cyan-600 text-white border-cyan-600"
+                                      : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700"
+                                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                >
+                                  {pageNum}
+                                </button>
+                              );
+                            })}
+                            <button
+                              onClick={() => {
+                                const nextPage = discoverTv.page + 1;
+                                if (nextPage <= discoverTv.totalPages) {
+                                  loadDiscoverTv(nextPage, tvFilters);
+                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                }
+                              }}
+                              disabled={discoverTv.page === discoverTv.totalPages || discoverTv.loading}
+                              className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                            >
+                              <ChevronRight size={18} />
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {discoverTv.loading && discoverTv.items.length === 0 ? (
-                        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 min-[1280px]:grid-cols-5 min-[1536px]:grid-cols-6 gap-3 sm:gap-4">
                           {[...Array(12)].map((_, i) => (
                             <div key={i} className="aspect-[2/3] bg-slate-200 dark:bg-slate-800 animate-pulse rounded-lg" />
                           ))}
                         </div>
                       ) : discoverTv.items.length > 0 ? (
                         <>
-                          <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 min-[1280px]:grid-cols-5 min-[1536px]:grid-cols-6 gap-2 sm:gap-2 md:gap-3 lg:gap-4">
                             {discoverTv.items.map((series) => (
                               <MovieCard key={mediaKey(series)} movie={series} />
                             ))}
                           </div>
-                          {discoverTv.totalPages > 1 && discoverTv.page < discoverTv.totalPages && (
-                            <div className="mt-4 sm:mt-6 text-center">
-                              <button
-                                onClick={() => {
-                                  const nextPage = discoverTv.page + 1;
-                                  api.discover("tv", tvFilters, nextPage)
-                                    .then((data) => {
-                                      const results = (data?.results || []) as ApiMovie[];
-                                      const filtered = results.filter((x: any) => {
-                                        const hasImage = (x.poster_path && x.poster_path.trim() !== "") || 
-                                                        (x.backdrop_path && x.backdrop_path.trim() !== "");
-                                        const hasTitle = (x.title && x.title.trim() !== "") || 
-                                                        (x.name && x.name.trim() !== "");
-                                        const hasInfo = (x.overview && x.overview.trim() !== "") || 
-                                                       x.release_date || 
-                                                       x.first_air_date ||
-                                                       x.vote_average !== null;
-                                        return hasImage && hasTitle && hasInfo;
-                                      });
-                                      const mapped = mapRows(filtered);
-                                      setDiscoverTv({
-                                        items: [...discoverTv.items, ...mapped],
-                                        loading: false,
-                                        page: nextPage,
-                                        totalPages: (data as any)?.total_pages ?? 1,
-                                      });
-                                    })
-                                    .catch((e: any) => {
-                                      console.error("Erro ao carregar mais séries:", e);
-                                      pushToast({ message: t("error_load_more_series"), tone: "err" });
-                                    });
-                                }}
-                                disabled={discoverTv.loading}
-                                className="w-full sm:w-auto px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-cyan-500 to-purple-500 text-white text-sm sm:text-base font-semibold rounded-lg hover:from-cyan-600 hover:to-purple-600 transition-all disabled:opacity-50 active:scale-95 sm:hover:scale-105"
-                              >
-                                {discoverTv.loading ? "Carregando..." : "Carregar Mais"}
-                              </button>
-                            </div>
-                          )}
+                        {discoverTv.totalPages > 1 && (
+                          <div className="flex items-center justify-center gap-2 mt-6 flex-wrap">
+                            <button
+                              onClick={() => {
+                                const prevPage = discoverTv.page - 1;
+                                if (prevPage >= 1) {
+                                  loadDiscoverTv(prevPage, tvFilters);
+                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                }
+                              }}
+                              disabled={discoverTv.page === 1 || discoverTv.loading}
+                              className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                            >
+                              <ChevronLeft size={18} />
+                            </button>
+                            {Array.from({ length: Math.min(5, discoverTv.totalPages) }, (_, i) => {
+                              let pageNum;
+                              if (discoverTv.totalPages <= 5) {
+                                pageNum = i + 1;
+                              } else if (discoverTv.page <= 3) {
+                                pageNum = i + 1;
+                              } else if (discoverTv.page >= discoverTv.totalPages - 2) {
+                                pageNum = discoverTv.totalPages - 4 + i;
+                              } else {
+                                pageNum = discoverTv.page - 2 + i;
+                              }
+                              return (
+                                <button
+                                  key={pageNum}
+                                  onClick={() => {
+                                    loadDiscoverTv(pageNum, tvFilters);
+                                    window.scrollTo({ top: 0, behavior: "smooth" });
+                                  }}
+                                  disabled={discoverTv.loading}
+                                  className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${
+                                    discoverTv.page === pageNum
+                                      ? "bg-cyan-600 text-white border-cyan-600"
+                                      : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700"
+                                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                >
+                                  {pageNum}
+                                </button>
+                              );
+                            })}
+                            <button
+                              onClick={() => {
+                                const nextPage = discoverTv.page + 1;
+                                if (nextPage <= discoverTv.totalPages) {
+                                  loadDiscoverTv(nextPage, tvFilters);
+                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                }
+                              }}
+                              disabled={discoverTv.page === discoverTv.totalPages || discoverTv.loading}
+                              className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                            >
+                              <ChevronRight size={18} />
+                            </button>
+                          </div>
+                        )}
                         </>
                       ) : (
                         <div className="text-center py-12">
                           <p className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-                            Nenhuma série encontrada
+                            Nenhum título encontrado para estes filtros.
                           </p>
-                          <p className="text-sm text-slate-600 dark:text-slate-400">
-                            {t("try_adjust_filters")}
-                          </p>
+                          <div className="flex flex-col sm:flex-row gap-3 justify-center items-center mt-4">
+                            <button
+                              onClick={() => setTvFilters({ sortBy: "popularity.desc", region: "BR", withPoster: true })}
+                              className="px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-medium hover:bg-cyan-700 transition-colors min-h-[44px]"
+                            >
+                              Limpar filtros
+                            </button>
+                            <button
+                              onClick={() => {
+                                setTvFilters({ sortBy: "popularity.desc", region: "BR", withPoster: true });
+                                loadDiscoverTv(1, { sortBy: "popularity.desc", region: "BR", withPoster: true });
+                              }}
+                              className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors min-h-[44px]"
+                            >
+                              Voltar para populares
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -7004,57 +9037,250 @@ const AppShell: React.FC = () => {
                 )}
                 </div>
               )}
-            {activeTab === "favorites" && <div className="container mx-auto px-3 sm:px-4 md:px-6">{FavoritesContent}</div>}
-            {activeTab === "lists" && <div className="container mx-auto px-3 sm:px-4 md:px-6">{ListsContent}</div>}
-            {activeTab === "people" && <div className="container mx-auto px-3 sm:px-4 md:px-6">{PeopleContent}</div>}
-            {activeTab === "history" && <div className="container mx-auto px-3 sm:px-4 md:px-6">{HistoryContent}</div>}
-            {activeTab === "watchlist" && <div className="container mx-auto px-3 sm:px-4 md:px-6">{WatchlistContent}</div>}
-            {(activeTab.startsWith("watchlist-")) && <div className="container mx-auto px-3 sm:px-4 md:px-6">{WatchlistContent}</div>}
-            {activeTab === "stats" && <div className="container mx-auto px-3 sm:px-4 md:px-6">{StatsContent}</div>}
-          </>
-        )}
-      </main>
+            {activeTab === "favorites" && (
+              viewingShared && !isLoggedIn ? (
+                <div className="flex flex-col lg:flex-row gap-0 lg:gap-6">
+                  {/* Conteúdo principal - Desktop à esquerda, Mobile abaixo */}
+                  <div className="flex-1 order-2 lg:order-1">
+                    <div className="container mx-auto px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-12 lg:pt-16 lg:pt-20">{FavoritesContent}</div>
+                  </div>
+                  {/* Sidebar com CTA - Desktop à direita (sticky), Mobile no topo - Compacta */}
+                  <div className="lg:sticky lg:top-[80px] lg:self-start order-1 lg:order-2 w-full lg:w-64 xl:w-72 flex-shrink-0">
+                    <div className="bg-gradient-to-b from-cyan-500/95 via-purple-600/95 to-lime-500/95 backdrop-blur-md border-b lg:border-b-0 lg:border-l border-white/20 shadow-lg lg:rounded-l-xl p-3 lg:p-4">
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <h3 className="text-white text-base font-bold mb-2">💡 Gostou desta lista?</h3>
+                          <p className="text-white text-xs font-medium mb-3 leading-snug">
+                            <strong>Crie sua conta no VETRA</strong> para favoritar, comentar e criar suas próprias listas!
+                          </p>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <button
+                            onClick={() => { setShowLogin(true); setLoginType("signup"); setLoginError(""); setEmailError(""); setPasswordError(""); }}
+                            className="w-full px-3 py-2 bg-white text-slate-900 font-semibold rounded-lg hover:bg-gray-100 transition-all text-xs min-h-[40px] flex items-center justify-center whitespace-nowrap shadow-md"
+                          >
+                            Criar conta
+                          </button>
+                          <button
+                            onClick={() => { setShowLogin(true); setLoginType("signin"); setLoginError(""); setEmailError(""); setPasswordError(""); }}
+                            className="w-full px-3 py-2 text-white hover:text-white/80 underline text-xs font-medium min-h-[40px] flex items-center justify-center whitespace-nowrap"
+                          >
+                            Entrar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="container mx-auto px-3 sm:px-4 md:px-6 pt-12 sm:pt-14 md:pt-16 lg:pt-20">{FavoritesContent}</div>
+              )
+            )}
+            {activeTab === "lists" && (() => {
+              const shouldShowSidebar = viewingShared && sharedList && !isLoggedIn;
+              if (shouldShowSidebar) {
+                console.log('[ListsContent] Renderizando com sidebar:', { viewingShared, hasSharedList: !!sharedList, isLoggedIn });
+              }
+              return shouldShowSidebar ? (
+                <div className="flex flex-col lg:flex-row gap-0 lg:gap-6">
+                  {/* Conteúdo principal - Desktop à esquerda, Mobile abaixo */}
+                  <div className="flex-1 order-2 lg:order-1">
+                    <div className="container mx-auto px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-12 lg:pt-16 lg:pt-20">{ListsContent}</div>
+                  </div>
+                  {/* Sidebar com CTA - Desktop à direita (sticky), Mobile no topo - Compacta */}
+                  <div className="lg:sticky lg:top-[80px] lg:self-start order-1 lg:order-2 w-full lg:w-64 xl:w-72 flex-shrink-0">
+                    <div className="bg-gradient-to-b from-cyan-500/95 via-purple-600/95 to-lime-500/95 backdrop-blur-md border-b lg:border-b-0 lg:border-l border-white/20 shadow-lg lg:rounded-l-xl p-3 lg:p-4">
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <h3 className="text-white text-base font-bold mb-2">💡 Gostou desta lista?</h3>
+                          <p className="text-white text-xs font-medium mb-3 leading-snug">
+                            <strong>Crie sua conta no VETRA</strong> para favoritar, comentar e criar suas próprias listas!
+                          </p>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <button
+                            onClick={() => { setShowLogin(true); setLoginType("signup"); setLoginError(""); setEmailError(""); setPasswordError(""); }}
+                            className="w-full px-3 py-2 bg-white text-slate-900 font-semibold rounded-lg hover:bg-gray-100 transition-all text-xs min-h-[40px] flex items-center justify-center whitespace-nowrap shadow-md"
+                          >
+                            Criar conta
+                          </button>
+                          <button
+                            onClick={() => { setShowLogin(true); setLoginType("signin"); setLoginError(""); setEmailError(""); setPasswordError(""); }}
+                            className="w-full px-3 py-2 text-white hover:text-white/80 underline text-xs font-medium min-h-[40px] flex items-center justify-center whitespace-nowrap"
+                          >
+                            Entrar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="container mx-auto px-3 sm:px-4 md:px-6 pt-12 sm:pt-14 md:pt-16 lg:pt-20">{ListsContent}</div>
+              );
+            })()}
+            {activeTab === "people" && <div className="container mx-auto px-3 sm:px-4 md:px-6 pt-12 sm:pt-14 md:pt-16 lg:pt-20">{PeopleContent}</div>}
+            {activeTab === "history" && <div className="container mx-auto px-3 sm:px-4 md:px-6 pt-12 sm:pt-14 md:pt-16 lg:pt-20">{HistoryContent}</div>}
+            {activeTab === "watchlist" && (
+              viewingShared && !isLoggedIn ? (
+                <div className="flex flex-col lg:flex-row gap-0 lg:gap-6">
+                  {/* Conteúdo principal - Desktop à esquerda, Mobile abaixo */}
+                  <div className="flex-1 order-2 lg:order-1">
+                    <div className="container mx-auto px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-12 lg:pt-16 lg:pt-20">{WatchlistContent}</div>
+                  </div>
+                  {/* Sidebar com CTA - Desktop à direita (sticky), Mobile no topo - Compacta */}
+                  <div className="lg:sticky lg:top-[80px] lg:self-start order-1 lg:order-2 w-full lg:w-64 xl:w-72 flex-shrink-0">
+                    <div className="bg-gradient-to-b from-cyan-500/95 via-purple-600/95 to-lime-500/95 backdrop-blur-md border-b lg:border-b-0 lg:border-l border-white/20 shadow-lg lg:rounded-l-xl p-3 lg:p-4">
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <h3 className="text-white text-base font-bold mb-2">💡 Gostou desta lista?</h3>
+                          <p className="text-white text-xs font-medium mb-3 leading-snug">
+                            <strong>Crie sua conta no VETRA</strong> para favoritar, comentar e criar suas próprias listas!
+                          </p>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <button
+                            onClick={() => { setShowLogin(true); setLoginType("signup"); setLoginError(""); setEmailError(""); setPasswordError(""); }}
+                            className="w-full px-3 py-2 bg-white text-slate-900 font-semibold rounded-lg hover:bg-gray-100 transition-all text-xs min-h-[40px] flex items-center justify-center whitespace-nowrap shadow-md"
+                          >
+                            Criar conta
+                          </button>
+                          <button
+                            onClick={() => { setShowLogin(true); setLoginType("signin"); setLoginError(""); setEmailError(""); setPasswordError(""); }}
+                            className="w-full px-3 py-2 text-white hover:text-white/80 underline text-xs font-medium min-h-[40px] flex items-center justify-center whitespace-nowrap"
+                          >
+                            Entrar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="container mx-auto px-3 sm:px-4 md:px-6 pt-12 sm:pt-14 md:pt-16 lg:pt-20">{WatchlistContent}</div>
+              )
+            )}
+            {(activeTab.startsWith("watchlist-")) && (
+              viewingShared && !isLoggedIn ? (
+                <div className="flex flex-col lg:flex-row gap-0 lg:gap-6">
+                  {/* Conteúdo principal - Desktop à esquerda, Mobile abaixo */}
+                  <div className="flex-1 order-2 lg:order-1">
+                    <div className="container mx-auto px-3 sm:px-4 md:px-6 pt-4 sm:pt-6 md:pt-12 lg:pt-16 lg:pt-20">{WatchlistContent}</div>
+                  </div>
+                  {/* Sidebar com CTA - Desktop à direita (sticky), Mobile no topo - Compacta */}
+                  <div className="lg:sticky lg:top-[80px] lg:self-start order-1 lg:order-2 w-full lg:w-64 xl:w-72 flex-shrink-0">
+                    <div className="bg-gradient-to-b from-cyan-500/95 via-purple-600/95 to-lime-500/95 backdrop-blur-md border-b lg:border-b-0 lg:border-l border-white/20 shadow-lg lg:rounded-l-xl p-3 lg:p-4">
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <h3 className="text-white text-base font-bold mb-2">💡 Gostou desta lista?</h3>
+                          <p className="text-white text-xs font-medium mb-3 leading-snug">
+                            <strong>Crie sua conta no VETRA</strong> para favoritar, comentar e criar suas próprias listas!
+                          </p>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <button
+                            onClick={() => { setShowLogin(true); setLoginType("signup"); setLoginError(""); setEmailError(""); setPasswordError(""); }}
+                            className="w-full px-3 py-2 bg-white text-slate-900 font-semibold rounded-lg hover:bg-gray-100 transition-all text-xs min-h-[40px] flex items-center justify-center whitespace-nowrap shadow-md"
+                          >
+                            Criar conta
+                          </button>
+                          <button
+                            onClick={() => { setShowLogin(true); setLoginType("signin"); setLoginError(""); setEmailError(""); setPasswordError(""); }}
+                            className="w-full px-3 py-2 text-white hover:text-white/80 underline text-xs font-medium min-h-[40px] flex items-center justify-center whitespace-nowrap"
+                          >
+                            Entrar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="container mx-auto px-3 sm:px-4 md:px-6 pt-12 sm:pt-14 md:pt-16 lg:pt-20">{WatchlistContent}</div>
+              )
+            )}
+            {activeTab === "stats" && <div className="container mx-auto px-3 sm:px-4 md:px-6 pt-12 sm:pt-14 md:pt-16 lg:pt-20">{StatsContent}</div>}
+        </main>
+      )}
 
       {/* Rodapés */}
-      {isLoggedIn && <SiteFooter />}
-      {isLoggedIn && <MobileFooter />}
+      {isLoggedIn && <SiteFooter 
+        goToHomeCategory={goToHomeCategory}
+        handleFooterLink={handleFooterLink}
+        setActiveTab={setActiveTab}
+        setShowProfileModal={setShowProfileModal}
+        t={t}
+      />}
+      {isLoggedIn && <MobileFooter 
+        useBottomNav={useBottomNav}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        setActiveListId={setActiveListId}
+        t={t}
+      />}
 
       {/* Modal de Edição de Perfil */}
       {isLoggedIn && <ProfileEditModal />}
 
-      {/* Banner discreto para login quando visualizando compartilhado sem login */}
-      {/* Mobile: posiciona acima da navegação, Desktop: canto inferior direito */}
-      {viewingShared && !isLoggedIn && (
-        <div className="fixed bottom-20 md:bottom-6 right-3 md:right-6 left-3 md:left-auto z-40 max-w-sm md:max-w-sm mx-auto md:mx-0 animate-fade-in-up">
-          <div className="bg-gradient-to-r from-cyan-500/90 via-purple-600/90 to-lime-500/90 backdrop-blur-xl rounded-2xl p-4 shadow-2xl border border-white/20">
-            <div className="flex items-start gap-3">
-              <div className="flex-1">
-                <h4 className="text-white font-bold text-sm mb-1">{t("login_to_create_lists")}</h4>
-                <p className="text-white/80 text-xs mb-3">{t("create_share_lists")}</p>
+      {/* Sheet para ações bloqueadas (sem login) */}
+      {showActionSheet && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 z-50"
+            onClick={() => setShowActionSheet(false)}
+          />
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl border-t border-slate-200 dark:border-slate-800 animate-fade-in-up max-h-[90vh] overflow-y-auto" style={{ paddingBottom: `max(env(safe-area-inset-bottom), 24px)` }}>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Entre para favoritar e guardar tudo</h3>
                 <button
-                  onClick={() => { setShowLogin(true); setLoginType("signin"); setLoginError(""); setEmailError(""); setPasswordError(""); }}
-                  className="min-h-[44px] px-4 py-2.5 bg-white text-slate-900 font-semibold rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-all text-sm shadow-lg touch-manipulation"
+                  onClick={() => setShowActionSheet(false)}
+                  className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  aria-label="Fechar"
                 >
-                  Fazer login
+                  <X size={20} />
                 </button>
               </div>
-              <button
-                onClick={() => {
-                  setViewingShared(false);
-                  setSharedList(null);
-                  setSharedCollection(null);
-                  // Limpar query string da URL
-                  const url = new URL(window.location.href);
-                  url.searchParams.delete('share');
-                  window.history.replaceState({}, '', url.toString());
-                }}
-                className="text-white/80 hover:text-white transition-colors flex-shrink-0"
-              >
-                <X size={18} />
-              </button>
+              <div className="space-y-3">
+                <button
+                  onClick={() => {
+                    setShowActionSheet(false);
+                    setShowLogin(true);
+                    setLoginType("signup");
+                    setLoginError("");
+                    setEmailError("");
+                    setPasswordError("");
+                  }}
+                  className="w-full px-4 py-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-semibold transition-colors min-h-[44px] flex items-center justify-center"
+                >
+                  Criar conta
+                </button>
+                <button
+                  onClick={() => {
+                    setShowActionSheet(false);
+                    setShowLogin(true);
+                    setLoginType("signin");
+                    setLoginError("");
+                    setEmailError("");
+                    setPasswordError("");
+                  }}
+                  className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors min-h-[44px] flex items-center justify-center"
+                >
+                  Entrar
+                </button>
+                <button
+                  onClick={() => {
+                    setShowActionSheet(false);
+                    setPendingAction(null);
+                  }}
+                  className="w-full px-4 py-3 rounded-lg text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition-colors min-h-[44px] flex items-center justify-center text-sm"
+                >
+                  Agora não
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Rotas para modais - renderiza sempre que a rota corresponder */}
@@ -7067,59 +9293,77 @@ const AppShell: React.FC = () => {
       </Routes>
 
       {/* Modal de Compartilhamento */}
-      {showShare && shareUrl && (
+      {showShare && shareSlug && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowShare(false)} />
-          <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-6 shadow-2xl">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowShare(false)} />
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-slate-700">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Link de Compartilhamento</h3>
-              <button onClick={() => setShowShare(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white transition">
-                <X size={20} />
-              </button>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Compartilhe este link para que outras pessoas possam ver seu conteúdo. O link é público e não requer login para visualização.
-            </p>
-            <div className="flex gap-2 mb-4">
-              <input 
-                readOnly 
-                value={shareUrl} 
-                className="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg px-4 py-2.5 text-sm text-gray-900 dark:text-white font-mono break-all" 
-                onClick={(e) => (e.target as HTMLInputElement).select()}
-              />
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white">Compartilhar</h3>
               <button 
-                onClick={async () => { 
-                  try { 
-                    await navigator.clipboard.writeText(shareUrl); 
-                    pushToast({ message: "Link copiado para a área de transferência!", tone: "ok" }); 
-                  } catch (e) {
-                    pushToast({ message: "Erro ao copiar link", tone: "err" });
-                  }
-                }}
-                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors shadow-sm"
+                onClick={() => setShowShare(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
               >
-                <Clipboard size={16} />Copiar
+                <X size={24} />
               </button>
             </div>
-            <div className="flex gap-2">
-              <a 
-                href={shareUrl} 
-                className="flex-1 px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-900 dark:text-white font-semibold text-center transition-colors text-sm" 
-                target="_blank" 
-                rel="noreferrer"
-              >
-                Abrir em nova aba
-              </a>
-              <button
-                onClick={() => setShowShare(false)}
-                className="px-4 py-2.5 rounded-lg bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-900 dark:text-white font-semibold transition-colors text-sm"
-              >
-                Fechar
-              </button>
+            
+            {!isLoggedIn && (
+              <div className="mb-4 p-4 bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 rounded-lg">
+                <p className="text-sm text-cyan-800 dark:text-cyan-200">
+                  <strong>Gostou desta lista?</strong> Entre no VETRA para salvar a sua.
+                </p>
+              </div>
+            )}
+            
+            <div className="space-y-4">
+              {/* Link compartilhável */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Link compartilhável
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={(() => {
+                      const fullUrl = `${window.location.origin}${window.location.pathname}?share=${shareSlug}`;
+                      // Se for localhost, substituir por um texto genérico para exibição
+                      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                        return fullUrl.replace(/https?:\/\/localhost:\d+/, 'vetra.app').replace(/https?:\/\/127\.0\.0\.1:\d+/, 'vetra.app');
+                      }
+                      return fullUrl;
+                    })()}
+                    readOnly
+                    className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-4 py-2 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                  <button
+                    onClick={async () => {
+                      try {
+                        // Sempre copiar a URL completa real (mesmo que seja localhost)
+                        const shareUrl = `${window.location.origin}${window.location.pathname}?share=${shareSlug}`;
+                        await navigator.clipboard.writeText(shareUrl);
+                        pushToast({ message: t("toasts.copied"), tone: "ok" });
+                        // Navega para o link compartilhado após copiar (abre direto em ?share=slug)
+                        navigate(`?share=${shareSlug}`, { replace: true });
+                      } catch {
+                        pushToast({ message: t("common.share_fail"), tone: "err" });
+                      }
+                    }}
+                    className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg font-medium transition-colors min-h-[44px] flex items-center gap-2 flex-shrink-0"
+                  >
+                    <Clipboard size={18} />
+                    <span className="hidden sm:inline">Copiar link</span>
+                    <span className="sm:hidden">Copiar</span>
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
+                  {t("common.send_link_hint")}
+                </p>
+              </div>
             </div>
           </div>
         </div>
       )}
+
 
       {showListPickerFor && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
@@ -7314,6 +9558,114 @@ const AppShell: React.FC = () => {
         </div>
       )}
 
+      {showDeleteAccountModal && (
+        <div 
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowDeleteAccountModal(false);
+              setDeleteAccountPassword("");
+              setDeleteAccountError("");
+              setDeleteAccountConfirmCheckbox(false);
+            }
+          }}
+        >
+          <div 
+            className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 sm:p-8 border border-slate-300 dark:border-slate-700 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Excluir conta</h2>
+              <button
+                onClick={() => {
+                  setShowDeleteAccountModal(false);
+                  setDeleteAccountPassword("");
+                  setDeleteAccountError("");
+                  setDeleteAccountConfirmCheckbox(false);
+                }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <p className="text-slate-700 dark:text-slate-300 mb-6">
+              Esta ação removerá seu perfil, listas e favoritos. Você poderá reativar a conta dentro de 30 dias. Após esse prazo, a exclusão é permanente. Para mais informações sobre retenção de dados, consulte nossa <Link to="/privacy" target="_blank" className="text-blue-600 dark:text-blue-400 hover:underline">Política de Privacidade</Link>.
+            </p>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                  Digite sua senha para confirmar
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                  <input
+                    type="password"
+                    value={deleteAccountPassword}
+                    onChange={(e) => {
+                      setDeleteAccountPassword(e.target.value);
+                      setDeleteAccountError("");
+                    }}
+                    placeholder="••••••••"
+                    className={`w-full bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white pl-10 pr-4 py-2.5 rounded-lg border text-sm focus:outline-none focus:ring-2 ${
+                      deleteAccountError
+                        ? "border-red-500 focus:ring-red-500"
+                        : "border-slate-300 dark:border-slate-600 focus:ring-cyan-500 focus:border-cyan-500"
+                    }`}
+                    autoFocus
+                  />
+                </div>
+                {deleteAccountError && (
+                  <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">{deleteAccountError}</p>
+                )}
+              </div>
+
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="deleteConfirmCheckbox"
+                  checked={deleteAccountConfirmCheckbox}
+                  onChange={(e) => setDeleteAccountConfirmCheckbox(e.target.checked)}
+                  className="mt-1 w-4 h-4 rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-red-500 focus:ring-2 focus:ring-red-500 focus:ring-offset-0 cursor-pointer"
+                />
+                <label htmlFor="deleteConfirmCheckbox" className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer flex-1">
+                  Entendo que esta ação não pode ser desfeita após 30 dias.
+                </label>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteAccountModal(false);
+                  setDeleteAccountPassword("");
+                  setDeleteAccountError("");
+                  setDeleteAccountConfirmCheckbox(false);
+                }}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteAccountLoading || !deleteAccountPassword.trim() || !deleteAccountConfirmCheckbox}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {deleteAccountLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Excluindo...
+                  </span>
+                ) : (
+                  "Excluir minha conta"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ToastHost toasts={toasts} onClose={removeToast} />
       {showLogin && <LoginModal
         formData={formData}
@@ -7323,6 +9675,10 @@ const AppShell: React.FC = () => {
         passwordError={passwordError}
         loginError={loginError}
         passwordErrors={passwordErrors}
+        passwordStrength={passwordStrength}
+        showPasswordTips={showPasswordTips}
+        confirmPasswordError={confirmPasswordError}
+        confirmPasswordTouched={confirmPasswordTouched}
         authLoading={authLoading}
         showForgotPassword={showForgotPassword}
         forgotPasswordEmail={forgotPasswordEmail}
@@ -7334,6 +9690,7 @@ const AppShell: React.FC = () => {
         handleInputBlur={handleInputBlur}
         handleSubmit={handleSubmit}
         setShowLogin={setShowLogin}
+        setLoginType={setLoginType}
         setLoginError={setLoginError}
         setEmailError={setEmailError}
         setPasswordError={setPasswordError}
@@ -7347,6 +9704,10 @@ const AppShell: React.FC = () => {
         setForgotPasswordNewPassword={setForgotPasswordNewPassword}
         setForgotPasswordConfirmPassword={setForgotPasswordConfirmPassword}
         setForgotPasswordShowPassword={setForgotPasswordShowPassword}
+        generatePassword={generatePassword}
+        setShowPasswordTips={setShowPasswordTips}
+        setConfirmPasswordError={setConfirmPasswordError}
+        setConfirmPasswordTouched={setConfirmPasswordTouched}
         forgotPasswordStep={forgotPasswordStep}
         forgotPasswordNewPassword={forgotPasswordNewPassword}
         forgotPasswordConfirmPassword={forgotPasswordConfirmPassword}
@@ -7355,11 +9716,83 @@ const AppShell: React.FC = () => {
         handleForgotPasswordCheckEmail={handleForgotPasswordCheckEmail}
         handleForgotPasswordReset={handleForgotPasswordReset}
       />}
+
+      {showCoverSelector && (
+        <CoverSelectorModal
+          isOpen={showCoverSelector}
+          onClose={() => {
+            setShowCoverSelector(false);
+            setCoverSelectorListId(null);
+          }}
+          onSelect={(cover, listName) => handleCoverSelect(cover, listName)}
+          listItems={coverSelectorListId && coverSelectorListId !== "new" 
+            ? lists.find(l => l.id === coverSelectorListId)?.items || []
+            : []}
+          currentCover={coverSelectorListId && coverSelectorListId !== "new"
+            ? lists.find(l => l.id === coverSelectorListId)?.cover
+            : undefined}
+          isNewList={coverSelectorListId === "new"}
+          listName={coverSelectorListId === "new" ? `Minha lista ${lists.length + 1}` : undefined}
+        />
+      )}
+    </div>
+  );
+};
+
+const ProfilePage: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, setUser, profileLoading, saveProfile, pushToast, t, favorites, lists, userStates, isLoggedIn, setIsLoggedIn, setShowDeleteAccountModal, darkEnabled, toggleDark, lang, setLang, changePassword, exportJSON, exportCSV, importJSON } = (window as any).__APP_SHELL_PROPS__ || {};
+  
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-slate-900 flex items-center justify-center">
+        <div className="text-center px-4">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Acesso restrito</h1>
+          <p className="text-slate-600 dark:text-gray-400 mb-6">Você precisa estar logado para acessar seu perfil.</p>
+        </div>
+      </div>
+    );
+  }
+  
+  return <PlaceholderPage title="Meu Perfil" route="/me" />;
+};
+
+const PlaceholderPage: React.FC<{ title: string; route: string }> = ({ title, route }) => {
+  const navigate = useNavigate();
+  return (
+    <div className="min-h-screen bg-white dark:bg-slate-900">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 max-w-4xl">
+        <button
+          onClick={() => navigate(-1)}
+          className="mb-6 flex items-center gap-2 text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+        >
+          <ChevronLeft size={20} />
+          <span>Voltar</span>
+        </button>
+        <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">{title}</h1>
+        <p className="text-slate-600 dark:text-gray-400">Em breve</p>
+      </div>
     </div>
   );
 };
 
 // export padrão
 export default function App() {
+  const location = useLocation();
+  
+  if (location.pathname === "/privacy") return <PrivacyPage />;
+  if (location.pathname === "/terms") return <TermsPage />;
+  if (location.pathname === "/about") return <AboutPage />;
+  if (location.pathname === "/help") return <HelpPage />;
+  if (location.pathname === "/lists") return <PlaceholderPage title="Listas" route="/lists" />;
+  if (location.pathname === "/collections") return <PlaceholderPage title="Coleções" route="/collections" />;
+  if (location.pathname === "/history") return <PlaceholderPage title="Histórico" route="/history" />;
+  if (location.pathname === "/stats") return <PlaceholderPage title="Estatísticas" route="/stats" />;
+  if (location.pathname === "/favorites") return <PlaceholderPage title="Favoritos" route="/favorites" />;
+  if (location.pathname === "/trending" || location.pathname === "/popular" || location.pathname === "/top-rated" || location.pathname === "/now-playing" || location.pathname === "/upcoming") {
+    return <PlaceholderPage title="Explorar" route={location.pathname} />;
+  }
+  
   return <AppShell />;
 }

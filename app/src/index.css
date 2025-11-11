@@ -2,9 +2,81 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Scrollbar hide utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Focus visible para tabs de navegação - apenas listra, sem caixa */
+.nav-tab-button {
+  outline: none;
+}
+
+.nav-tab-button:focus-visible {
+  outline: none;
+}
+
+/* Quando o botão está em focus-visible e tem indicador ativo, engrossa a listra */
+.nav-tab-button:focus-visible .nav-tab-indicator-active {
+  height: 4px !important;
+}
+
+/* Quando o botão está em focus-visible e não tem indicador ativo, mostra listra fina */
+.nav-tab-button:focus-visible .nav-tab-indicator-focus {
+  height: 2px !important;
+}
+
+
 /* Preferência do usuário: claro/escuro segue a classe 'dark' no <html> */
 :root {
   color-scheme: light dark;
+  
+  /* Breakpoints responsivos */
+  --breakpoint-xs: 480px;
+  --breakpoint-sm: 768px;
+  --breakpoint-md: 1024px;
+  --breakpoint-lg: 1440px;
+  
+  /* Container widths responsivos */
+  --container-xs: 100%;
+  --container-sm: 100%;
+  --container-md: 720px;
+  --container-lg: 1080px;
+  --container-xl: 1440px;
+  
+  /* Padding lateral dos containers */
+  --container-gutter-mobile: clamp(16px, 4vw, 24px);
+  --container-gutter-desktop: clamp(24px, 5vw, 48px);
+  
+  /* Tipografia fluida com clamp() */
+  --font-size-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem); /* 12-14px */
+  --font-size-sm: clamp(0.875rem, 0.8rem + 0.375vw, 1rem); /* 14-16px */
+  --font-size-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem); /* 16-18px */
+  --font-size-lg: clamp(1.125rem, 1rem + 0.625vw, 1.5rem); /* 18-24px */
+  --font-size-xl: clamp(1.25rem, 1.1rem + 0.75vw, 2rem); /* 20-32px */
+  --font-size-2xl: clamp(1.5rem, 1.3rem + 1vw, 2.5rem); /* 24-40px */
+  --font-size-3xl: clamp(1.875rem, 1.5rem + 1.875vw, 3rem); /* 30-48px */
+  
+  /* Line heights para leitura confortável */
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+  
+  /* Hit areas mínimas (Apple/Google guidelines) */
+  --hit-area-min: 44px;
+  
+  /* App bar heights */
+  --appbar-h-mobile: 56px;
+  --appbar-h-desktop: 64px;
+  --app-header-h: 64px;
+  
+  /* Bottom nav height */
+  --bottom-nav-h: 56px;
 }
 
 html, body, #root {
@@ -13,6 +85,8 @@ html, body, #root {
 
 body {
   margin: 0;
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
 }
 
 /* Animações personalizadas */
@@ -196,6 +270,29 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Hit area mínima para acessibilidade (44x44px) */
+.hit-area-min {
+  min-width: var(--hit-area-min);
+  min-height: var(--hit-area-min);
+}
+
+/* Classe utilitária para botões com hit area expandida */
+.button-hit-area {
+  position: relative;
+}
+
+.button-hit-area::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: var(--hit-area-min);
+  min-height: var(--hit-area-min);
+  width: 100%;
+  height: 100%;
+}
+
 /* Prevenir zoom no input focus (iOS Safari) */
 @supports (-webkit-touch-callout: none) {
   input[type="text"],
@@ -215,4 +312,48 @@ html {
     max-height: calc(100vh - 2rem);
     margin: 1rem;
   }
+}
+
+/* Animações para accordions */
+@keyframes accordion-open {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 1000px;
+  }
+}
+
+@keyframes accordion-close {
+  from {
+    opacity: 1;
+    max-height: 1000px;
+  }
+  to {
+    opacity: 0;
+    max-height: 0;
+  }
+}
+
+.accordion-content {
+  animation: accordion-open 0.2s ease-out;
+  overflow: hidden;
+}
+
+/* Animação para indicador do menu inferior (listra) */
+@keyframes navIndicatorSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scaleX(0);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scaleX(1);
+  }
+}
+
+.nav-indicator-active {
+  animation: navIndicatorSlideIn 0.2s ease-out;
 }
