@@ -11,7 +11,7 @@ Plataforma moderna para organização, descoberta e compartilhamento de filmes e
 
 VETRA é uma aplicação web full-stack que permite aos usuários descobrir, organizar e compartilhar seus filmes e séries favoritos. O projeto implementa requisitos funcionais e não funcionais, além de funcionalidades extras.
 
-### Destaques Técnicos
+### Implementação
 
 - **Arquitetura**: Frontend React + Backend Express com separação clara de responsabilidades
 - **Autenticação**: Firebase Auth com tokens JWT e validação no backend
@@ -19,34 +19,45 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 - **API Externa**: Integração com TMDB API para conteúdo de filmes e séries
 - **Segurança**: Rate limiting, validação de inputs, CORS restritivo, Helmet.js
 - **Performance**: Compressão HTTP, paginação, otimização de bundle
-- **UX**: Dark mode, internacionalização (i18n - PT-BR, EN-US, ES-ES), design responsivo com navegação mobile otimizada
+- **UX**: Dark mode, internacionalização (i18n), design responsivo
 
 ## Funcionalidades
 
 ### Requisitos Obrigatórios
 
-- ✅ **Busca de Filmes e Séries**: Interface completa de busca com filtros avançados (ano, gênero, nota mínima, votos, provedores, tipo)
-- ✅ **Detalhes Completos**: Exibição destacada da nota do TMDB, créditos, vídeos, recomendações
-- ✅ **Gerenciamento de Favoritos**: Adicionar e remover filmes/séries da lista com persistência no Firestore
-- ✅ **Backend com TMDB**: Gerenciamento centralizado de chamadas à API
-- ✅ **Compartilhamento via Link**: Sistema de geração de links públicos compartilháveis (sem necessidade de login para visualizar)
-- ✅ **Listas Personalizadas**: CRUD completo de listas customizadas com capas personalizáveis
-- ✅ **Perfis de Pessoas**: Páginas detalhadas de atores, diretores e outros profissionais do cinema
-- ✅ **Perfil de Usuário**: Atualização de nome e avatar
+- **Busca de Filmes**: Interface completa de busca com filtros avançados
+  [colocar imagem: Screenshot da tela de busca com filtros aplicados]
+- **Detalhes com Nota TMDB**: Exibição destacada da nota do TMDB
+  [colocar imagem: Screenshot da página de detalhes de um filme/série mostrando a nota TMDB em destaque]
+- **Gerenciamento de Favoritos**: Adicionar e remover filmes da lista
+  [colocar imagem: Screenshot da tela de favoritos com lista de filmes]
+- **Backend com TMDB**: Gerenciamento centralizado de chamadas à API
+- **Armazenamento de Favoritos**: Persistência no Firebase Firestore
+- **Compartilhamento via Link**: Sistema de geração de links compartilháveis
+  [colocar imagem: Screenshot mostrando o modal de compartilhamento e link gerado]
 
 ### Funcionalidades Extras
 
-- ✅ **Suporte a Séries de TV**: Busca, detalhes e organização de séries
-- ✅ **Sistema de Comentários**: Comentários com curtidas e reações em filmes/séries
-- ✅ **Dark Mode**: Alternância entre tema claro e escuro
-- ✅ **Internacionalização (i18n)**: Suporte a Português (BR), Inglês (US) e Espanhol (ES)
-- ✅ **Filtros Avançados de Busca**: Filtros por gênero, ano, nota, provedores de streaming, tipo de mídia
-- ✅ **Sistema de Recomendações**: Recomendações personalizadas baseadas em favoritos
-- ✅ **Watch Providers**: Exibição de onde assistir (streaming, aluguel, compra)
-- ✅ **Navegação Mobile**: Menu inferior responsivo com indicadores visuais
-- ✅ **Coleções/Watchlist**: Organização de conteúdo em coleções
-- ✅ **Paginação**: Sistema de paginação para listas e resultados de busca
-- ✅ **Autenticação Completa**: Signup, signin, recuperação de senha via Firebase
+- Suporte a Séries de TV
+  [colocar imagem: Screenshot mostrando séries de TV na interface]
+- Listas Personalizadas
+  [colocar imagem: Screenshot da tela de listas personalizadas do usuário]
+- Perfis de Pessoas (atores, diretores)
+  [colocar imagem: Screenshot da página de perfil de uma pessoa (ator/diretor)]
+- Sistema de Comentários
+  [colocar imagem: Screenshot mostrando comentários em um filme/série]
+- Histórico de Visualização
+- Dark Mode
+  [colocar imagem: Comparação lado a lado mostrando modo claro e modo escuro]
+- Internacionalização (i18n)
+  [colocar imagem: Screenshot mostrando menu de idiomas e interface em diferentes idiomas]
+- Filtros Avançados de Busca
+- Sistema de Recomendações
+  [colocar imagem: Screenshot mostrando seção de recomendações]
+- Watch Providers
+  [colocar imagem: Screenshot mostrando provedores de streaming disponíveis]
+- Autenticação completa com Firebase
+  [colocar imagem: Screenshot das telas de login e cadastro]
 
 ## Requisitos
 
@@ -574,6 +585,38 @@ lsof -ti:4001 | xargs kill
 
 - Remover node_modules e package-lock.json; executar npm install
 - Garantir Node 18+
+
+## Testes
+
+O projeto possui testes automatizados para backend e frontend.
+
+### Backend (Jest)
+
+```bash
+cd api
+npm test              # Executa todos os testes
+npm run test:watch    # Modo watch
+npm run test:coverage # Com cobertura
+```
+
+**Cobertura:**
+- Serviços: TMDB integration, data normalization
+- Rotas: Autenticação, validações
+- Utilitários: Helpers e funções auxiliares
+
+### Frontend (Vitest)
+
+```bash
+cd app
+npm test              # Executa todos os testes
+npm run test:ui       # Interface visual
+npm run test:coverage # Com cobertura
+```
+
+**Cobertura:**
+- Componentes: Renderização, interações
+- Hooks: Lógica de estado
+- Utilitários: Funções de formatação e helpers
 
 ## Versão
 
