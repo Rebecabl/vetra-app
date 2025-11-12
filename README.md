@@ -29,39 +29,28 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 ### Requisitos Obrigatórios
 
 - **Busca de Filmes**: Interface completa de busca com filtros avançados
-  [colocar imagem: Screenshot da tela de busca com filtros aplicados]
+  
 - **Detalhes com Nota TMDB**: Exibição destacada da nota do TMDB
-  [colocar imagem: Screenshot da página de detalhes de um filme/série mostrando a nota TMDB em destaque]
+
 - **Gerenciamento de Favoritos**: Adicionar e remover filmes da lista
-  [colocar imagem: Screenshot da tela de favoritos com lista de filmes]
+
 - **Backend com TMDB**: Gerenciamento centralizado de chamadas à API
 - **Armazenamento de Favoritos**: Persistência no Firebase Firestore
 - **Compartilhamento via Link**: Sistema de geração de links compartilháveis
-  [colocar imagem: Screenshot mostrando o modal de compartilhamento e link gerado]
+
 
 ### Funcionalidades Extras
 
-- Suporte a Séries de TV
-  [colocar imagem: Screenshot mostrando séries de TV na interface]
+
 - Listas Personalizadas
-  [colocar imagem: Screenshot da tela de listas personalizadas do usuário]
 - Perfis de Pessoas (atores, diretores)
-  [colocar imagem: Screenshot da página de perfil de uma pessoa (ator/diretor)]
 - Sistema de Comentários
-  [colocar imagem: Screenshot mostrando comentários em um filme/série]
 - Histórico de Visualização
 - Dark Mode
-  [colocar imagem: Comparação lado a lado mostrando modo claro e modo escuro]
-- Internacionalização (i18n)
-  [colocar imagem: Screenshot mostrando menu de idiomas e interface em diferentes idiomas]
 - Filtros Avançados de Busca
-- Sistema de Recomendações
-  [colocar imagem: Screenshot mostrando seção de recomendações]
 - Watch Providers
-  [colocar imagem: Screenshot mostrando provedores de streaming disponíveis]
 - Autenticação completa com Firebase
-  [colocar imagem: Screenshot das telas de login e cadastro]
-
+- 
 ## Requisitos
 
 ### 3.1 Funcionais
