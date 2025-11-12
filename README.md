@@ -34,20 +34,6 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 - ✅ **Perfis de Pessoas**: Páginas detalhadas de atores, diretores e outros profissionais do cinema
 - ✅ **Perfil de Usuário**: Atualização de nome e avatar
 
-### Funcionalidades Extras
-
-- ✅ **Suporte a Séries de TV**: Busca, detalhes e organização de séries
-- ✅ **Sistema de Comentários**: Comentários com curtidas e reações em filmes/séries
-- ✅ **Dark Mode**: Alternância entre tema claro e escuro
-- ✅ **Internacionalização (i18n)**: Suporte a Português (BR), Inglês (US) e Espanhol (ES)
-- ✅ **Filtros Avançados de Busca**: Filtros por gênero, ano, nota, provedores de streaming, tipo de mídia
-- ✅ **Sistema de Recomendações**: Recomendações personalizadas baseadas em favoritos
-- ✅ **Watch Providers**: Exibição de onde assistir (streaming, aluguel, compra)
-- ✅ **Navegação Mobile**: Menu inferior responsivo com indicadores visuais
-- ✅ **Coleções/Watchlist**: Organização de conteúdo em coleções
-- ✅ **Paginação**: Sistema de paginação para listas e resultados de busca
-- ✅ **Autenticação Completa**: Signup, signin, recuperação de senha via Firebase
-
 ## Requisitos
 
 ### 3.1 Funcionais
