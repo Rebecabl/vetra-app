@@ -11,7 +11,7 @@ Plataforma moderna para organização, descoberta e compartilhamento de filmes e
 
 VETRA é uma aplicação web full-stack que permite aos usuários descobrir, organizar e compartilhar seus filmes e séries favoritos. O projeto implementa requisitos funcionais e não funcionais, além de funcionalidades extras.
 
-### Destaques Técnicos
+### Implementação
 
 - **Arquitetura**: Frontend React + Backend Express com separação clara de responsabilidades
 - **Autenticação**: Firebase Auth com tokens JWT e validação no backend
