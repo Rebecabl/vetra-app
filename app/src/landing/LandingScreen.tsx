@@ -564,13 +564,13 @@ const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp }) => {
             </div>
           </div>
           <div className="pt-6 border-t border-white/5">
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-              <p className="text-sm text-white/50 text-center md:text-left">
-                © {new Date().getFullYear()} VETRA. Todos os direitos reservados.
-              </p>
-              
-              {/* Dados por TMDB e Créditos - lado direito */}
-              <div className="flex flex-col items-center md:items-end gap-2">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                <p className="text-sm text-white/50 text-center md:text-left">
+                  © {new Date().getFullYear()} VETRA. Todos os direitos reservados.
+                </p>
+                
+                {/* Dados por TMDB - lado direito */}
                 <p className="text-xs text-white/40 text-center md:text-right">
                   Dados fornecidos por{" "}
                   <a 
@@ -582,10 +582,12 @@ const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp }) => {
                     TMDB
                   </a>
                 </p>
-                <p className="text-xs text-white/40 text-center md:text-right">
-                  Desenvolvido por <span className="font-medium text-white/60">Rebeca Barbosa Lourenço</span>
-                </p>
               </div>
+              
+              {/* Créditos - sempre visível, centralizado no mobile */}
+              <p className="text-xs text-white/40 text-center w-full">
+                Desenvolvido por <span className="font-medium text-white/60">Rebeca Barbosa Lourenço</span>
+              </p>
             </div>
           </div>
         </div>

@@ -69,14 +69,14 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({
           
           {/* Linha divisória */}
           <div className="pt-6 border-t border-slate-300 dark:border-slate-800/50">
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-              {/* Copyright */}
-              <p className="text-sm text-slate-600 dark:text-gray-500 text-center md:text-left">
-                © {new Date().getFullYear()} VETRA. Todos os direitos reservados.
-              </p>
-              
-              {/* Dados por TMDB e Créditos - lado direito */}
-              <div className="flex flex-col items-center md:items-end gap-2">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                {/* Copyright */}
+                <p className="text-sm text-slate-600 dark:text-gray-500 text-center md:text-left">
+                  © {new Date().getFullYear()} VETRA. Todos os direitos reservados.
+                </p>
+                
+                {/* Dados por TMDB - lado direito */}
                 <p className="text-xs text-slate-600 dark:text-gray-500 text-center md:text-right">
                   Dados fornecidos por{" "}
                   <a 
@@ -88,10 +88,12 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({
                     TMDB
                   </a>
                 </p>
-                <p className="text-xs text-slate-500 dark:text-gray-600 text-center md:text-right">
-                  Desenvolvido por <span className="font-medium text-slate-600 dark:text-gray-400">Rebeca Barbosa Lourenço</span>
-                </p>
               </div>
+              
+              {/* Créditos - sempre visível, centralizado no mobile */}
+              <p className="text-xs text-slate-500 dark:text-gray-600 text-center w-full">
+                Desenvolvido por <span className="font-medium text-slate-600 dark:text-gray-400">Rebeca Barbosa Lourenço</span>
+              </p>
             </div>
           </div>
         </div>
