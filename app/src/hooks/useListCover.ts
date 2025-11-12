@@ -160,24 +160,32 @@ export function useListCover(
 
       // Para "item", precisa fazer chamada à API se houver backend
       if (type === "item" && itemId && itemType && itemMediaKey) {
+        console.log("[useListCover] Definindo capa:", JSON.stringify({ listId, itemId, itemType, itemMediaKey }, null, 2));
         setIsUpdating(true);
         
-        // Atualização otimista
+        // Atualização otimista - usar itemMediaKey (formato "movie:123") em vez de itemId (apenas "123")
         const previousList = lists.find((l) => l.id === listId);
-        setLists((prev) =>
-          prev.map((l) =>
+        console.log("[useListCover] Lista anterior:", JSON.stringify(previousList?.cover, null, 2));
+        console.log("[useListCover] Itens na lista:", previousList?.items.map(m => `${m.media || "movie"}:${m.id}`));
+        
+        setLists((prev) => {
+          const updated = prev.map((l) =>
             l.id === listId
               ? {
                   ...l,
                   cover: {
                     type: "item",
-                    itemId,
+                    itemId: itemMediaKey, // Usar itemMediaKey completo (formato "movie:123")
                   },
                   updatedAt: new Date().toISOString(),
                 }
               : l
-          )
-        );
+          );
+          const updatedList = updated.find(l => l.id === listId);
+          console.log("[useListCover] Lista atualizada:", JSON.stringify(updatedList?.cover, null, 2));
+          console.log("[useListCover] Itens na lista atualizada:", updatedList?.items.map(m => `${m.media || "movie"}:${m.id}`));
+          return updated;
+        });
 
         try {
           const result = await setListCoverApi({
@@ -199,9 +207,35 @@ export function useListCover(
 
           // Se a API retornou a lista atualizada, usar ela
           if (result.list) {
+            console.log("[useListCover] API retornou lista atualizada:", JSON.stringify(result.list.cover, null, 2));
             setLists((prev) =>
               prev.map((l) => (l.id === listId ? result.list! : l))
             );
+          } else {
+            // Se a API não retornou a lista, garantir que o estado local está correto
+            console.log("[useListCover] API não retornou lista, verificando estado local...");
+            setLists((prev) => {
+              const currentList = prev.find(l => l.id === listId);
+              if (currentList && currentList.cover?.itemId !== itemMediaKey) {
+                console.log("[useListCover] Corrigindo itemId no estado local:", {
+                  atual: currentList.cover?.itemId,
+                  esperado: itemMediaKey
+                });
+                return prev.map((l) =>
+                  l.id === listId
+                    ? {
+                        ...l,
+                        cover: {
+                          type: "item",
+                          itemId: itemMediaKey,
+                        },
+                        updatedAt: new Date().toISOString(),
+                      }
+                    : l
+                );
+              }
+              return prev;
+            });
           }
 
           return result;

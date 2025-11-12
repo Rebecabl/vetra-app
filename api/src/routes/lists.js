@@ -259,6 +259,104 @@ router.get("/lists/:userId", async (req, res) => {
 });
 
 /**
+ * DELETE /api/lists/:userId/:listId/:itemId
+ * 
+ * Remove um item de uma lista específica do usuário.
+ * 
+ * @param {string} userId - ID do usuário
+ * @param {string} listId - ID da lista
+ * @param {string} itemId - ID do item (formato: "movie:123" ou "tv:456" ou apenas "123")
+ * 
+ * @returns {Object} { ok: true }
+ */
+router.delete("/lists/:userId/:listId/:itemId", async (req, res) => {
+  try {
+    const userId = String(req.params.userId || "").trim();
+    const listId = String(req.params.listId || "").trim();
+    const itemIdParam = String(req.params.itemId || "").trim();
+    
+    if (!userId || !listId || !itemIdParam) {
+      return res.status(400).json({ error: "parametros_invalidos" });
+    }
+
+    const userLists = await readUserLists(userId);
+    const lists = userLists.lists || [];
+    
+    // Encontrar a lista
+    const targetList = lists.find(l => l.id === listId);
+    
+    if (!targetList) {
+      return res.status(404).json({ 
+        error: "lista_nao_encontrada",
+        message: "Lista não encontrada" 
+      });
+    }
+
+    // Parse do itemId (pode ser "movie:123", "tv:456" ou apenas "123")
+    let itemId, itemMedia;
+    if (itemIdParam.includes(":")) {
+      const parts = itemIdParam.split(":");
+      itemMedia = parts[0];
+      itemId = parts[1];
+    } else {
+      // Se não tem ":", assumir que é apenas o ID numérico
+      // Tentar encontrar o item na lista para determinar o media
+      const existingItem = targetList.items.find(i => String(i.id) === itemIdParam);
+      if (existingItem) {
+        itemId = itemIdParam;
+        itemMedia = existingItem.media || "movie";
+      } else {
+        // Se não encontrou, assumir movie
+        itemId = itemIdParam;
+        itemMedia = "movie";
+      }
+    }
+
+    // Remover o item da lista
+    const initialLength = targetList.items.length;
+    targetList.items = targetList.items.filter(item => {
+      const itemMatchesId = String(item.id) === String(itemId);
+      const itemMatchesMedia = (item.media || "movie") === itemMedia;
+      return !(itemMatchesId && itemMatchesMedia);
+    });
+
+    // Se o item removido era a capa, atualizar a capa
+    if (targetList.cover?.type === "item") {
+      const itemKey = `${itemMedia}:${itemId}`;
+      if (targetList.cover.itemId === itemKey || targetList.cover.itemId === String(itemId)) {
+        if (targetList.items.length > 0) {
+          // Usar o primeiro item como capa
+          const firstItem = targetList.items[0];
+          targetList.cover = {
+            type: "item",
+            itemId: `${firstItem.media || "movie"}:${firstItem.id}`,
+          };
+        } else {
+          // Lista vazia, remover capa
+          targetList.cover = undefined;
+        }
+      }
+    }
+
+    targetList.updatedAt = new Date().toISOString();
+
+    // Atualizar no banco
+    await getListsCollection().doc(userId).set({
+      lists,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error("Erro ao remover item da lista:", error);
+    return res.status(500).json({ 
+      error: "erro_interno",
+      message: error.message 
+    });
+  }
+});
+
+/**
  * DELETE /api/lists/:userId/:listId
  * 
  * Remove uma lista do usuário.

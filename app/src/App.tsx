@@ -173,9 +173,22 @@ const AppShell: React.FC = () => {
   const setListCover = async (listId: string, type: "item" | "upload" | "auto", itemId?: string, url?: string, focalPoint?: { x: number; y: number }) => {
     if (type === "item" && itemId) {
       // Extrair tipo de mídia do itemId (formato: "movie:123" ou "tv:456")
-      const [itemType, id] = itemId.split(":");
-      if (itemType === "movie" || itemType === "tv") {
-        return await setListCoverWithApi(listId, type, id, itemType as "movie" | "tv", itemId, url, focalPoint);
+      if (itemId.includes(":")) {
+        const [itemType, id] = itemId.split(":");
+        if ((itemType === "movie" || itemType === "tv") && id) {
+          return await setListCoverWithApi(listId, type, id, itemType as "movie" | "tv", itemId, url, focalPoint);
+        }
+      } else {
+        // Se itemId não tem ":", tentar encontrar o item na lista para determinar o tipo
+        const list = lists.find(l => l.id === listId);
+        if (list) {
+          const item = list.items.find(m => String(m.id) === itemId);
+          if (item) {
+            const itemMedia = item.media || "movie";
+            const itemMediaKey = `${itemMedia}:${item.id}`;
+            return await setListCoverWithApi(listId, type, itemId, itemMedia as "movie" | "tv", itemMediaKey, url, focalPoint);
+          }
+        }
       }
     }
     return await setListCoverWithApi(listId, type, itemId, undefined, undefined, url, focalPoint);
@@ -2451,8 +2464,35 @@ const AppShell: React.FC = () => {
         );
         pushToast({ message: "Capa será definida automaticamente pelo primeiro item", tone: "ok" });
       } else if (cover.type === "item" && cover.itemId) {
-        await setListCover(listId, "item", cover.itemId);
-        pushToast({ message: "Capa definida", tone: "ok" });
+        console.log("[handleCoverSelect] Definindo capa:", { listId, itemId: cover.itemId });
+        const result = await setListCover(listId, "item", cover.itemId);
+        console.log("[handleCoverSelect] Resultado:", result);
+        
+        // Forçar atualização do estado para garantir que a lista seja recalculada
+        setLists((prev) => {
+          const updated = prev.map((l) => {
+            if (l.id === listId) {
+              console.log("[handleCoverSelect] Lista antes:", l.cover);
+              // Se o resultado foi bem-sucedido, garantir que a capa está atualizada
+              if (result?.success !== false) {
+                return {
+                  ...l,
+                  updatedAt: new Date().toISOString(),
+                };
+              }
+            }
+            return l;
+          });
+          const updatedList = updated.find(l => l.id === listId);
+          console.log("[handleCoverSelect] Lista depois:", updatedList?.cover);
+          return updated;
+        });
+        
+        if (result?.success !== false) {
+          pushToast({ message: "Capa definida", tone: "ok" });
+        } else {
+          pushToast({ message: result?.error || "Erro ao definir capa", tone: "err" });
+        }
       } else if (cover.type === "upload" && cover.url) {
         await setListCover(listId, "upload", undefined, cover.url);
         pushToast({ message: "Capa atualizada", tone: "ok" });
@@ -2464,7 +2504,7 @@ const AppShell: React.FC = () => {
     setShowCoverSelector(false);
     setCoverSelectorListId(null);
   };
-  const addToList = (listId: string, movie: MovieT) => {
+  const addToList = async (listId: string, movie: MovieT) => {
     setLists((prev) =>
       prev.map((l) =>
         l.id === listId
@@ -2484,6 +2524,24 @@ const AppShell: React.FC = () => {
           : l
       )
     );
+    
+    // Sincronizar com a API se o usuário estiver logado
+    if (isLoggedIn && user?.email) {
+      try {
+        await api.addListItem(user.email, listId, {
+          id: movie.id,
+          title: movie.title,
+          image: movie.image || movie.poster_path,
+          rating: movie.rating,
+          year: movie.year,
+          media: movie.media || "movie",
+        });
+      } catch (error) {
+        console.error("[addToList] Erro ao sincronizar com API:", error);
+        // Continua mesmo se falhar
+      }
+    }
+    
     // Se a lista não tinha capa e agora tem o primeiro item, atualizar via API
     const list = lists.find(l => l.id === listId);
     if (list && !list.cover && list.items.length === 0) {
@@ -2493,12 +2551,13 @@ const AppShell: React.FC = () => {
     }
     pushToast({ message: t("added_list_ok"), tone: "ok" });
   };
-  const removeFromList = (listId: string, movieId: number, media?: MediaT) => {
+  const removeFromList = async (listId: string, movieId: number, media?: MediaT) => {
+    const itemKey = mediaKey({ id: movieId, media: media || "movie" } as MovieT);
+    
     setLists((prev) =>
       prev.map((l) => {
         if (l.id !== listId) return l;
         
-        const itemKey = mediaKey({ id: movieId, media: media || "movie" } as MovieT);
         const wasCover = l.cover?.type === "item" && (l.cover.itemId === itemKey || l.cover.itemId === String(movieId));
         
         const newItems = l.items.filter((m) => !(m.id === movieId && (m.media || "movie") === (media || "movie")));
@@ -2531,6 +2590,17 @@ const AppShell: React.FC = () => {
         };
       })
     );
+    
+    // Sincronizar com a API se o usuário estiver logado
+    if (isLoggedIn && user?.email) {
+      try {
+        await api.removeListItem(user.email, listId, itemKey);
+      } catch (error) {
+        console.error("[removeFromList] Erro ao sincronizar com API:", error);
+        // Continua mesmo se falhar
+      }
+    }
+    
     pushToast({ message: t("removed_list_ok"), tone: "ok" });
   };
   const renameList = (listId: string, newName: string) => {
@@ -5001,6 +5071,25 @@ const AppShell: React.FC = () => {
 
     const coverImageUrl = getListCoverImageUrl(lst, mediaKey, toPosterPath);
     const fallbackPosters = getListFallbackPosters(lst, 4, toPosterPath);
+    
+    // Debug: log quando a capa é calculada
+    useEffect(() => {
+      if (lst.cover) {
+        console.log("[ListDetail] Capa calculada:", JSON.stringify({
+          listId: lst.id,
+          cover: lst.cover,
+          coverImageUrl,
+          itemsCount: lst.items.length,
+          itemKeys: lst.items.map(m => mediaKey(m)),
+          coverItem: lst.items.find(m => mediaKey(m) === lst.cover?.itemId) ? {
+            id: lst.items.find(m => mediaKey(m) === lst.cover?.itemId)!.id,
+            media: lst.items.find(m => mediaKey(m) === lst.cover?.itemId)!.media,
+            poster_path: lst.items.find(m => mediaKey(m) === lst.cover?.itemId)!.poster_path,
+            image: lst.items.find(m => mediaKey(m) === lst.cover?.itemId)!.image
+          } : null
+        }, null, 2));
+      }
+    }, [lst.id, lst.cover, coverImageUrl, lst.items.length]);
 
     const openShare = async () => {
       try {
@@ -5032,33 +5121,6 @@ const AppShell: React.FC = () => {
         {/* Cabeçalho compacto da lista */}
         <div className="mb-6 sm:mb-8 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
           <div className="flex items-center gap-4 sm:gap-6">
-            {/* Miniatura da capa */}
-            <div className="flex-shrink-0">
-              {coverImageUrl ? (
-                <img
-                  src={coverImageUrl}
-                  alt={`Capa da lista ${lst.name}`}
-                  className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl object-cover bg-slate-200 dark:bg-slate-700"
-                  style={{ aspectRatio: "1/1" }}
-                />
-              ) : fallbackPosters.length > 0 ? (
-                <div className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl overflow-hidden grid grid-cols-2 bg-slate-200 dark:bg-slate-700">
-                  {fallbackPosters.slice(0, 4).map((poster, idx) => (
-                    <img
-                      key={idx}
-                      src={poster.url}
-                      alt={poster.alt || ""}
-                      className="w-full h-full object-cover"
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
-                  <ListIcon size={24} className="text-slate-400 dark:text-slate-600 sm:w-8 sm:h-8 md:w-10 md:h-10" />
-                </div>
-              )}
-            </div>
-
             {/* Título e contagem */}
             <div className="flex-1 min-w-0">
               <input
@@ -5121,8 +5183,12 @@ const AppShell: React.FC = () => {
                           icon: <ImageIcon size={14} />,
                           onClick: async () => {
                             const itemKey = mediaKey(m);
-                            await setListCover(lst.id, "item", itemKey);
-                            pushToast({ message: "Capa definida", tone: "ok" });
+                            const result = await setListCover(lst.id, "item", itemKey);
+                            if (result?.success !== false) {
+                              pushToast({ message: "Capa definida", tone: "ok" });
+                            } else {
+                              pushToast({ message: result.error || "Erro ao definir capa", tone: "err" });
+                            }
                           }
                         },
                         { 
@@ -5208,8 +5274,14 @@ const AppShell: React.FC = () => {
         )}
 
         <div className="mt-6 flex items-center gap-2 flex-wrap">
-          <button onClick={() => setActiveListId(null)} className="text-sm text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white underline min-h-[44px]">
-            {t("back_all_lists")}
+          <button 
+            onClick={() => {
+              setActiveListId(null);
+            }} 
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-medium transition-all min-h-[44px] focus:outline-none focus:ring-2 focus:ring-cyan-500"
+          >
+            <ChevronLeft size={18} />
+            <span>{t("back_all_lists")}</span>
           </button>
         </div>
       </div>
@@ -7906,7 +7978,7 @@ const AppShell: React.FC = () => {
             </div>
             
             {filteredAndSortedLists.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 min-[1280px]:grid-cols-4 gap-4 sm:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 min-[1280px]:grid-cols-4 gap-6 sm:gap-8">
                 {filteredAndSortedLists.map((l) => {
               const shareList = async () => {
                 try {
@@ -7945,11 +8017,12 @@ const AppShell: React.FC = () => {
               };
               const coverImageUrl = getListCoverImageUrl(l, mediaKey, toPosterPath);
               const fallbackPosters = getListFallbackPosters(l, 4, toPosterPath);
+              
 
               return (
-                <div key={l.id} className="group relative bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 hover:scale-[1.02]">
-                  {/* Capa da lista - destaque visual */}
-                  <div className="relative aspect-[16/9] overflow-hidden bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-800 dark:to-slate-900">
+                <div key={l.id} className="group relative bg-white dark:bg-slate-900 rounded-3xl overflow-hidden border border-slate-200/50 dark:border-slate-800/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-3 hover:scale-[1.03] backdrop-blur-sm">
+                  {/* Capa da lista - destaque visual melhorado */}
+                  <div className="relative aspect-[16/9] overflow-hidden bg-slate-200 dark:bg-slate-800">
                     <ListCover
                       title={l.name}
                       itemsCount={l.items.length}
@@ -7964,30 +8037,33 @@ const AppShell: React.FC = () => {
                         setRenameInput(l.name);
                         setRenameModal({ show: true, listId: l.id, currentName: l.name });
                       }}
-                      className="cursor-pointer h-full"
+                      className="cursor-pointer h-full w-full"
                     />
+                    {/* Overlay gradiente sutil no hover */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20" />
                   </div>
                   
-                  {/* Informações da lista */}
-                  <div className="p-4 sm:p-5 bg-white dark:bg-slate-900">
-                    <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white mb-2 line-clamp-2 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
+                  {/* Informações da lista - design melhorado */}
+                  <div className="p-5 sm:p-6 bg-gradient-to-b from-white to-slate-50 dark:from-slate-900 dark:to-slate-950">
+                    <h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-3 line-clamp-2 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors duration-300">
                       {l.name}
                     </h3>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                        <span className="font-medium">{l.items.length} {l.items.length === 1 ? "item" : "itens"}</span>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">{l.items.length}</span>
+                        <span className="text-slate-500 dark:text-slate-500">{l.items.length === 1 ? "item" : "itens"}</span>
                         {l.updatedAt && (
                           <>
-                            <span>•</span>
-                            <span>{formatListUpdatedAt(l.updatedAt)}</span>
+                            <span className="text-slate-400 dark:text-slate-600">•</span>
+                            <span className="text-slate-500 dark:text-slate-500">{formatListUpdatedAt(l.updatedAt)}</span>
                           </>
                         )}
                       </div>
                       {l.isPublic !== undefined && (
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium shrink-0 ${
+                        <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all ${
                           l.isPublic 
-                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                            : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                            ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400"
+                            : "bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400"
                         }`}>
                           {l.isPublic ? "Pública" : "Privada"}
                         </span>
@@ -9832,3 +9908,4 @@ export default function App() {
   
   return <AppShell />;
 }
+

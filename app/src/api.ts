@@ -1417,6 +1417,75 @@ export async function deleteComment(commentId: string): Promise<{ ok: boolean; e
   }
 }
 
+/**
+ * Remove um item de uma lista do usuário
+ * 
+ * @param userId - ID do usuário
+ * @param listId - ID da lista
+ * @param itemId - ID do item (formato: "movie:123" ou "tv:456" ou apenas "123")
+ * @returns { ok: boolean, error?: string }
+ */
+export async function removeListItem(userId: string, listId: string, itemId: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    if (await ensureBackendHealth()) {
+      const encodedUserId = encodeURIComponent(userId);
+      const encodedListId = encodeURIComponent(listId);
+      const encodedItemId = encodeURIComponent(itemId);
+      
+      const res = await fetch(`${API_BASE}/api/lists/${encodedUserId}/${encodedListId}/${encodedItemId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return { ok: false, error: data.error || data.message || "Erro ao remover item da lista" };
+      }
+      
+      return { ok: true };
+    }
+    // Fallback: apenas retorna ok (sem sincronização com backend)
+    return { ok: true };
+  } catch (error: any) {
+    return { ok: false, error: error.message || "Erro ao remover item da lista" };
+  }
+}
+
+/**
+ * Adiciona um item a uma lista do usuário
+ * 
+ * @param userId - ID do usuário
+ * @param listId - ID da lista
+ * @param item - Item a ser adicionado
+ * @returns { ok: boolean, error?: string }
+ */
+export async function addListItem(userId: string, listId: string, item: { id: number; title?: string; image?: string; rating?: number; year?: string; media?: "movie" | "tv" }): Promise<{ ok: boolean; error?: string }> {
+  try {
+    if (await ensureBackendHealth()) {
+      const encodedUserId = encodeURIComponent(userId);
+      
+      const res = await fetch(`${API_BASE}/api/lists/${encodedUserId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listId, item }),
+        credentials: "include",
+      });
+      
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return { ok: false, error: data.error || data.message || "Erro ao adicionar item à lista" };
+      }
+      
+      return { ok: true };
+    }
+    // Fallback: apenas retorna ok (sem sincronização com backend)
+    return { ok: true };
+  } catch (error: any) {
+    return { ok: false, error: error.message || "Erro ao adicionar item à lista" };
+  }
+}
+
 /* =========================
    ALIASES p/ compat com o front
    ========================= */
@@ -1623,6 +1692,9 @@ const api = {
   likeComment,
   reactToComment,
   deleteComment,
+  // lists
+  addListItem,
+  removeListItem,
   // auth
   forgotPassword,
   checkEmailExists,
