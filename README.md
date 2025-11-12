@@ -1,13 +1,11 @@
 # 🎬 VETRA
 
-
 Plataforma moderna para organização, descoberta e compartilhamento de filmes e séries, desenvolvida como solução full-stack integrada com a API do TMDB.
 
 ![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6.2-3178C6?logo=typescript)
 ![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js)
 ![Firebase](https://img.shields.io/badge/Firebase-FFCA28?logo=firebase)
-
 
 ## Sobre o Projeto
 
@@ -20,59 +18,58 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 - **Banco de Dados**: Firestore (NoSQL) para persistência escalável
 - **API Externa**: Integração com TMDB API para conteúdo de filmes e séries
 - **Segurança**: Rate limiting, validação de inputs, CORS restritivo, Helmet.js
-- **Testes**: Cobertura de testes unitários e de integração (Jest + Vitest)
 - **Performance**: Compressão HTTP, paginação, otimização de bundle
-- **UX**: Dark mode, internacionalização (i18n), design responsivo
+- **UX**: Dark mode, internacionalização (i18n - PT-BR, EN-US, ES-ES)
 
 ## Funcionalidades
 
 ### Requisitos Obrigatórios
 
-- **Busca de Filmes**: Interface completa de busca com filtros avançados
-  
-- **Detalhes com Nota TMDB**: Exibição destacada da nota do TMDB
-
-- **Gerenciamento de Favoritos**: Adicionar e remover filmes da lista
-
-- **Backend com TMDB**: Gerenciamento centralizado de chamadas à API
-- **Armazenamento de Favoritos**: Persistência no Firebase Firestore
-- **Compartilhamento via Link**: Sistema de geração de links compartilháveis
-
+- ✅ **Busca de Filmes e Séries**: Interface completa de busca com filtros avançados (ano, gênero, nota mínima, votos, provedores, tipo)
+- ✅ **Detalhes Completos**: Exibição destacada da nota do TMDB, créditos, vídeos, recomendações
+- ✅ **Gerenciamento de Favoritos**: Adicionar e remover filmes/séries da lista com persistência no Firestore
+- ✅ **Backend com TMDB**: Gerenciamento centralizado de chamadas à API
+- ✅ **Compartilhamento via Link**: Sistema de geração de links públicos compartilháveis (sem necessidade de login para visualizar)
+- ✅ **Listas Personalizadas**: CRUD completo de listas customizadas
+- ✅ **Perfis de Pessoas**: Páginas detalhadas de atores, diretores e outros profissionais do cinema
+- ✅ **Perfil de Usuário**: Atualização de nome e avatar
 
 ### Funcionalidades Extras
 
+- ✅ **Suporte a Séries de TV**: Busca, detalhes e organização de séries
+- ✅ **Sistema de Comentários**: Comentários com curtidas e reações em filmes/séries
+- ✅ **Dark Mode**: Alternância entre tema claro e escuro
+- ✅ **Internacionalização (i18n)**: Suporte a Português (BR), Inglês (US) e Espanhol (ES)
+- ✅ **Filtros Avançados de Busca**: Filtros por gênero, ano, nota, provedores de streaming, tipo de mídia
+- ✅ **Sistema de Recomendações**: Recomendações personalizadas baseadas em favoritos
+- ✅ **Watch Providers**: Exibição de onde assistir (streaming, aluguel, compra)
+- ✅ **Navegação Mobile**: Menu inferior responsivo com indicadores visuais
+- ✅ **Coleções/Watchlist**: Organização de conteúdo em coleções
+- ✅ **Paginação**: Sistema de paginação para listas e resultados de busca
+- ✅ **Autenticação Completa**: Signup, signin, recuperação de senha via Firebase
 
-- Listas Personalizadas
-- Perfis de Pessoas (atores, diretores)
-- Sistema de Comentários
-- Histórico de Visualização
-- Dark Mode
-- Filtros Avançados de Busca
-- Watch Providers
-- Autenticação completa com Firebase
-- 
 ## Requisitos
 
 ### 3.1 Funcionais
 
-| ID | Requisito | Descrição |
-|----|-----------|-----------|
-| **RF001** | Busca de filmes/séries | Texto + filtros (ano, gênero, nota mínima, votos, provedores, tipo) |
-| **RF002** | Detalhes completos | Nota TMDB, créditos, vídeos, recomendações |
-| **RF003** | Autenticação de usuário | Signup/signin via Firebase |
-| **RF004** | Favoritos e Listas | CRUD e persistência em Firestore |
-| **RF005** | Compartilhamento por link público | Geração de slug e leitura sem login |
-| **RF006** | Pessoas | Listagem, busca e detalhes (atores, diretores etc.) |
-| **RF007** | Perfil | Atualização de nome e avatar |
+| ID | Requisito | Descrição | Status |
+|----|-----------|-----------|--------|
+| **RF001** | Busca de filmes/séries | Texto + filtros (ano, gênero, nota mínima, votos, provedores, tipo) | ✅ Implementado |
+| **RF002** | Detalhes completos | Nota TMDB, créditos, vídeos, recomendações | ✅ Implementado |
+| **RF003** | Autenticação de usuário | Signup/signin via Firebase | ✅ Implementado |
+| **RF004** | Favoritos e Listas | CRUD e persistência em Firestore | ✅ Implementado |
+| **RF005** | Compartilhamento por link público | Geração de slug e leitura sem login | ✅ Implementado |
+| **RF006** | Pessoas | Listagem, busca e detalhes (atores, diretores etc.) | ✅ Implementado |
+| **RF007** | Perfil | Atualização de nome e avatar | ✅ Implementado |
 
 ### 3.2 Não-Funcionais
 
-| ID | Requisito | Implementação |
-|----|-----------|---------------|
-| **RNF001** | Segurança | Helmet, CORS restritivo, validação de payloads, rate limiting |
-| **RNF002** | Performance | Compressão HTTP, paginação e possibilidade de cache (Redis em roadmap) |
-| **RNF003** | Observabilidade | Logs estruturados e mensagens de erro claras |
-| **RNF004** | UX/A11y | Responsivo, acessível e internacionalizável (i18n) |
+| ID | Requisito | Implementação | Status |
+|----|-----------|---------------|--------|
+| **RNF001** | Segurança | Helmet, CORS restritivo, validação de payloads, rate limiting | ✅ Implementado |
+| **RNF002** | Performance | Compressão HTTP, paginação | ✅ Implementado |
+| **RNF003** | Observabilidade | Logs estruturados e mensagens de erro claras | ✅ Implementado |
+| **RNF004** | UX/A11y | Responsivo (breakpoints xs/sm/md/lg/xl), acessível (hit areas 44x44px, focus-visible), internacionalizável (i18n) | ✅ Implementado |
 
 ## Arquitetura e Módulos
 
@@ -92,37 +89,41 @@ Frontend (React/TS) → API (Express) → TMDB API
 Vetra/
 ├── api/   # Node.js + Express
 │   ├── src/
-│   │   ├── routes/      # Rotas da API
-│   │   ├── controllers/ # Lógica de negócio
+│   │   ├── routes/      # Rotas da API (auth, browse, comments, details, favorites, lists, people, profile, search, share)
 │   │   ├── services/    # Serviços externos (TMDB)
 │   │   ├── repositories/# Acesso a dados (Firestore)
-│   │   ├── models/      # Modelos de dados
 │   │   ├── middlewares/ # Middlewares (auth, rate limit)
-│   │   └── utils/       # Utilitários
+│   │   └── utils/       # Utilitários (passwordValidator, rateLimiter)
 │   └── index.js         # Entry point
 └── app/   # React + TypeScript
     ├── src/
-    │   ├── components/  # Componentes React
-    │   ├── pages/       # Páginas/rotas
-    │   ├── hooks/       # Custom hooks
-    │   ├── lib/         # Bibliotecas auxiliares
-    │   ├── types/       # Tipos TypeScript
-    │   ├── i18n/        # Internacionalização
-    │   └── theme/       # Tema e estilos
+    │   ├── components/  # Componentes React (MobileFooter, PersonRouteModal, DiscoverFilters, etc.)
+    │   ├── pages/       # Páginas (AboutPage, HelpPage, PrivacyPage, TermsPage)
+    │   ├── hooks/       # Custom hooks (useListCover)
+    │   ├── types/       # Tipos TypeScript (movies.ts)
+    │   ├── i18n/        # Internacionalização (i18n.ts)
+    │   ├── ui/          # Componentes de UI (Toast, KebabMenu)
+    │   ├── landing/     # Landing page
+    │   ├── constants/   # Constantes (storage.ts)
+    │   ├── utils/       # Utilitários (date.ts)
+    │   └── App.tsx      # Componente principal
     └── vite.config.ts   # Configuração Vite
 ```
 
 ## Tecnologias (Principais Versões)
 
 ### Frontend
+
 - **React** 18.3.1
 - **TypeScript** 5.6.x
 - **Vite** 5.4.x
 - **Tailwind CSS** 3.4.x
 - **React Router** 6.30.x
-- **Lucide** (Ícones)
+- **Lucide React** (Ícones)
+- **Vitest** (Testes)
 
 ### Backend
+
 - **Node.js** 18+
 - **Express** 4.19.x
 - **Firebase Admin SDK** 12.x
@@ -205,8 +206,8 @@ Vetra/
 {
   [slug: string]: {              // Document ID = slug (nanoid 16)
     items: Array<MovieItem>;      // Array de itens
-    type: "favorites" | "list";   // Tipo de compartilhamento
-    listName: string | null;      // Nome da lista (se type="list")
+    type: "favorites" | "list" | "collection";   // Tipo de compartilhamento
+    listName: string | null;      // Nome da lista (se type="list" ou "collection")
     ownerEmail: string | null;    // Email do dono
     createdAt: Timestamp;         // Server timestamp
   }
@@ -327,391 +328,6 @@ Vetra/
 }
 ```
 
-### Exemplos de Requisições
-
-#### POST /api/auth/signup
-**Request:**
-```json
-{
-  "name": "João Silva",
-  "email": "joao@example.com",
-  "password": "SenhaSegura123!"
-}
-```
-
-**Response 200:**
-```json
-{
-  "ok": true,
-  "user": {
-    "uid": "abc123...",
-    "email": "joao@example.com",
-    "name": "João Silva"
-  },
-  "idToken": "eyJhbGciOiJSUzI1NiIs...",
-  "refreshToken": "AEu4IL...",
-  "expiresIn": "3600"
-}
-```
-
-**Response 400:**
-```json
-{
-  "ok": false,
-  "error": "senha_fraca",
-  "errors": [
-    "A senha deve ter pelo menos 8 caracteres",
-    "A senha deve conter pelo menos uma letra maiúscula"
-  ]
-}
-```
-
-**Response 409:**
-```json
-{
-  "ok": false,
-  "error": "email_ja_cadastrado"
-}
-```
-
-#### POST /api/favorites
-**Request:**
-```json
-{
-  "uid": "user123",
-  "items": [
-    {
-      "id": 550,
-      "media": "movie",
-      "title": "Fight Club",
-      "image": "https://image.tmdb.org/t/p/w300/...",
-      "rating": 8.4,
-      "year": "1999"
-    }
-  ]
-}
-```
-
-**Response 200:**
-```json
-{
-  "ok": true,
-  "id": "user123"
-}
-```
-
-**Response 400:**
-```json
-{
-  "error": "uid_obrigatorio"
-}
-```
-
-#### GET /api/share/:slug
-**Response 200:**
-```json
-{
-  "id": "abc123xyz",
-  "slug": "abc123xyz",
-  "items": [ ... ],
-  "type": "favorites",
-  "listName": null,
-  "createdAt": "2024-01-01T00:00:00.000Z"
-}
-```
-
-**Response 404:**
-```json
-{
-  "error": "compartilhamento_nao_encontrado"
-}
-```
-
-## Fluxos Principais
-
-### Fluxo de Autenticação
-
-![Fluxo de Autenticação](https://github.com/user-attachments/assets/b2b489a7-ca07-4bc9-82fd-6aedd11a0097)
-
-### Fluxo de Busca e Favoritos
-
-![Fluxo de Busca e Favoritos](https://github.com/user-attachments/assets/3e2ebbdb-dae2-4684-af1a-42676f1752fc)
-
-### Fluxo de Compartilhamento
-
-![Fluxo de Compartilhamento](https://github.com/user-attachments/assets/562b0936-6461-471b-8726-caaaa913c5cb)
-
-## Contrato de Erros
-
-### Códigos de Erro Padronizados
-
-| Código | HTTP | Descrição | Quando Ocorre |
-|--------|------|-----------|---------------|
-| `uid_obrigatorio` | 400 | UID do usuário é obrigatório | Faltando parâmetro `uid` |
-| `email_obrigatorio` | 400 | Email é obrigatório | Faltando parâmetro `email` |
-| `email_invalido` | 400 | Formato de email inválido | Email não passa validação |
-| `senha_fraca` | 400 | Senha não atende critérios | Senha < 8 chars ou sem maiúscula/número |
-| `items_deve_ser_array` | 400 | Items deve ser array | Tipo incorreto no body |
-| `lista_vazia` | 400 | Lista não pode estar vazia | Array vazio em compartilhamento |
-| `slug_invalido` | 400 | Slug inválido | Slug < 8 caracteres |
-| `nao_autenticado` | 401 | Não autenticado | Token ausente ou inválido |
-| `credenciais_invalidas` | 401 | Credenciais inválidas | Email/senha incorretos |
-| `token_invalido` | 401 | Token inválido | Token expirado ou malformado |
-| `usuario_nao_encontrado` | 404 | Usuário não encontrado | UID/email não existe |
-| `compartilhamento_nao_encontrado` | 404 | Compartilhamento não existe | Slug não encontrado |
-| `rate_limit_exceeded` | 429 | Limite de requisições excedido | Muitas requisições em janela de tempo |
-| `erro_interno` | 500 | Erro interno do servidor | Erro não tratado |
-| `permissao_service_account` | 500 | Permissão da Service Account | Firebase sem permissões |
-
-### Headers de Resposta
-
-#### Rate Limiting
-```
-X-RateLimit-Limit: 10
-X-RateLimit-Remaining: 5
-X-RateLimit-Reset: 1704067200
-```
-
-## Requisitos Não Funcionais (NFR)
-
-### Performance
-
-| Métrica | Meta | Medição |
-|---------|------|---------|
-| Tempo de resposta API | < 500ms (p95) | Endpoint `/api/search` |
-| Tempo de carregamento inicial | < 2s | First Contentful Paint |
-| Throughput | 100 req/s | Requisições simultâneas |
-| Tamanho do bundle | < 500KB (gzipped) | Build de produção |
-
-### Disponibilidade
-
-| Métrica | Meta | Observação |
-|---------|------|------------|
-| Uptime | 99.5% | Monitoramento de health check |
-| MTTR | < 30min | Tempo médio de recuperação |
-
-### Segurança
-
-| Requisito | Implementação |
-|-----------|----------------|
-| Autenticação | Firebase Auth com JWT |
-| Rate Limiting | 10 req/15min por IP (login) |
-| Validação de entrada | Validação de email, senha, tipos |
-| Proteção CORS | Configurado por origem |
-| Helmet.js | Headers de segurança HTTP |
-| Senhas | Mínimo 8 caracteres, maiúscula, número |
-
-### Escalabilidade
-
-| Aspecto | Implementação |
-|---------|---------------|
-| Banco de dados | Firestore (NoSQL escalável) |
-| Cache | Não implementado (pode usar Redis) |
-| CDN | Imagens via TMDB CDN |
-| Stateless API | Sem sessão no servidor |
-
-## Observabilidade
-
-### Logging
-
-**Níveis de Log:**
-- `console.log()` - Informações gerais
-- `console.warn()` - Avisos
-- `console.error()` - Erros
-
-**Formato:**
-```
-[timestamp] [context] mensagem
-```
-
-**Exemplos:**
-```
-[2024-01-01T00:00:00.000Z] POST /api/auth/signup
-[share] POST /api/share - Body: {...}
-[API ERROR] Error: ...
-```
-
-### Audit Log
-
-**Collection:** `audit_logs` (Firestore)
-
-**Estrutura:**
-```typescript
-{
-  type: "login" | "login_error" | "password_change" | "password_change_attempt";
-  uid?: string;
-  email?: string;
-  ip: string;
-  userAgent: string;
-  status: "success" | "failure" | "error";
-  details?: string;
-  timestamp: Timestamp;
-}
-```
-
-**Eventos Rastreados:**
-- Tentativas de login (sucesso/falha)
-- Mudanças de senha
-- Erros de autenticação
-- Ações sensíveis
-
-### Health Check
-
-**Endpoint:** `GET /api/health`
-
-**Response:**
-```json
-{
-  "ok": true,
-  "status": "ok",
-  "tmdb": true,
-  "env": "production",
-  "ts": "2024-01-01T00:00:00.000Z"
-}
-```
-
-### Métricas Disponíveis
-
-- **Rate Limiting**: Headers `X-RateLimit-*`
-- **Tempo de Resposta**: Logs com timestamp
-- **Erros**: Logs estruturados em `console.error`
-- **Auditoria**: Firestore collection `audit_logs`
-
-## Matriz de Ambientes
-
-| Ambiente | URL Base | Banco de Dados | Variáveis |
-|----------|----------|----------------|-----------|
-| **Desenvolvimento** | `http://localhost:4001` | Firestore (dev project) | `.env` local |
-| **Produção (Vercel)** | `https://vetra-api.vercel.app` | Firestore (prod project) | Vercel Environment Variables |
-| **Frontend (Dev)** | `http://localhost:5173` | - | `.env` local |
-| **Frontend (Netlify)** | `https://vetra-app.netlify.app` | - | Netlify Environment Variables |
-
-### Variáveis por Ambiente
-
-#### Desenvolvimento
-```env
-NODE_ENV=development
-API_PORT=4001
-FRONT_ORIGIN=http://localhost:5173
-```
-
-#### Produção
-```env
-NODE_ENV=production
-API_PORT=4001
-FRONT_ORIGIN=https://vetra-app.netlify.app
-SHARE_BASE_URL=https://vetra-app.netlify.app
-```
-
-## Instalação e Configuração
-
-### 4.1 Pré-requisitos
-
-- **Node.js** 18.17+; npm ou yarn
-- **Projeto Firebase** ativo
-- **Chave da TMDB API** (v3 ou Bearer v4)
-
-### 4.2 Backend (`api/.env`)
-
-| Variável | Descrição | Exemplo |
-|----------|-----------|---------|
-| `FIREBASE_PROJECT_ID` | ID do projeto Firebase | `vetra-prod` |
-| `FIREBASE_CLIENT_EMAIL` | Email da conta de serviço | `svc@vetra.iam.gserviceaccount.com` |
-| `FIREBASE_PRIVATE_KEY` | Chave privada (com quebras `\n`) | `"-----BEGIN...\\n...\\nEND-----"` |
-| `TMDB_V3_API_KEY` | Chave v3 do TMDB | `xxxxxxxx` |
-| `TMDB_LANG` | Idioma padrão TMDB | `pt-BR` |
-| `API_PORT` | Porta do servidor | `4001` |
-| `SHARE_BASE_URL` | Base dos links públicos | `http://localhost:5173` |
-| `SMTP_*` (opcional) | Envio de emails transacionais | `smtp.gmail.com / 587 / credenciais` |
-
-**Como obter credenciais Firebase (resumo):**
-1. Firebase Console → Configurações do Projeto → Contas de Serviço
-2. Gerar nova chave privada (JSON)
-3. Mapear: `project_id` → `FIREBASE_PROJECT_ID`; `client_email` → `FIREBASE_CLIENT_EMAIL`; `private_key` → `FIREBASE_PRIVATE_KEY` (com `\n`)
-
-### 4.3 Frontend (`app/.env`)
-
-| Variável | Descrição | Exemplo |
-|----------|-----------|---------|
-| `VITE_API_BASE` | URL do backend | `http://localhost:4001` |
-| `VITE_TMDB_V3` | (Opcional) fallback TMDB v3 | `...` |
-| `VITE_TMDB_BEARER` | (Opcional) fallback TMDB Bearer | `...` |
-| `VITE_TMDB_LANG` | Idioma padrão | `pt-BR` |
-
-**Nota:** O frontend usa o backend como fonte principal; TMDB no cliente é fallback.
-
-### 4.4 Passos de Setup
-
-[colocar imagem: Screenshot do terminal mostrando os comandos de instalação sendo executados]
-
-```bash
-# Clone o repositório
-git clone https://github.com/Rebecabl/vetra-app.git
-cd vetra-app
-
-# Instalar dependências do backend
-cd api
-npm install
-
-# Instalar dependências do frontend
-cd ../app
-npm install
-
-# Configurar .env do backend e frontend (ver seções acima)
-```
-
-## Execução e Deploy
-
-### 5.1 Modo Desenvolvimento (Dois Terminais)
-
-**Backend:**
-```bash
-cd api
-npm run dev
-# http://localhost:4001
-```
-
-**Frontend:**
-```bash
-cd app
-npm run dev
-# http://localhost:5173
-```
-
-### 5.2 Produção
-
-**Build do Frontend:**
-```bash
-cd app
-npm run build   # gera app/dist
-```
-
-**Backend:**
-```bash
-cd api
-npm start
-```
-
-### 5.3 Deploy (Vercel)
-
-[colocar imagem: Screenshot do dashboard do Vercel mostrando o deploy do backend]
-
-```bash
-npm i -g vercel
-vercel login
-# Configurar variáveis de ambiente (backend) no dashboard
-vercel
-```
-
-**Observação:** Deploy em Vercel (ou similar) adiciona 1 ponto na avaliação do projeto.
-
-**Frontend (Netlify):**
-[colocar imagem: Screenshot do dashboard do Netlify mostrando o deploy do frontend]
-
-Configurado para:
-- **Backend**: Vercel (`vercel.json`)
-- **Frontend**: Netlify (`app/netlify.toml`)
-
 ## Endpoints da API
 
 ### 6.1 Autenticação
@@ -730,8 +346,6 @@ Configurado para:
 | `GET` | `/api/details/:media/:id` | Detalhes (media: `movie` \| `tv`) |
 | `GET` | `/api/search?q=...` | Busca de conteúdo |
 | `GET` | `/api/browse/:category` | `trending` \| `popular` \| `top_rated` \| `now_playing` \| `upcoming` |
-| `GET` | `/api/upcoming?type=movie` | Próximos lançamentos |
-| `GET` | `/api/trending` | Em alta |
 | `GET` | `/api/discover` | Descoberta com filtros |
 
 ### 6.3 Usuário
@@ -772,10 +386,96 @@ Configurado para:
 | `PUT` | `/api/comments/:id/reaction` | Reagir comentário |
 | `DELETE` | `/api/comments/:id` | Excluir comentário |
 
-## Documentação Adicional
+## Instalação e Configuração
 
-- [README do Backend](api/README.md) - Documentação completa da API
-- [README do Frontend](app/README.md) - Documentação do frontend
+### Pré-requisitos
+
+- **Node.js** 18.17+; npm ou yarn
+- **Projeto Firebase** ativo
+- **Chave da TMDB API** (v3 ou Bearer v4)
+
+### Backend (`api/.env`)
+
+| Variável | Descrição | Exemplo |
+|----------|-----------|---------|
+| `FIREBASE_PROJECT_ID` | ID do projeto Firebase | `vetra-prod` |
+| `FIREBASE_CLIENT_EMAIL` | Email da conta de serviço | `svc@vetra.iam.gserviceaccount.com` |
+| `FIREBASE_PRIVATE_KEY` | Chave privada (com quebras `\n`) | `"-----BEGIN...\\n...\\nEND-----"` |
+| `TMDB_V3_API_KEY` | Chave v3 do TMDB | `xxxxxxxx` |
+| `TMDB_LANG` | Idioma padrão TMDB | `pt-BR` |
+| `API_PORT` | Porta do servidor | `4001` |
+| `SHARE_BASE_URL` | Base dos links públicos | `http://localhost:5173` |
+
+**Como obter credenciais Firebase:**
+1. Firebase Console → Configurações do Projeto → Contas de Serviço
+2. Gerar nova chave privada (JSON)
+3. Mapear: `project_id` → `FIREBASE_PROJECT_ID`; `client_email` → `FIREBASE_CLIENT_EMAIL`; `private_key` → `FIREBASE_PRIVATE_KEY` (com `\n`)
+
+### Frontend (`app/.env`)
+
+| Variável | Descrição | Exemplo |
+|----------|-----------|---------|
+| `VITE_API_BASE` | URL do backend | `http://localhost:4001` |
+| `VITE_TMDB_V3` | (Opcional) fallback TMDB v3 | `...` |
+| `VITE_TMDB_BEARER` | (Opcional) fallback TMDB Bearer | `...` |
+| `VITE_TMDB_LANG` | Idioma padrão | `pt-BR` |
+
+**Nota:** O frontend usa o backend como fonte principal; TMDB no cliente é fallback.
+
+### Passos de Setup
+
+```bash
+# Clone o repositório
+git clone https://github.com/Rebecabl/vetra-app.git
+cd vetra-app
+
+# Instalar dependências do backend
+cd api
+npm install
+
+# Instalar dependências do frontend
+cd ../app
+npm install
+
+# Configurar .env do backend e frontend (ver seções acima)
+```
+
+## Execução e Deploy
+
+### Modo Desenvolvimento (Dois Terminais)
+
+**Backend:**
+```bash
+cd api
+npm run dev
+# http://localhost:4001
+```
+
+**Frontend:**
+```bash
+cd app
+npm run dev
+# http://localhost:5173
+```
+
+### Produção
+
+**Build do Frontend:**
+```bash
+cd app
+npm run build   # gera app/dist
+```
+
+**Backend:**
+```bash
+cd api
+npm start
+```
+
+### Deploy
+
+- **Backend**: Vercel (`vercel.json`)
+- **Frontend**: Netlify (`app/netlify.toml`)
 
 ## Quick Start
 
@@ -812,13 +512,30 @@ Acesse `http://localhost:5173` para ver a aplicação em funcionamento.
 
 🔹 Validação de senhas fortes e proteção contra força bruta
 
-## Operação e Monitoramento
+## Responsividade
 
-🔹 Logs estruturados (níveis: info, warn, error)
+🔹 **Breakpoints**: xs (< 480px), sm (480-768px), md (768-1024px), lg (1024-1440px), xl (> 1440px)
 
-🔹 Healthcheck do backend (/health, opcional, para verificação pelo frontend/infra)
+🔹 **Navegação Mobile**: Menu inferior responsivo que aparece quando viewport < 900px ou janela estreita (< 60% da largura do monitor)
 
-🔹 Métricas e tracing (integrações futuras)
+🔹 **Tipografia Fluida**: Fontes com `clamp()` para adaptação automática
+
+🔹 **Hit Areas**: Mínimo de 44x44px para todos os elementos interativos (padrão Apple/Google)
+
+🔹 **Safe Area**: Suporte completo a dispositivos com notch (iPhone)
+
+## Testes
+
+O projeto possui testes configurados para frontend.
+
+### Frontend (Vitest)
+
+```bash
+cd app
+npm test              # Executa todos os testes
+npm run test:ui       # Interface visual
+npm run test:coverage # Com cobertura
+```
 
 ## Troubleshooting
 
@@ -836,11 +553,6 @@ Acesse `http://localhost:5173` para ver a aplicação em funcionamento.
 
 ### Porta em uso
 
-🔹 Identificar o processo ocupando a porta
-
-
-🔹 Finalizar o processo e tentar novamente
-
 **Windows:**
 ```bash
 netstat -ano | findstr :4001
@@ -854,49 +566,20 @@ lsof -ti:4001 | xargs kill
 
 ### CORS no navegador
 
-Verificar se o backend está rodando
-
-Confirmar VITE_API_BASE no frontend
-
-Conferir política de CORS no backend
+- Verificar se o backend está rodando
+- Confirmar VITE_API_BASE no frontend
+- Conferir política de CORS no backend
 
 ### Módulos não encontrados
 
-Remover node_modules e package-lock.json; executar npm install
+- Remover node_modules e package-lock.json; executar npm install
+- Garantir Node 18+
 
-Garantir Node 18+
+## Versão
 
-## Testes
+**Versão Atual: 1.0.0 (Primeira Versão)**
 
-O projeto possui testes automatizados para backend e frontend.
-
-### Backend (Jest)
-
-```bash
-cd api
-npm test              # Executa todos os testes
-npm run test:watch    # Modo watch
-npm run test:coverage # Com cobertura
-```
-
-**Cobertura:**
-- Serviços: TMDB integration, data normalization
-- Rotas: Autenticação, validações
-- Utilitários: Helpers e funções auxiliares
-
-### Frontend (Vitest)
-
-```bash
-cd app
-npm test              # Executa todos os testes
-npm run test:ui       # Interface visual
-npm run test:coverage # Com cobertura
-```
-
-**Cobertura:**
-- Componentes: Renderização, interações
-- Hooks: Lógica de estado
-- Utilitários: Funções de formatação e helpers
+Esta é a primeira versão do VETRA. Correções de possíveis bugs serão feitas.
 
 ## Roadmap (Melhorias Futuras)
 
@@ -907,6 +590,9 @@ npm run test:coverage # Com cobertura
 - Integração com mais serviços de streaming
 - Sistema de reviews e ratings próprios
 - Aumentar cobertura de testes
+- Histórico de visualização
+- Correções de bugs e melhorias de performance
+- - Código compartilhável (QR Code, código alfanumérico)
 
 ---
 
