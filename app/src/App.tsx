@@ -5031,6 +5031,23 @@ const AppShell: React.FC = () => {
 
 
   const ListDetail: React.FC<{ lst: UserList }> = ({ lst }) => {
+    // Estado local para o nome da lista durante edição
+    const [localListName, setLocalListName] = useState(lst.name);
+    const listIdRef = useRef(lst.id);
+    const inputRef = useRef<HTMLInputElement>(null);
+    const isEditingRef = useRef(false);
+    
+    // Atualizar estado local apenas se a lista mudou (não apenas o nome)
+    // Mas não atualizar se o usuário estiver editando
+    useEffect(() => {
+      if (listIdRef.current !== lst.id) {
+        listIdRef.current = lst.id;
+        setLocalListName(lst.name);
+      } else if (!isEditingRef.current && lst.name !== localListName) {
+        // Só atualizar se não estiver editando e o nome mudou externamente
+        setLocalListName(lst.name);
+      }
+    }, [lst.id, lst.name, localListName]);
     const [order, setOrder] = useState<"recent" | "year" | "rating">("recent");
     const [searchQuery, setSearchQuery] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
@@ -5124,9 +5141,35 @@ const AppShell: React.FC = () => {
             {/* Título e contagem */}
             <div className="flex-1 min-w-0">
               <input
+                ref={inputRef}
                 className="w-full bg-transparent text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white outline-none border-b-2 border-transparent focus:border-cyan-500 placeholder:text-slate-400 dark:placeholder:text-slate-500 mb-1"
-                value={lst.name}
-                onChange={(e) => renameList(lst.id, e.target.value)}
+                value={localListName}
+                onChange={(e) => {
+                  isEditingRef.current = true;
+                  setLocalListName(e.target.value);
+                }}
+                onFocus={() => {
+                  isEditingRef.current = true;
+                }}
+                onBlur={() => {
+                  isEditingRef.current = false;
+                  if (localListName.trim() && localListName !== lst.name) {
+                    renameList(lst.id, localListName.trim());
+                  } else if (!localListName.trim()) {
+                    setLocalListName(lst.name);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    isEditingRef.current = false;
+                    e.currentTarget.blur();
+                  }
+                  if (e.key === "Escape") {
+                    isEditingRef.current = false;
+                    setLocalListName(lst.name);
+                    e.currentTarget.blur();
+                  }
+                }}
                 placeholder="Nome da lista"
               />
               <p className="text-sm text-slate-600 dark:text-slate-400">
