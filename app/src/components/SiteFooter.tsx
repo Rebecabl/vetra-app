@@ -75,18 +75,23 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({
                 © {new Date().getFullYear()} VETRA. Todos os direitos reservados.
               </p>
               
-              {/* Dados por TMDB */}
-              <p className="text-xs text-slate-600 dark:text-gray-500 text-center md:text-right">
-                Dados fornecidos por{" "}
-                <a 
-                  href="https://www.themoviedb.org/" 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="text-slate-700 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition-colors underline focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded"
-                >
-                  TMDB
-                </a>
-              </p>
+              {/* Dados por TMDB e Créditos - lado direito */}
+              <div className="flex flex-col items-center md:items-end gap-2">
+                <p className="text-xs text-slate-600 dark:text-gray-500 text-center md:text-right">
+                  Dados fornecidos por{" "}
+                  <a 
+                    href="https://www.themoviedb.org/" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-slate-700 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition-colors underline focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded"
+                  >
+                    TMDB
+                  </a>
+                </p>
+                <p className="text-xs text-slate-500 dark:text-gray-600 text-center md:text-right">
+                  Desenvolvido por <span className="font-medium text-slate-600 dark:text-gray-400">Rebeca Barbosa Lourenço</span>
+                </p>
+              </div>
             </div>
           </div>
         </div>

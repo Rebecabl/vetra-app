@@ -563,21 +563,30 @@ const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp }) => {
               </Link>
             </div>
           </div>
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-6 border-t border-white/5">
-            <p className="text-sm text-white/50 text-center md:text-left">
-              © {new Date().getFullYear()} VETRA. Todos os direitos reservados.
-            </p>
-            <p className="text-xs text-white/40 text-center md:text-right">
-              Dados fornecidos por{" "}
-              <a 
-                href="https://www.themoviedb.org/" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="text-white/60 hover:text-white transition-colors underline"
-              >
-                TMDB
-              </a>
-            </p>
+          <div className="pt-6 border-t border-white/5">
+            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+              <p className="text-sm text-white/50 text-center md:text-left">
+                © {new Date().getFullYear()} VETRA. Todos os direitos reservados.
+              </p>
+              
+              {/* Dados por TMDB e Créditos - lado direito */}
+              <div className="flex flex-col items-center md:items-end gap-2">
+                <p className="text-xs text-white/40 text-center md:text-right">
+                  Dados fornecidos por{" "}
+                  <a 
+                    href="https://www.themoviedb.org/" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-white/60 hover:text-white transition-colors underline"
+                  >
+                    TMDB
+                  </a>
+                </p>
+                <p className="text-xs text-white/40 text-center md:text-right">
+                  Desenvolvido por <span className="font-medium text-white/60">Rebeca Barbosa Lourenço</span>
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </footer>

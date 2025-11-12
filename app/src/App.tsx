@@ -3429,7 +3429,6 @@ const AppShell: React.FC = () => {
     });
     const [activeTab, setActiveTab] = useState<"sobre" | "info" | "elenco" | "episodios" | "reviews">("sobre");
     const [synopsisExpanded, setSynopsisExpanded] = useState(false);
-    const [showCastMore, setShowCastMore] = useState(false);
     const [showDock, setShowDock] = useState(false);
     const [commentsToShow, setCommentsToShow] = useState(3);
     
@@ -3874,13 +3873,25 @@ const AppShell: React.FC = () => {
                 src={d?.backdrop_path ? `https://image.tmdb.org/t/p/w1280${d.backdrop_path}` : (selectedMovie.image || poster(selectedMovie.poster_path))} 
                 alt={selectedMovie.title} 
                 className="w-full h-full object-cover"
+                style={{ 
+                  objectPosition: 'center 30%',
+                  minHeight: '100%',
+                  minWidth: '100%'
+                }}
                 loading="lazy"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-white via-white/60 to-transparent dark:from-gray-900 dark:via-gray-900/60" />
             </div>
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/98 to-transparent dark:from-gray-900 dark:via-gray-900/98 p-3 sm:p-4 md:p-6">
-              <button onClick={() => navigate(-1)} className="absolute -top-8 right-3 sm:-top-10 sm:right-4 z-[100] min-w-[44px] min-h-[44px] flex items-center justify-center bg-black/80 dark:bg-black/80 backdrop-blur-md p-2 rounded-full hover:bg-black/90 active:bg-black transition shadow-lg touch-manipulation" aria-label="Fechar">
-                <X size={20} className="sm:w-6 sm:h-6" color="white" />
+              <button 
+                onClick={() => navigate(-1)} 
+                className="absolute top-3 right-3 sm:top-4 sm:right-4 z-[100] min-h-[44px] flex items-center gap-2 bg-black/80 dark:bg-black/80 backdrop-blur-md px-3 sm:px-4 py-2 rounded-full hover:bg-black/90 active:bg-black transition shadow-lg touch-manipulation group" 
+                aria-label="Voltar para filmes"
+              >
+                <ChevronLeft size={20} className="sm:w-6 sm:h-6 text-white" />
+                <span className="text-white text-sm font-medium hidden sm:inline group-hover:text-cyan-300 transition-colors">
+                  Voltar
+                </span>
               </button>
               <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2 break-words leading-tight">
                 {selectedMovie.title} {selectedMovie.year ? `(${selectedMovie.year})` : ""}
@@ -4150,40 +4161,46 @@ const AppShell: React.FC = () => {
               {activeTab === "elenco" && (
                 <div>
                   {d?.cast?.length ? (
-                    <>
-                      <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-4">
-                        {(showCastMore ? d.cast : d.cast.slice(0, 8)).map((actor: any, idx: number) => (
-                          <div key={idx} className="flex items-center gap-2 sm:gap-3">
-                            {actor.profile_path ? (
-                              <img
-                                src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
-                                alt={actor.name || ""}
-                                className="w-12 h-12 sm:w-16 sm:h-16 rounded-lg object-cover flex-shrink-0"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
-                                <User size={20} className="text-slate-400" />
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{actor.name || actor}</p>
+                    <HorizontalCarousel
+                      title={`Elenco principal (${d.cast.length})`}
+                      items={d.cast}
+                      loading={false}
+                      renderItem={(actor: any, idx: number) => (
+                        <Link
+                          key={actor.id || idx}
+                          to={`/person/${actor.id}`}
+                          className="group block w-[140px] sm:w-[160px] flex-shrink-0"
+                        >
+                          <div className="bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 transition-all hover:shadow-lg">
+                            <div className="w-full aspect-[2/3] bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
+                              {actor.profile_path ? (
+                                <img
+                                  src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
+                                  alt={actor.name || "Ator"}
+                                  className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <User size={48} className="text-slate-400 dark:text-slate-500" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-3">
+                              <p className="text-sm font-semibold text-slate-900 dark:text-white truncate mb-1 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
+                                {actor.name || "Nome não disponível"}
+                              </p>
                               {actor.character && (
-                                <p className="text-xs text-slate-600 dark:text-gray-400 truncate">{actor.character}</p>
+                                <p className="text-xs text-slate-600 dark:text-gray-400 truncate">
+                                  {actor.character}
+                                </p>
                               )}
                             </div>
                           </div>
-                        ))}
-                      </div>
-                      {d.cast.length > 8 && (
-                        <button
-                          onClick={() => setShowCastMore(!showCastMore)}
-                          className="w-full min-h-[44px] px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-sm"
-                        >
-                          {showCastMore ? "Ver menos" : `Ver mais (${d.cast.length - 8})`}
-                        </button>
+                        </Link>
                       )}
-                    </>
+                      limit={d.cast.length}
+                    />
                   ) : (
                     <p className="text-slate-600 dark:text-gray-400 text-sm">—</p>
                   )}
@@ -4602,49 +4619,46 @@ const AppShell: React.FC = () => {
               ) : null}
 
               {d?.cast?.length ? (
-                <div>
-                  <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-3">{t("cast")} ({d.cast.length})</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-4">
-                    {d.cast.slice(0, d.cast.length % 2 === 0 ? d.cast.length : d.cast.length - 1).map((c) => (
-                      <Link key={c.id} to={`/person/${c.id}`} className="group">
-                        <div className="bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 transition">
-                          <div className="w-full h-40 bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden" style={{ aspectRatio: "2/3" }}>
-                            {c.profile_path ? (
-                              <img
-                                src={`https://image.tmdb.org/t/p/w185${c.profile_path}`}
-                                alt={c.name || "Ator"}
-                                className="w-full h-full object-cover object-center"
-                                style={{ objectFit: 'cover', objectPosition: 'center top' }}
-                                onError={(e) => {
-                                  const target = e.target as HTMLImageElement;
-                                  target.style.display = "none";
-                                  const parent = target.parentElement;
-                                  if (parent) {
-                                    parent.innerHTML = '<div class="w-full h-full flex items-center justify-center"><svg class="w-12 h-12 text-slate-400 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg></div>';
-                                  }
-                                }}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <User size={48} className="text-slate-400 dark:text-gray-600" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="p-3">
-                            <div className="text-slate-900 dark:text-white font-semibold text-sm truncate" title={c.name || ""}>
-                              {c.name || "Nome não disponível"}
+                <HorizontalCarousel
+                  title={`${t("cast")} (${d.cast.length})`}
+                  items={d.cast}
+                  loading={false}
+                  renderItem={(actor: any, idx: number) => (
+                    <Link
+                      key={actor.id || idx}
+                      to={`/person/${actor.id}`}
+                      className="group block w-[140px] sm:w-[160px] flex-shrink-0"
+                    >
+                      <div className="bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 transition-all hover:shadow-lg">
+                        <div className="w-full aspect-[2/3] bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
+                          {actor.profile_path ? (
+                            <img
+                              src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
+                              alt={actor.name || "Ator"}
+                              className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <User size={48} className="text-slate-400 dark:text-slate-500" />
                             </div>
-                            {c.character ? (
-                              <div className="text-slate-600 dark:text-gray-400 text-xs truncate" title={c.character}>
-                                {c.character}
-                              </div>
-                            ) : null}
-                          </div>
+                          )}
                         </div>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
+                        <div className="p-3">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white truncate mb-1 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
+                            {actor.name || "Nome não disponível"}
+                          </p>
+                          {actor.character && (
+                            <p className="text-xs text-slate-600 dark:text-gray-400 truncate">
+                              {actor.character}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  )}
+                  limit={d.cast.length}
+                />
               ) : null}
 
               <div className="border-t border-slate-300 dark:border-slate-700 pt-6 md:pt-8">
