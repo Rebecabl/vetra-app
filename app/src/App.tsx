@@ -5154,8 +5154,8 @@ const AppShell: React.FC = () => {
             <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500/20 via-purple-500/20 to-lime-400/20 mb-6 ring-4 ring-cyan-500/10">
               <ListIcon size={48} className="text-cyan-400" />
             </div>
-            <p className="text-white text-xl font-bold mb-2">{t("none_item_in_list")}</p>
-            <p className="text-gray-400">{t("add_items_hint")}</p>
+            <p className="text-white text-xl font-bold mb-2">{t("lists.none_in_list")}</p>
+            <p className="text-gray-400">{t("lists.list_empty")}</p>
           </div>
         )}
 
