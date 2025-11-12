@@ -592,7 +592,7 @@ Esta é a primeira versão do VETRA. Correções de possíveis bugs serão feita
 - Aumentar cobertura de testes
 - Histórico de visualização
 - Correções de bugs e melhorias de performance
-- - Código compartilhável (QR Code, código alfanumérico)
+- Código compartilhável (QR Code, código alfanumérico)
 
 ---
 
