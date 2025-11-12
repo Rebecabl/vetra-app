@@ -563,9 +563,9 @@ lsof -ti:4001 | xargs kill
 
 ## Versão
 
-**Versão Atual: 1.0.0 (Primeira Versão)**
-
-Esta é a primeira versão do VETRA. Correções de possíveis bugs serão feitas.
+<!--VERSAO-->
+**Versão Atual: 1.0.0 (Primeira Versão) — Atualizado em: 11 de novembro de 2025**
+<!--/VERSAO-->
 
 ## Roadmap (Melhorias Futuras)
 
