@@ -153,6 +153,7 @@ export type ApiPersonDetails = {
 export type UserProfile = {
   name: string;
   email: string;
+  uid?: string;
   avatar_url?: string | null;
   updatedAt?: string | null;
 };
@@ -1317,9 +1318,16 @@ export async function createComment(media: "movie" | "tv", id: number, text: str
       body: JSON.stringify({ text, rating }),
     });
     const data = await res.json();
+    console.log("[createComment] Resposta da API:", { status: res.status, data });
     if (!res.ok) {
       return { ok: false, error: data.error || data.message || "Erro ao criar comentário" };
     }
+    // Validar estrutura do comentário retornado
+    if (!data.comment || !data.comment.id) {
+      console.error("[createComment] Comentário retornado sem ID:", data.comment);
+      return { ok: false, error: "Comentário criado mas estrutura inválida" };
+    }
+    console.log("[createComment] Comentário válido retornado:", { id: data.comment.id, text: data.comment.text?.substring(0, 50) });
     return { ok: true, comment: data.comment };
   } catch (error: any) {
     return { ok: false, error: error.message || "Erro ao criar comentário" };

@@ -2067,7 +2067,7 @@ const AppShell: React.FC = () => {
     setAppliedSearchFilters(filters);
     setSearchPage(1);
     runSearch(searchTerm, filters, 1);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Removido scroll automático para o topo
   }, [searchTerm]);
 
   const handleClearAllFilters = useCallback(() => {
@@ -2079,7 +2079,7 @@ const AppShell: React.FC = () => {
     setAppliedSearchFilters(defaults);
     setSearchPage(1);
     runSearch(searchTerm, defaults, 1);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Removido scroll automático para o topo
   }, [searchTerm]);
 
   const handleRemoveFilter = useCallback((key: keyof SearchFilters) => {
@@ -3099,7 +3099,7 @@ const AppShell: React.FC = () => {
   const goToHomeCategory = (key: CatKey) => {
     setActiveTab("home");
     if (!cats[key]?.initialized && !cats[key]?.loading) loadCategory(key);
-    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+    // Removido scroll automático para o topo
   };
 
   const navigateWithAuth = (route: string, requiresAuth: boolean = false) => {
@@ -3575,26 +3575,74 @@ const AppShell: React.FC = () => {
       const movieId = parseInt(id);
       if (isNaN(movieId)) return;
 
+      // Capturar posição de scroll ANTES de qualquer ação para evitar scroll automático
+      const savedScrollY = window.scrollY;
+      const savedScrollX = window.scrollX;
+      
+      // Prevenir scroll IMEDIATAMENTE antes de qualquer setState
+      let scrollLocked = true;
+      const scrollHandler = (e: Event) => {
+        if (scrollLocked) {
+          e.preventDefault();
+          e.stopPropagation();
+          window.scrollTo({ top: savedScrollY, left: savedScrollX, behavior: "auto" });
+          return false;
+        }
+      };
+      
+      // Adicionar listener ANTES de qualquer setState
+      window.addEventListener("scroll", scrollHandler, { passive: false, capture: true });
+      window.addEventListener("wheel", scrollHandler, { passive: false, capture: true });
+      window.addEventListener("touchmove", scrollHandler, { passive: false, capture: true });
+      
+      // Forçar posição imediatamente
+      window.scrollTo({ top: savedScrollY, left: savedScrollX, behavior: "auto" });
+      
       setSubmittingComment(true);
       setCommentError("");
-      const result = await createComment(mediaType, movieId, newCommentText.trim(), newCommentRating);
-      if (result.ok && result.comment) {
-        setComments([result.comment, ...comments]);
-        setNewCommentText("");
-        setNewCommentRating(undefined);
-        if (textareaRef.current) {
-          textareaRef.current.style.height = "auto";
-        }
-        pushToast({ message: "Comentário publicado", tone: "ok" });
-      } else {
-        const errorMsg = result.error || "Não foi possível publicar agora. Tente novamente.";
-        if (errorMsg.includes("rápido") || errorMsg.includes("rate limit")) {
-          setCommentError("Você comentou muito rápido. Tente novamente em alguns segundos.");
+      
+      try {
+        const result = await createComment(mediaType, movieId, newCommentText.trim(), newCommentRating);
+        
+        // Manter scroll bloqueado durante atualização de estado
+        window.scrollTo({ top: savedScrollY, left: savedScrollX, behavior: "auto" });
+        
+        if (result.ok && result.comment) {
+          setComments([result.comment, ...comments]);
+          setNewCommentText("");
+          setNewCommentRating(undefined);
+          if (textareaRef.current) {
+            textareaRef.current.style.height = "auto";
+          }
+          pushToast({ message: "Comentário publicado", tone: "ok" });
         } else {
-          setCommentError(errorMsg);
+          const errorMsg = result.error || "Não foi possível publicar agora. Tente novamente.";
+          if (errorMsg.includes("rápido") || errorMsg.includes("rate limit")) {
+            setCommentError("Você comentou muito rápido. Tente novamente em alguns segundos.");
+          } else {
+            setCommentError(errorMsg);
+          }
         }
+      } finally {
+        setSubmittingComment(false);
+        
+        // Manter scroll bloqueado por mais tempo para garantir que não role
+        setTimeout(() => {
+          window.scrollTo({ top: savedScrollY, left: savedScrollX, behavior: "auto" });
+        }, 0);
+        
+        setTimeout(() => {
+          window.scrollTo({ top: savedScrollY, left: savedScrollX, behavior: "auto" });
+        }, 50);
+        
+        setTimeout(() => {
+          window.scrollTo({ top: savedScrollY, left: savedScrollX, behavior: "auto" });
+          scrollLocked = false;
+          window.removeEventListener("scroll", scrollHandler, { capture: true });
+          window.removeEventListener("wheel", scrollHandler, { capture: true });
+          window.removeEventListener("touchmove", scrollHandler, { capture: true });
+        }, 300);
       }
-      setSubmittingComment(false);
     };
 
     const toggleCommentExpand = (commentId: string) => {
@@ -3751,7 +3799,7 @@ const AppShell: React.FC = () => {
       <div className="fixed inset-0 bg-black/80 dark:bg-black/90 z-50 flex items-center justify-center p-2 sm:p-3 md:p-4 backdrop-blur-sm" onClick={() => navigate(-1)}>
         <div className="bg-white dark:bg-gray-900 rounded-lg max-w-6xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto shadow-2xl mx-2 sm:mx-auto" onClick={(e) => e.stopPropagation()}>
           <div className="relative overflow-hidden rounded-t-lg">
-            <div className="relative w-full max-h-[55vh] sm:max-h-[50vh] md:h-[500px] overflow-hidden" style={{ aspectRatio: "16/9" }}>
+            <div className="relative w-full max-h-[40vh] sm:max-h-[35vh] md:max-h-[400px] overflow-hidden" style={{ aspectRatio: "16/9" }}>
               <img 
                 src={d?.backdrop_path ? `https://image.tmdb.org/t/p/w1280${d.backdrop_path}` : (selectedMovie.image || poster(selectedMovie.poster_path))} 
                 alt={selectedMovie.title} 
@@ -3760,10 +3808,10 @@ const AppShell: React.FC = () => {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-white via-white/60 to-transparent dark:from-gray-900 dark:via-gray-900/60" />
             </div>
-            <button onClick={() => navigate(-1)} className="absolute top-3 right-3 sm:top-4 sm:right-4 min-w-[44px] min-h-[44px] flex items-center justify-center bg-black/60 dark:bg-black/60 backdrop-blur-sm p-2 rounded-full hover:bg-black/80 active:bg-black/90 transition z-10 touch-manipulation" aria-label="Fechar">
-              <X size={20} className="sm:w-6 sm:h-6" color="white" />
-            </button>
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/98 to-transparent dark:from-gray-900 dark:via-gray-900/98 p-3 sm:p-4 md:p-6">
+              <button onClick={() => navigate(-1)} className="absolute -top-8 right-3 sm:-top-10 sm:right-4 z-[100] min-w-[44px] min-h-[44px] flex items-center justify-center bg-black/80 dark:bg-black/80 backdrop-blur-md p-2 rounded-full hover:bg-black/90 active:bg-black transition shadow-lg touch-manipulation" aria-label="Fechar">
+                <X size={20} className="sm:w-6 sm:h-6" color="white" />
+              </button>
               <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2 break-words leading-tight">
                 {selectedMovie.title} {selectedMovie.year ? `(${selectedMovie.year})` : ""}
               </h2>
@@ -5100,7 +5148,7 @@ const AppShell: React.FC = () => {
                 <button
                   onClick={() => {
                     setCurrentPage(prev => Math.max(1, prev - 1));
-                    window.scrollTo({ top: 0, behavior: "smooth" });
+                    // Removido scroll automático para o topo
                   }}
                   disabled={currentPage === 1}
                   className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
@@ -5123,7 +5171,7 @@ const AppShell: React.FC = () => {
                       key={pageNum}
                       onClick={() => {
                         setCurrentPage(pageNum);
-                        window.scrollTo({ top: 0, behavior: "smooth" });
+                        // Removido scroll automático para o topo
                       }}
                       disabled={currentPage === pageNum}
                       className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${
@@ -5139,7 +5187,7 @@ const AppShell: React.FC = () => {
                 <button
                   onClick={() => {
                     setCurrentPage(prev => Math.min(totalPages, prev + 1));
-                    window.scrollTo({ top: 0, behavior: "smooth" });
+                    // Removido scroll automático para o topo
                   }}
                   disabled={currentPage === totalPages}
                   className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
@@ -7064,7 +7112,7 @@ const AppShell: React.FC = () => {
                   onPageChange={(page) => {
                     setSearchPage(page);
                     runSearch(searchTerm, appliedSearchFilters, page);
-                    window.scrollTo({ top: 0, behavior: "smooth" });
+                    // Removido scroll automático para o topo
                   }}
                   loading={loading}
                 />
@@ -8008,8 +8056,7 @@ const AppShell: React.FC = () => {
     </section>
   );
 
-  // Calcular texto do badge da API (após todos os hooks)
-  const apiBadgeText = apiStatus === "ok" ? (tmdb.apiBase ? t("api.api_badge_ok_backend") : t("api.api_badge_ok_tmdb")) : apiStatus;
+  // Badge da API removido - não será mais exibido
 
   // Verificar se há um compartilhamento na URL antes de decidir mostrar LandingScreen
   const urlParams = new URLSearchParams(window.location.search);
@@ -8108,17 +8155,6 @@ const AppShell: React.FC = () => {
                       <path d="M16 8 L32 20 L16 32 Z" fill="#C6D800" />
                     </svg>
                     <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-cyan-400 via-purple-500 to-lime-400 bg-clip-text text-transparent whitespace-nowrap">VETRA</h1>
-                    <span
-                      className={`hidden min-[1100px]:inline-block ml-2 text-xs px-2 py-1 rounded border flex-shrink-0 ${
-                        apiStatus === "ok"
-                          ? "bg-emerald-600/10 text-emerald-700 border-emerald-500/30 dark:bg-emerald-600/20 dark:text-emerald-200 dark:border-emerald-500/40"
-                          : apiStatus === "falhou"
-                          ? "bg-rose-600/10 text-rose-700 border-rose-500/30 dark:bg-rose-600/20 dark:text-rose-200 dark:border-rose-500/40"
-                          : "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-700/40 dark:text-slate-300 dark:border-slate-500/40"
-                      }`}
-                      title={`TMDB: ${tmdb.hasBearer ? "v4" : tmdb.hasV3 ? "v3" : "—"} · Lang: ${tmdb.lang} · ${tmdb.apiBase ? "com backend" : "TMDB direto"}`}>
-                      {t("api.api_title")}: {apiBadgeText}
-                    </span>
                   </div>
                 </div>
 
@@ -8617,7 +8653,7 @@ const AppShell: React.FC = () => {
                       onApply={() => {
                         setDiscoverMovies((prev) => ({ ...prev, page: 1 }));
                         loadDiscoverMovies(1, moviesFilters);
-                        window.scrollTo({ top: 0, behavior: "smooth" });
+                        // Removido scroll automático para o topo
                       }}
                       facets={moviesFacets}
                     />
@@ -8662,7 +8698,7 @@ const AppShell: React.FC = () => {
                                 const prevPage = discoverMovies.page - 1;
                                 if (prevPage >= 1) {
                                   loadDiscoverMovies(prevPage, moviesFilters);
-                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                  // Removido scroll automático para o topo
                                 }
                               }}
                               disabled={discoverMovies.page === 1 || discoverMovies.loading}
@@ -8686,7 +8722,7 @@ const AppShell: React.FC = () => {
                                   key={pageNum}
                                   onClick={() => {
                                     loadDiscoverMovies(pageNum, moviesFilters);
-                                    window.scrollTo({ top: 0, behavior: "smooth" });
+                                    // Removido scroll automático para o topo
                                   }}
                                   disabled={discoverMovies.loading}
                                   className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${
@@ -8704,7 +8740,7 @@ const AppShell: React.FC = () => {
                                 const nextPage = discoverMovies.page + 1;
                                 if (nextPage <= discoverMovies.totalPages) {
                                   loadDiscoverMovies(nextPage, moviesFilters);
-                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                  // Removido scroll automático para o topo
                                 }
                               }}
                               disabled={discoverMovies.page === discoverMovies.totalPages || discoverMovies.loading}
@@ -8736,7 +8772,7 @@ const AppShell: React.FC = () => {
                                 const prevPage = discoverMovies.page - 1;
                                 if (prevPage >= 1) {
                                   loadDiscoverMovies(prevPage, moviesFilters);
-                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                  // Removido scroll automático para o topo
                                 }
                               }}
                               disabled={discoverMovies.page === 1 || discoverMovies.loading}
@@ -8760,7 +8796,7 @@ const AppShell: React.FC = () => {
                                   key={pageNum}
                                   onClick={() => {
                                     loadDiscoverMovies(pageNum, moviesFilters);
-                                    window.scrollTo({ top: 0, behavior: "smooth" });
+                                    // Removido scroll automático para o topo
                                   }}
                                   disabled={discoverMovies.loading}
                                   className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${
@@ -8778,7 +8814,7 @@ const AppShell: React.FC = () => {
                                 const nextPage = discoverMovies.page + 1;
                                 if (nextPage <= discoverMovies.totalPages) {
                                   loadDiscoverMovies(nextPage, moviesFilters);
-                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                  // Removido scroll automático para o topo
                                 }
                               }}
                               disabled={discoverMovies.page === discoverMovies.totalPages || discoverMovies.loading}
@@ -8836,7 +8872,7 @@ const AppShell: React.FC = () => {
                       onApply={() => {
                         setDiscoverTv((prev) => ({ ...prev, page: 1 }));
                         loadDiscoverTv(1, tvFilters);
-                        window.scrollTo({ top: 0, behavior: "smooth" });
+                        // Removido scroll automático para o topo
                       }}
                       facets={tvFacets}
                     />
@@ -8881,7 +8917,7 @@ const AppShell: React.FC = () => {
                                 const prevPage = discoverTv.page - 1;
                                 if (prevPage >= 1) {
                                   loadDiscoverTv(prevPage, tvFilters);
-                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                  // Removido scroll automático para o topo
                                 }
                               }}
                               disabled={discoverTv.page === 1 || discoverTv.loading}
@@ -8905,7 +8941,7 @@ const AppShell: React.FC = () => {
                                   key={pageNum}
                                   onClick={() => {
                                     loadDiscoverTv(pageNum, tvFilters);
-                                    window.scrollTo({ top: 0, behavior: "smooth" });
+                                    // Removido scroll automático para o topo
                                   }}
                                   disabled={discoverTv.loading}
                                   className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${
@@ -8923,7 +8959,7 @@ const AppShell: React.FC = () => {
                                 const nextPage = discoverTv.page + 1;
                                 if (nextPage <= discoverTv.totalPages) {
                                   loadDiscoverTv(nextPage, tvFilters);
-                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                  // Removido scroll automático para o topo
                                 }
                               }}
                               disabled={discoverTv.page === discoverTv.totalPages || discoverTv.loading}
@@ -8955,7 +8991,7 @@ const AppShell: React.FC = () => {
                                 const prevPage = discoverTv.page - 1;
                                 if (prevPage >= 1) {
                                   loadDiscoverTv(prevPage, tvFilters);
-                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                  // Removido scroll automático para o topo
                                 }
                               }}
                               disabled={discoverTv.page === 1 || discoverTv.loading}
@@ -8979,7 +9015,7 @@ const AppShell: React.FC = () => {
                                   key={pageNum}
                                   onClick={() => {
                                     loadDiscoverTv(pageNum, tvFilters);
-                                    window.scrollTo({ top: 0, behavior: "smooth" });
+                                    // Removido scroll automático para o topo
                                   }}
                                   disabled={discoverTv.loading}
                                   className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${
@@ -8997,7 +9033,7 @@ const AppShell: React.FC = () => {
                                 const nextPage = discoverTv.page + 1;
                                 if (nextPage <= discoverTv.totalPages) {
                                   loadDiscoverTv(nextPage, tvFilters);
-                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                  // Removido scroll automático para o topo
                                 }
                               }}
                               disabled={discoverTv.page === discoverTv.totalPages || discoverTv.loading}

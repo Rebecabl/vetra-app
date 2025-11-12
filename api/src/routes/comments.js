@@ -14,15 +14,57 @@ router.get("/:media/:id", async (req, res) => {
     const db = getFirestore();
     const mediaKey = `${media}:${id}`;
     const commentsRef = db.collection("comments").where("mediaKey", "==", mediaKey);
-    const snapshot = await commentsRef.orderBy("createdAt", "desc").get();
-
-    const comments = [];
-    snapshot.forEach((doc) => {
-      comments.push({
-        id: doc.id,
-        ...doc.data(),
+    
+    let comments = [];
+    
+    try {
+      // Buscar comentários SEM orderBy (para evitar erro de índice)
+      // Ordenamos em memória depois
+      console.log(`[comments] Buscando comentários para mediaKey: ${mediaKey}`);
+      const snapshot = await commentsRef.get();
+      
+      if (snapshot.empty) {
+        console.log(`[comments] Nenhum comentário encontrado para ${mediaKey}`);
+        return res.json({ comments: [] });
+      }
+      
+      // Processar documentos e ordenar em memória
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        comments.push({
+          id: doc.id,
+          mediaKey: data.mediaKey,
+          media: data.media,
+          mediaId: data.mediaId,
+          userId: data.userId,
+          userName: data.userName || "Usuário",
+          userAvatar: data.userAvatar || null,
+          text: data.text || "",
+          rating: data.rating || null,
+          likes: data.likes || [],
+          reactions: data.reactions || {},
+          createdAt: data.createdAt || new Date().toISOString(),
+          updatedAt: data.updatedAt || new Date().toISOString(),
+        });
       });
-    });
+      
+      // Ordenar em memória por createdAt (desc) - mais recente primeiro
+      comments.sort((a, b) => {
+        const dateA = new Date(a.createdAt || 0).getTime();
+        const dateB = new Date(b.createdAt || 0).getTime();
+        return dateB - dateA; // Descendente
+      });
+      
+      console.log(`[comments] Retornando ${comments.length} comentários ordenados em memória para ${mediaKey}`);
+    } catch (error) {
+      console.error("[comments] Erro ao buscar comentários:", error);
+      // Retornar array vazio em caso de erro, mas não falhar completamente
+      return res.status(500).json({ 
+        error: "Erro ao buscar comentários", 
+        comments: [],
+        message: error.message 
+      });
+    }
 
     return res.json({ comments });
   } catch (error) {
@@ -60,6 +102,7 @@ router.post("/:media/:id", requireAuth, async (req, res) => {
     const userData = userDoc.data() || {};
 
     const mediaKey = `${media}:${id}`;
+    const now = new Date().toISOString();
     const commentData = {
       mediaKey,
       media,
@@ -71,12 +114,26 @@ router.post("/:media/:id", requireAuth, async (req, res) => {
       rating: rating && rating >= 0 && rating <= 10 ? parseFloat(rating) : null,
       likes: [],
       reactions: {},
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     };
+
+    console.log(`[comments] Salvando comentário para ${mediaKey}`, {
+      userId: uid,
+      userName: commentData.userName,
+      textLength: commentData.text.length,
+      rating: commentData.rating,
+      createdAt: commentData.createdAt,
+    });
 
     const commentRef = await db.collection("comments").add(commentData);
     const newComment = { id: commentRef.id, ...commentData };
+
+    console.log(`[comments] Comentário salvo com sucesso! ID: ${commentRef.id}`, {
+      id: newComment.id,
+      mediaKey: newComment.mediaKey,
+      createdAt: newComment.createdAt,
+    });
 
     return res.status(201).json({ comment: newComment });
   } catch (error) {
