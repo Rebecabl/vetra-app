@@ -309,11 +309,11 @@ const EditProfilePage: React.FC<EditProfilePageProps> = ({
     <div className="min-h-screen bg-white dark:bg-slate-900">
       {/* Header */}
       <div className="bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-lime-400/20 border-b border-slate-200 dark:border-slate-700">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-1">Editar Perfil</h1>
-              <p className="text-sm text-slate-600 dark:text-gray-400">Gerencie suas informações e preferências</p>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white mb-1">Editar Perfil</h1>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-gray-400">Gerencie suas informações e preferências</p>
             </div>
             <button
               onClick={() => {
@@ -325,35 +325,35 @@ const EditProfilePage: React.FC<EditProfilePageProps> = ({
                   navigate(-1);
                 }
               }}
-              className="text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition-colors p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition-colors p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 flex-shrink-0 ml-2"
               aria-label="Fechar"
             >
-              <X size={24} />
+              <X size={20} className="sm:w-6 sm:h-6" />
             </button>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid md:grid-cols-2 gap-6 lg:gap-8">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+        <div className="grid lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
           {/* Left Column - Avatar and Stats */}
-          <div className="space-y-6">
-            <div className="flex flex-col items-center bg-slate-50 dark:bg-slate-800/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+          <div className="space-y-4 sm:space-y-6">
+            <div className="flex flex-col items-center bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 sm:p-6 border border-slate-200 dark:border-slate-700">
               <label className="cursor-pointer group">
                 {editAvatar ? (
                   <div className="relative">
                     <img
                       src={editAvatar}
                       alt="Avatar"
-                      className="w-32 h-32 rounded-full object-cover border-4 border-slate-300 dark:border-slate-600 shadow-xl group-hover:border-cyan-500/50 transition-all duration-300"
+                      className="w-24 h-24 sm:w-28 sm:h-28 lg:w-32 lg:h-32 rounded-full object-cover border-4 border-slate-300 dark:border-slate-600 shadow-xl group-hover:border-cyan-500/50 transition-all duration-300"
                     />
                     <div className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <Pencil size={24} className="text-white" />
+                      <Pencil size={20} className="sm:w-6 sm:h-6 text-white" />
                     </div>
                   </div>
                 ) : (
-                  <div className="w-32 h-32 rounded-full bg-gradient-to-br from-cyan-400 via-purple-500 to-lime-400 flex items-center justify-center text-white font-bold text-3xl border-4 border-slate-300 dark:border-slate-600 shadow-xl group-hover:border-cyan-500/50 transition-all duration-300">
+                  <div className="w-24 h-24 sm:w-28 sm:h-28 lg:w-32 lg:h-32 rounded-full bg-gradient-to-br from-cyan-400 via-purple-500 to-lime-400 flex items-center justify-center text-white font-bold text-2xl sm:text-3xl border-4 border-slate-300 dark:border-slate-600 shadow-xl group-hover:border-cyan-500/50 transition-all duration-300">
                     {(editFirstName || user?.name || "U").charAt(0)?.toUpperCase() || "U"}
                   </div>
                 )}
@@ -368,7 +368,7 @@ const EditProfilePage: React.FC<EditProfilePageProps> = ({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="mt-4 px-4 py-2 text-sm font-semibold text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-all duration-200"
+                className="mt-3 sm:mt-4 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-all duration-200"
               >
                 {editAvatar ? "Alterar foto" : "Adicionar foto"}
               </button>
@@ -386,23 +386,23 @@ const EditProfilePage: React.FC<EditProfilePageProps> = ({
             </div>
 
             {/* Statistics */}
-            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
-              <h3 className="text-sm font-semibold text-slate-600 dark:text-gray-400 mb-4 uppercase tracking-wide">Estatísticas</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="text-center p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">{stats.favorites}</div>
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 sm:p-6 border border-slate-200 dark:border-slate-700">
+              <h3 className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-gray-400 mb-3 sm:mb-4 uppercase tracking-wide">Estatísticas</h3>
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div className="text-center p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="text-xl sm:text-2xl font-bold text-cyan-600 dark:text-cyan-400">{stats.favorites}</div>
                   <div className="text-xs text-slate-600 dark:text-gray-400 mt-1">Favoritos</div>
                 </div>
-                <div className="text-center p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.lists}</div>
+                <div className="text-center p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="text-xl sm:text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.lists}</div>
                   <div className="text-xs text-slate-600 dark:text-gray-400 mt-1">Listas</div>
                 </div>
-                <div className="text-center p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div className="text-2xl font-bold text-lime-600 dark:text-lime-400">{stats.watched}</div>
+                <div className="text-center p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="text-xl sm:text-2xl font-bold text-lime-600 dark:text-lime-400">{stats.watched}</div>
                   <div className="text-xs text-slate-600 dark:text-gray-400 mt-1">Assistidos</div>
                 </div>
-                <div className="text-center p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.want}</div>
+                <div className="text-center p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="text-xl sm:text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.want}</div>
                   <div className="text-xs text-slate-600 dark:text-gray-400 mt-1">Quero ver</div>
                 </div>
               </div>
@@ -410,9 +410,9 @@ const EditProfilePage: React.FC<EditProfilePageProps> = ({
           </div>
 
           {/* Right Column - Form */}
-          <div className="space-y-5">
+          <div className="space-y-4 sm:space-y-5">
             <div>
-              <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+              <label className="block text-xs sm:text-sm font-semibold text-slate-900 dark:text-white mb-1.5 sm:mb-2">
                 Nome <span className="text-red-500">*</span>
               </label>
               <input
@@ -420,13 +420,13 @@ const EditProfilePage: React.FC<EditProfilePageProps> = ({
                 value={editFirstName}
                 onChange={(e) => setEditFirstName(e.target.value)}
                 autoComplete="given-name"
-                className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 focus:outline-none transition-all duration-200"
+                className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 focus:outline-none transition-all duration-200 text-sm sm:text-base"
                 placeholder="Seu nome"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+              <label className="block text-xs sm:text-sm font-semibold text-slate-900 dark:text-white mb-1.5 sm:mb-2">
                 Sobrenome
               </label>
               <input
@@ -434,40 +434,40 @@ const EditProfilePage: React.FC<EditProfilePageProps> = ({
                 value={editLastName}
                 onChange={(e) => setEditLastName(e.target.value)}
                 autoComplete="family-name"
-                className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 focus:outline-none transition-all duration-200"
+                className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 focus:outline-none transition-all duration-200 text-sm sm:text-base"
                 placeholder="Seu sobrenome"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">Email</label>
+              <label className="block text-xs sm:text-sm font-semibold text-slate-900 dark:text-white mb-1.5 sm:mb-2">Email</label>
               <div className="relative">
                 <input
                   type="email"
                   value={user?.email || ""}
                   disabled
-                  className="w-full bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-gray-500 px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 cursor-not-allowed"
+                  className="w-full bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-gray-500 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl border border-slate-300 dark:border-slate-600 cursor-not-allowed text-sm sm:text-base"
                 />
                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <Lock size={16} className="text-slate-400 dark:text-gray-600" />
+                  <Lock size={14} className="sm:w-4 sm:h-4 text-slate-400 dark:text-gray-600" />
                 </div>
               </div>
-              <p className="mt-2 text-xs text-slate-500 dark:text-gray-500 flex items-center gap-1">
+              <p className="mt-1.5 sm:mt-2 text-xs text-slate-500 dark:text-gray-500 flex items-center gap-1">
                 <Lock size={12} />
                 O email não pode ser alterado
               </p>
             </div>
 
             {/* Password Section */}
-            <div className="border-t border-slate-200 dark:border-slate-700 pt-5">
-              <div className="flex items-center justify-between mb-3">
-                <label className="block text-sm font-semibold text-slate-900 dark:text-white">
+            <div className="border-t border-slate-200 dark:border-slate-700 pt-4 sm:pt-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-3">
+                <label className="block text-xs sm:text-sm font-semibold text-slate-900 dark:text-white">
                   Senha
                 </label>
                 <button
                   type="button"
                   onClick={() => setShowPasswordSection(!showPasswordSection)}
-                  className="text-xs text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 transition-colors"
+                  className="text-xs text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 transition-colors self-start sm:self-auto"
                 >
                   {showPasswordSection ? "Cancelar" : "Alterar senha"}
                 </button>
@@ -481,7 +481,7 @@ const EditProfilePage: React.FC<EditProfilePageProps> = ({
                         type={showPasswords ? "text" : "password"}
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 focus:outline-none transition-all text-sm"
+                        className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 sm:px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 focus:outline-none transition-all text-sm"
                         placeholder="Mínimo 8 caracteres"
                       />
                       <button
@@ -499,7 +499,7 @@ const EditProfilePage: React.FC<EditProfilePageProps> = ({
                       type={showPasswords ? "text" : "password"}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 focus:outline-none transition-all text-sm"
+                      className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 sm:px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 focus:outline-none transition-all text-sm"
                       placeholder="Digite a senha novamente"
                     />
                   </div>
@@ -507,7 +507,7 @@ const EditProfilePage: React.FC<EditProfilePageProps> = ({
                     type="button"
                     onClick={handleChangePassword}
                     disabled={changingPassword || !newPassword || !confirmPassword}
-                    className="w-full px-4 py-2.5 rounded-xl bg-slate-700 dark:bg-slate-600 text-white font-semibold text-sm hover:bg-slate-600 dark:hover:bg-slate-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-700 dark:bg-slate-600 text-white font-semibold text-sm hover:bg-slate-600 dark:hover:bg-slate-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 min-h-[44px]"
                   >
                     {changingPassword ? (
                       <span className="flex items-center justify-center gap-2">
@@ -523,17 +523,17 @@ const EditProfilePage: React.FC<EditProfilePageProps> = ({
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3 pt-4">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-3 sm:pt-4">
               <button
                 onClick={() => navigate("/profile")}
-                className="flex-1 px-5 py-3 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-semibold transition-all duration-200 border border-slate-300 dark:border-slate-600"
+                className="flex-1 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-semibold transition-all duration-200 border border-slate-300 dark:border-slate-600 text-sm sm:text-base min-h-[44px]"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving || !editFirstName.trim()}
-                className="flex-1 px-5 py-3 rounded-xl bg-blue-600 dark:bg-blue-500 text-white font-semibold hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg"
+                className="flex-1 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-blue-600 dark:bg-blue-500 text-white font-semibold hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg text-sm sm:text-base min-h-[44px]"
               >
                 {saving ? (
                   <span className="flex items-center justify-center gap-2">
@@ -9088,23 +9088,113 @@ const AppShell: React.FC = () => {
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-1">Meu Perfil</h1>
-              <p className="text-sm text-slate-600 dark:text-gray-400">Visualize suas informações e estatísticas</p>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white mb-1">Meu Perfil</h1>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-gray-400">Visualize suas informações e estatísticas</p>
             </div>
             <button
               onClick={() => navigate(-1)}
-              className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
               aria-label="Voltar"
             >
               <X size={20} className="text-slate-600 dark:text-gray-400" />
             </button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Mobile: Layout em 1 coluna */}
+          <div className="flex flex-col lg:hidden space-y-4 sm:space-y-6">
+            {/* Foto + Nome + Email */}
+            <div className="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
+              <div className="flex flex-col items-center">
+                {user?.avatar_url ? (
+                  <img
+                    src={user.avatar_url}
+                    alt={user.name || "Usuário"}
+                    className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover border-4 border-cyan-500 dark:border-cyan-400 shadow-lg"
+                  />
+                ) : (
+                  <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-gradient-to-br from-cyan-400 via-purple-500 to-lime-400 flex items-center justify-center text-white text-2xl sm:text-4xl font-bold border-4 border-cyan-500 dark:border-cyan-400 shadow-lg">
+                    {user?.name?.charAt(0)?.toUpperCase() || "U"}
+                  </div>
+                )}
+                <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white mt-3 sm:mt-4 text-center">
+                  {user?.name || "Usuário"}
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-gray-400 mt-1 text-center break-all">
+                  {user?.email || ""}
+                </p>
+              </div>
+            </div>
+
+            {/* Botão Editar Perfil */}
+            <button
+              onClick={() => navigate("/profile/edit")}
+              className="w-full bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-600 hover:to-purple-700 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 text-sm sm:text-base"
+            >
+              <Pencil size={18} />
+              Editar Perfil
+            </button>
+
+            {/* Estatísticas */}
+            <div className="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mb-3 sm:mb-4">Estatísticas</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                <div className="text-center p-3 sm:p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="text-xl sm:text-2xl font-bold text-cyan-600 dark:text-cyan-400">{stats.favorite}</div>
+                  <div className="text-xs text-slate-600 dark:text-gray-400 mt-1">Favoritos</div>
+                </div>
+                <div className="text-center p-3 sm:p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="text-xl sm:text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.lists}</div>
+                  <div className="text-xs text-slate-600 dark:text-gray-400 mt-1">Listas</div>
+                </div>
+                <div className="text-center p-3 sm:p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="text-xl sm:text-2xl font-bold text-lime-600 dark:text-lime-400">{stats.watched}</div>
+                  <div className="text-xs text-slate-600 dark:text-gray-400 mt-1">Assistidos</div>
+                </div>
+                <div className="text-center p-3 sm:p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="text-xl sm:text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.want}</div>
+                  <div className="text-xs text-slate-600 dark:text-gray-400 mt-1">Quero ver</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Informações Pessoais */}
+            <div className="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mb-3 sm:mb-4">Informações Pessoais</h3>
+              <div className="space-y-3 sm:space-y-4">
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-slate-600 dark:text-gray-400 mb-1">
+                    Nome
+                  </label>
+                  <div className="text-sm sm:text-base text-slate-900 dark:text-white break-words">
+                    {firstName || "—"}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-slate-600 dark:text-gray-400 mb-1">
+                    Sobrenome
+                  </label>
+                  <div className="text-sm sm:text-base text-slate-900 dark:text-white break-words">
+                    {lastName || "—"}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-semibold text-slate-600 dark:text-gray-400 mb-1">
+                    Email
+                  </label>
+                  <div className="text-sm sm:text-base text-slate-900 dark:text-white break-all">
+                    {user?.email || "—"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop: Layout em 2 colunas */}
+          <div className="hidden lg:grid lg:grid-cols-3 gap-6 xl:gap-8">
             {/* Coluna Esquerda - Informações do Usuário */}
             <div className="lg:col-span-1">
               <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6">
@@ -9124,7 +9214,7 @@ const AppShell: React.FC = () => {
                   <h2 className="text-xl font-bold text-slate-900 dark:text-white mt-4 text-center">
                     {user?.name || "Usuário"}
                   </h2>
-                  <p className="text-sm text-slate-600 dark:text-gray-400 mt-1 text-center">
+                  <p className="text-sm text-slate-600 dark:text-gray-400 mt-1 text-center break-words">
                     {user?.email || ""}
                   </p>
                 </div>
@@ -9189,7 +9279,7 @@ const AppShell: React.FC = () => {
                     <label className="block text-sm font-semibold text-slate-600 dark:text-gray-400 mb-1">
                       Email
                     </label>
-                    <div className="text-base text-slate-900 dark:text-white">
+                    <div className="text-base text-slate-900 dark:text-white break-words">
                       {user?.email || "—"}
                     </div>
                   </div>
