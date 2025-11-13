@@ -21,7 +21,8 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 | 2025-11-13 | 1.2.0  | Minor    | Busca híbrida: TMDb + dados locais, ignora acentos/caixa e faz deduplicação.                        |
 | 2025-11-13 | 1.2.1  | Bugfix   | Campo de busca vazio limpa resultados, filtros, paginação e URL; volta ao estado padrão.            |
 | 2025-11-13 | 1.3.0  | Minor    | **Editar Perfil** virou página `/profile/edit` + **correção de padding do header** (navbar fixa). 
-| 2025-11-13 | 1.3.1  | Bugfix  | Estabilidade do formulário de edição de perfil (sem “tremor”/reset durante digitação).            ||
+| 2025-11-13 | 1.3.1  | Bugfix  | Estabilidade do formulário de edição de perfil (sem “tremor”/reset durante digitação).            
+| 2025-11-13 | 1.3.2  | Bugfix  | Perfil: navegação normal, confirmação só com alterações não salvas e modal de confirmação com botões corretos. 
 
 
 
