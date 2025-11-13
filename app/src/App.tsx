@@ -69,6 +69,7 @@ export type { MediaT, MovieT, UserState, UserStateMap, CatState, UserList, ApiSt
 // ======================= App =======================
 const AppShell: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true); // Estado para verificar se está checando a sessão
   const [viewingShared, setViewingShared] = useState(false);
   const [resolvingShare, setResolvingShare] = useState(false);
   const [sharedCollection, setSharedCollection] = useState<{ items: Array<{ movie: MovieT; meta: { rating?: number; description?: string } }>; listName: string; category?: string } | null>(null);
@@ -174,9 +175,9 @@ const AppShell: React.FC = () => {
     if (type === "item" && itemId) {
       // Extrair tipo de mídia do itemId (formato: "movie:123" ou "tv:456")
       if (itemId.includes(":")) {
-        const [itemType, id] = itemId.split(":");
+      const [itemType, id] = itemId.split(":");
         if ((itemType === "movie" || itemType === "tv") && id) {
-          return await setListCoverWithApi(listId, type, id, itemType as "movie" | "tv", itemId, url, focalPoint);
+        return await setListCoverWithApi(listId, type, id, itemType as "movie" | "tv", itemId, url, focalPoint);
         }
       } else {
         // Se itemId não tem ":", tentar encontrar o item na lista para determinar o tipo
@@ -195,8 +196,25 @@ const AppShell: React.FC = () => {
   };
 
   const [selectedMovie, setSelectedMovie] = useState<any | null>(null);
-  const [activeTab, setActiveTab] = useState<TabKey>("home");
-  const [activeCategory, setActiveCategory] = useState<"movies" | "tv" | "people" | "home">("home");
+  // Restaurar estado de navegação do localStorage
+  const [activeTab, setActiveTab] = useState<TabKey>(() => {
+    try {
+      const saved = localStorage.getItem('vetra:activeTab');
+      if (saved && (saved === "home" || saved === "favorites" || saved === "lists" || saved === "watchlist" || saved === "people")) {
+        return saved as TabKey;
+      }
+    } catch {}
+    return "home";
+  });
+  const [activeCategory, setActiveCategory] = useState<"movies" | "tv" | "people" | "home">(() => {
+    try {
+      const saved = localStorage.getItem('vetra:activeCategory');
+      if (saved && (saved === "movies" || saved === "tv" || saved === "people" || saved === "home")) {
+        return saved as "movies" | "tv" | "people" | "home";
+      }
+    } catch {}
+    return "home";
+  });
 
   const [cats, setCats] = useState<Record<CatKey, CatState>>({
     trending: { items: [], page: 0, loading: false, initialized: false },
@@ -458,7 +476,11 @@ const AppShell: React.FC = () => {
 
       setIsLoggedIn(false);
       setUser(null);
+      // Limpar todos os tokens
       localStorage.removeItem("authToken");
+      localStorage.removeItem('vetra:idToken');
+      localStorage.removeItem('vetra:refreshToken');
+      localStorage.removeItem('vetra:last_email');
       setShowDeleteAccountModal(false);
       setDeleteAccountPassword("");
       setDeleteAccountConfirmCheckbox(false);
@@ -1727,6 +1749,22 @@ const AppShell: React.FC = () => {
     const activeFilters = filters || appliedSearchFilters;
     const currentPage = page !== undefined ? page : searchPage;
     
+    // Se o campo de busca estiver vazio, limpar resultados e voltar ao estado padrão
+    if (!hasSearchTerm && !hasActiveFilters) {
+      setMovies([]);
+      setPeople([]);
+      setSearchTotalResults(0);
+      setHasActiveFilters(false);
+      setSearchPage(1);
+      // Limpar parâmetros de busca da URL
+      const params = new URLSearchParams(window.location.search);
+      params.delete("q");
+      params.delete("page");
+      const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+      window.history.replaceState({}, "", newURL);
+      return;
+    }
+    
     setLoading(true);
     try {
       // Determine effective sort
@@ -1906,10 +1944,97 @@ const AppShell: React.FC = () => {
         if (yearFrom) filters.year = yearFrom;
         if (minRating > 0) filters.minRating = minRating;
         
+        // Função para normalizar texto (remover acentos e converter para minúsculas)
+        const normalizeText = (text: string): string => {
+          if (!text) return "";
+          return text
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "") // Remove acentos
+            .trim();
+        };
+        
+        // Função para verificar se um texto contém o termo de busca
+        const matchesSearch = (text: string, searchTerm: string): boolean => {
+          const normalizedText = normalizeText(text);
+          const normalizedSearch = normalizeText(searchTerm);
+          return normalizedText.includes(normalizedSearch);
+        };
+        
+        // Coletar todos os filmes/séries já carregados no site para busca local
+        const allLocalMovies: any[] = [];
+        
+        // Adicionar filmes das seções da home
+        Object.values(homeRows).forEach((section: any) => {
+          if (Array.isArray(section)) {
+            section.forEach((item: any) => {
+              if (item.items && Array.isArray(item.items)) {
+                allLocalMovies.push(...item.items);
+              }
+            });
+          } else if (section.items && Array.isArray(section.items)) {
+            allLocalMovies.push(...section.items);
+          }
+        });
+        
+        // Adicionar filmes das categorias
+        Object.values(cats).forEach((cat: any) => {
+          if (cat.items && Array.isArray(cat.items)) {
+            allLocalMovies.push(...cat.items);
+          }
+        });
+        
+        // Adicionar favoritos
+        if (favorites && Array.isArray(favorites)) {
+          allLocalMovies.push(...favorites);
+        }
+        
+        // Adicionar filmes das listas
+        lists.forEach((list: any) => {
+          if (list.items && Array.isArray(list.items)) {
+            allLocalMovies.push(...list.items);
+          }
+        });
+        
+        // Fazer busca local nos dados já carregados
+        const localResults = allLocalMovies.filter((item: any) => {
+          const title = item.title || item.name || "";
+          return matchesSearch(title, searchQuery);
+        });
+        
+        // Remover duplicatas dos resultados locais (por ID e tipo de mídia)
+        const seenIds = new Set<string>();
+        const uniqueLocalResults = localResults.filter((item: any) => {
+          const mediaType = item.media || item.media_type || "movie";
+          const id = `${mediaType}:${item.id}`;
+          if (seenIds.has(id)) return false;
+          seenIds.add(id);
+          return true;
+        });
+        
+        // Buscar na API
         const data = await api.search(searchQuery, currentPage, filters);
         const mixed = (data as any).items || (data as any).results || [];
+        
+        // Combinar resultados da API com resultados locais, removendo duplicatas
+        const apiIds = new Set<string>();
+        mixed.forEach((item: any) => {
+          const mediaType = item.media_type || item.media || "movie";
+          const id = `${mediaType}:${item.id}`;
+          apiIds.add(id);
+        });
+        
+        // Adicionar resultados locais que não estão na API
+        const additionalLocalResults = uniqueLocalResults.filter((item: any) => {
+          const mediaType = item.media || item.media_type || "movie";
+          const id = `${mediaType}:${item.id}`;
+          return !apiIds.has(id);
+        });
+        
+        // Combinar: resultados da API primeiro, depois resultados locais adicionais
+        const combinedResults = [...mixed, ...additionalLocalResults];
       
-        let moviesPart = mixed.filter((x: any) => {
+        let moviesPart = combinedResults.filter((x: any) => {
           const mediaType = x.media_type || x.media;
           if (activeFilters.type === "movie" && mediaType !== "movie") return false;
           if (activeFilters.type === "tv" && mediaType !== "tv") return false;
@@ -2212,6 +2337,18 @@ const AppShell: React.FC = () => {
   useEffect(() => { try { localStorage.setItem(KEY_STATES, JSON.stringify(userStates)); } catch {} }, [userStates]);
   useEffect(() => { try { localStorage.setItem(KEY_HISTORY, JSON.stringify(watchHistory)); } catch {} }, [watchHistory]);
   useEffect(() => { try { localStorage.setItem(KEY_STATS, JSON.stringify(userStats)); } catch {} }, [userStats]);
+  
+  // Salvar estado de navegação no localStorage
+  useEffect(() => { 
+    try { 
+      localStorage.setItem('vetra:activeTab', activeTab); 
+    } catch {} 
+  }, [activeTab]);
+  useEffect(() => { 
+    try { 
+      localStorage.setItem('vetra:activeCategory', activeCategory); 
+    } catch {} 
+  }, [activeCategory]);
 
 
   const toggleFavorite = (movie: MovieT, skipConfirm = false) => {
@@ -2489,7 +2626,7 @@ const AppShell: React.FC = () => {
         });
         
         if (result?.success !== false) {
-          pushToast({ message: "Capa definida", tone: "ok" });
+        pushToast({ message: "Capa definida", tone: "ok" });
         } else {
           pushToast({ message: result?.error || "Erro ao definir capa", tone: "err" });
         }
@@ -3133,6 +3270,60 @@ const AppShell: React.FC = () => {
     }
   };
 
+
+  // Verificar sessão persistente ao carregar a aplicação
+  useEffect(() => {
+    const checkPersistedSession = async () => {
+      try {
+        const idToken = localStorage.getItem('vetra:idToken');
+        const lastEmail = localStorage.getItem('vetra:last_email');
+        
+        if (idToken && lastEmail) {
+          console.log("[checkPersistedSession] Token encontrado, verificando sessão...");
+          
+          // Verificar se o token ainda é válido
+          const verifyResult = await api.authVerify(idToken);
+          
+          if (verifyResult.ok && verifyResult.user) {
+            console.log("[checkPersistedSession] Sessão válida, restaurando login...");
+            setIsLoggedIn(true);
+            setUser({
+              name: verifyResult.user.name || "Usuário",
+              email: verifyResult.user.email || lastEmail,
+              avatar_url: verifyResult.user.avatar_url || null,
+              updatedAt: verifyResult.user.updatedAt || null,
+            });
+            // Carregar perfil completo
+            await loadProfile(verifyResult.user.email || lastEmail);
+          } else {
+            console.log("[checkPersistedSession] Token inválido ou expirado, limpando...");
+            // Limpar tokens inválidos
+            localStorage.removeItem('vetra:idToken');
+            localStorage.removeItem('vetra:refreshToken');
+            localStorage.removeItem('vetra:last_email');
+            setIsLoggedIn(false);
+            setUser(null);
+          }
+        } else {
+          console.log("[checkPersistedSession] Nenhuma sessão persistida encontrada");
+          setIsLoggedIn(false);
+        }
+      } catch (error) {
+        console.error("[checkPersistedSession] Erro ao verificar sessão:", error);
+        // Em caso de erro, limpar tokens e manter usuário deslogado
+        localStorage.removeItem('vetra:idToken');
+        localStorage.removeItem('vetra:refreshToken');
+        setIsLoggedIn(false);
+        setUser(null);
+      } finally {
+        // Sempre marcar como finalizado a verificação, mesmo em caso de erro
+        setIsCheckingSession(false);
+      }
+    };
+    
+    // Executar verificação apenas uma vez ao montar
+    checkPersistedSession();
+  }, []); // Array vazio = executa apenas uma vez ao montar
 
   useEffect(() => {
     if (isLoggedIn && (user?.email || "").trim()) {
@@ -4173,18 +4364,18 @@ const AppShell: React.FC = () => {
                         >
                           <div className="bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 hover:border-cyan-500 dark:hover:border-cyan-500 transition-all hover:shadow-lg">
                             <div className="w-full aspect-[2/3] bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
-                              {actor.profile_path ? (
-                                <img
-                                  src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
+                            {actor.profile_path ? (
+                              <img
+                                src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
                                   alt={actor.name || "Ator"}
                                   className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
-                                  loading="lazy"
-                                />
-                              ) : (
+                                loading="lazy"
+                              />
+                            ) : (
                                 <div className="w-full h-full flex items-center justify-center">
                                   <User size={48} className="text-slate-400 dark:text-slate-500" />
-                                </div>
-                              )}
+                              </div>
+                            )}
                             </div>
                             <div className="p-3">
                               <p className="text-sm font-semibold text-slate-900 dark:text-white truncate mb-1 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
@@ -4637,14 +4828,14 @@ const AppShell: React.FC = () => {
                               alt={actor.name || "Ator"}
                               className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
                               loading="lazy"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
                               <User size={48} className="text-slate-400 dark:text-slate-500" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="p-3">
+                              </div>
+                            )}
+                          </div>
+                          <div className="p-3">
                           <p className="text-sm font-semibold text-slate-900 dark:text-white truncate mb-1 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
                             {actor.name || "Nome não disponível"}
                           </p>
@@ -4653,9 +4844,9 @@ const AppShell: React.FC = () => {
                               {actor.character}
                             </p>
                           )}
+                          </div>
                         </div>
-                      </div>
-                    </Link>
+                      </Link>
                   )}
                   limit={d.cast.length}
                 />
@@ -5242,7 +5433,7 @@ const AppShell: React.FC = () => {
                             const itemKey = mediaKey(m);
                             const result = await setListCover(lst.id, "item", itemKey);
                             if (result?.success !== false) {
-                              pushToast({ message: "Capa definida", tone: "ok" });
+                            pushToast({ message: "Capa definida", tone: "ok" });
                             } else {
                               pushToast({ message: result.error || "Erro ao definir capa", tone: "err" });
                             }
@@ -7084,11 +7275,45 @@ const AppShell: React.FC = () => {
               </div>
               <input
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  // Se o campo for limpo, limpar resultados imediatamente
+                  if (e.target.value.trim() === "") {
+                    // Verificar se há filtros realmente ativos (não padrão)
+                    const defaults = getDefaultFilters();
+                    const hasNonDefaultFilters = 
+                      appliedSearchFilters.type !== defaults.type ||
+                      appliedSearchFilters.sort !== defaults.sort ||
+                      appliedSearchFilters.yearGte !== defaults.yearGte ||
+                      appliedSearchFilters.yearLte !== defaults.yearLte ||
+                      appliedSearchFilters.voteAvgGte > defaults.voteAvgGte ||
+                      appliedSearchFilters.voteCntGte > defaults.voteCntGte ||
+                      appliedSearchFilters.withPoster !== defaults.withPoster;
+                    
+                    // Se não há filtros ativos, limpar tudo
+                    if (!hasNonDefaultFilters) {
+                      setMovies([]);
+                      setPeople([]);
+                      setSearchTotalResults(0);
+                      setHasActiveFilters(false);
+                      setSearchPage(1);
+                      // Limpar parâmetros de busca da URL
+                      const params = new URLSearchParams(window.location.search);
+                      params.delete("q");
+                      params.delete("page");
+                      const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+                      window.history.replaceState({}, "", newURL);
+                    }
+                  }
+                }}
                       placeholder={t("home.search_placeholder_full")}
                       className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 pl-12 pr-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 transition-all duration-200 text-base font-normal"
                       style={{ lineHeight: '1.6', minHeight: '48px' }}
-                onKeyDown={(e) => e.key === "Enter" && runSearch()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    runSearch();
+                  }
+                }}
                       aria-label={t("home.search_placeholder_full")}
               />
             </div>
@@ -7144,7 +7369,7 @@ const AppShell: React.FC = () => {
           />
         )}
 
-      {(searchTerm || hasActiveFilters) ? (
+      {(searchTerm.trim() || hasActiveFilters) ? (
         <section className="mb-6 md:mb-8">
           <div className="flex flex-col gap-3 mb-3 md:mb-4">
             <div className="flex items-center justify-between">
@@ -8195,6 +8420,18 @@ const AppShell: React.FC = () => {
   const urlParams = new URLSearchParams(window.location.search);
   const hasShareSlug = urlParams.get("share");
   
+  // Mostrar loading enquanto verifica a sessão para evitar flash da tela de login
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-600 dark:text-slate-400">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+  
   if (!isLoggedIn && !viewingShared && !hasShareSlug && !resolvingShare) {
     return (
       <>
@@ -8405,6 +8642,11 @@ const AppShell: React.FC = () => {
                           setIsLoggedIn(false);
                           setUser(null);
                           setShowProfileMenu(false);
+                          // Limpar tokens ao fazer logout
+                          localStorage.removeItem('vetra:idToken');
+                          localStorage.removeItem('vetra:refreshToken');
+                          localStorage.removeItem('vetra:last_email');
+                          pushToast({ message: "Logout realizado com sucesso", tone: "ok" });
                         }}
                         className="w-full px-4 py-2 text-left text-red-600 dark:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors"
                       >
@@ -8739,6 +8981,11 @@ const AppShell: React.FC = () => {
                     setIsLoggedIn(false);
                     setUser(null);
                     setShowMobileMenu(false);
+                    // Limpar tokens ao fazer logout
+                    localStorage.removeItem('vetra:idToken');
+                    localStorage.removeItem('vetra:refreshToken');
+                    localStorage.removeItem('vetra:last_email');
+                    pushToast({ message: "Logout realizado com sucesso", tone: "ok" });
                   }}
                   className="w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 text-red-600 dark:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
