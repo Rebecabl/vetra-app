@@ -19,7 +19,7 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 |------------|--------|-------------|----------------------------------------------------------------|
 | 2025-11-11 | 1.0.0  | no ar       | Primeira versão estável do VETRA.                              |
 | 2025-11-12 | 1.0.1  | Minor       |  **Adiciona capa (thumbnail) nas listas** e pequenos ajustes  |
-
+ 2025-11-13 | 1.1.1  | Patch  | Verificação de sessão no load, limpeza completa de tokens no logout/remoção de conta e preservação de rota.(continuando) |
 
 
 ### Implementação
