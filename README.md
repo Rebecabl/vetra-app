@@ -27,6 +27,7 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 
 
 
+
 ### Implementação
 
 - **Arquitetura**: Frontend React + Backend Express com separação clara de responsabilidades
