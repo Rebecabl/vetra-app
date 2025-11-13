@@ -99,8 +99,7 @@ export const LanguageMenu: React.FC<{
         }}
         className={`inline-flex items-center justify-center rounded-full border
                    transition-all duration-200
-                   w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12
-                   min-w-[40px] min-h-[40px] sm:min-w-[44px] sm:min-h-[44px] md:min-w-[48px] md:min-h-[48px]
+                   h-9 w-9
                    focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2
                    ${
                      variant === "dark-bg"
@@ -117,7 +116,7 @@ export const LanguageMenu: React.FC<{
         aria-haspopup="true"
         aria-controls="language-menu"
       >
-        <Globe size={20} className="sm:w-5 sm:h-5 md:w-6 md:h-6 stroke-current" aria-hidden="true" />
+        <Globe size={16} className="stroke-current" aria-hidden="true" />
       </button>
       {open && (
         <div
