@@ -66,6 +66,492 @@ import { formatDate, formatDateShort } from "./utils/date";
 export type { MediaT, MovieT, UserState, UserStateMap, CatState, UserList, ApiStatus, TabKey } from "./types/movies";
 
 
+// ======================= EditProfilePage =======================
+interface EditProfilePageProps {
+  user: UserProfile | null;
+  isLoggedIn: boolean;
+  favorites: MovieT[];
+  lists: UserList[];
+  userStates: UserStateMap;
+  pushToast: (toast: { message: string; tone: "ok" | "err" | "info" }) => void;
+  saveProfile: (data: { name: string; avatar_url: string | null }) => Promise<void>;
+  setIsLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
+  setUser: React.Dispatch<React.SetStateAction<UserProfile | null>>;
+  setEditProfileHasChanges: React.Dispatch<React.SetStateAction<boolean>>;
+  editProfileHasChanges: boolean;
+  setPendingTabChange: React.Dispatch<React.SetStateAction<TabKey | null>>;
+  setPendingCategoryChange: React.Dispatch<React.SetStateAction<"movies" | "tv" | "people" | "home" | null>>;
+  setShowExitEditProfileConfirm: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+const EditProfilePage: React.FC<EditProfilePageProps> = ({
+  user,
+  isLoggedIn,
+  favorites,
+  lists,
+  userStates,
+  pushToast,
+  saveProfile,
+  setIsLoggedIn,
+  setUser,
+  setEditProfileHasChanges,
+  editProfileHasChanges,
+  setPendingTabChange,
+  setPendingCategoryChange,
+  setShowExitEditProfileConfirm,
+}) => {
+  const navigate = useNavigate();
+  
+  // Estados locais do formulário - SEMPRE começam vazios
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editLastName, setEditLastName] = useState("");
+  const [editAvatar, setEditAvatar] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [showPasswordSection, setShowPasswordSection] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [showPasswords, setShowPasswords] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Refs para controlar inicialização
+  const initializedForEmailRef = useRef<string | null>(null);
+  const originalValuesRef = useRef<{ firstName: string; lastName: string; avatar: string | null } | null>(null);
+  
+  // Inicializar valores APENAS UMA VEZ quando o user.email carregar
+  useEffect(() => {
+    const email = user?.email;
+    if (!email || !user) {
+      return;
+    }
+    
+    // Se já foi inicializado para este email, NUNCA fazer nada
+    if (initializedForEmailRef.current === email) {
+      return;
+    }
+    
+    // Primeira vez - inicializar TUDO
+    const fullName = user.name || "";
+    const nameParts = fullName.split(' ');
+    const firstName = nameParts[0] || "";
+    const lastName = nameParts.slice(1).join(' ') || "";
+    const avatar = user.avatar_url || null;
+    
+    // Armazenar valores originais
+    originalValuesRef.current = {
+      firstName,
+      lastName,
+      avatar,
+    };
+    
+    // Marcar como inicializado ANTES de setar os estados
+    initializedForEmailRef.current = email;
+    
+    // Preencher os campos apenas uma vez
+    setEditFirstName(firstName);
+    setEditLastName(lastName);
+    setEditAvatar(avatar);
+  }, [user?.email]); // APENAS email - nunca incluir outros campos
+  
+  // Verificar alterações usando estados locais - muito mais simples e confiável
+  useEffect(() => {
+    if (!originalValuesRef.current) {
+      return;
+    }
+    
+    const original = originalValuesRef.current;
+    
+    // Comparar estados locais com valores originais
+    const hasNameChange = Boolean(
+      editFirstName.trim() !== original.firstName.trim() || 
+      editLastName.trim() !== original.lastName.trim()
+    );
+    const hasAvatarChange = Boolean(editAvatar !== original.avatar || avatarFile !== null);
+    const hasPasswordChange = Boolean(showPasswordSection && (newPassword || confirmPassword));
+    
+    const hasChanges = hasNameChange || hasAvatarChange || hasPasswordChange;
+    setEditProfileHasChanges(hasChanges);
+  }, [editFirstName, editLastName, editAvatar, avatarFile, showPasswordSection, newPassword, confirmPassword, setEditProfileHasChanges]);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        pushToast({ message: "A imagem deve ter no máximo 5MB", tone: "err" });
+        return;
+      }
+      if (!file.type.startsWith("image/")) {
+        pushToast({ message: "Por favor, selecione uma imagem", tone: "err" });
+        return;
+      }
+      setAvatarFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditAvatar(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSave = async () => {
+    // Usar estados locais do formulário
+    const firstName = editFirstName.trim();
+    const lastName = editLastName.trim();
+    
+    if (!firstName) {
+      pushToast({ message: "O nome é obrigatório", tone: "err" });
+      return;
+    }
+    
+    const fullName = lastName 
+      ? `${firstName} ${lastName}`
+      : firstName;
+      
+    setSaving(true);
+    try {
+      await saveProfile({ name: fullName, avatar_url: editAvatar });
+      pushToast({ message: "Perfil atualizado com sucesso!", tone: "ok" });
+      setEditProfileHasChanges(false); // Resetar flag de alterações após salvar
+      
+      // Atualizar valores originais após salvar
+      if (originalValuesRef.current) {
+        originalValuesRef.current = {
+          firstName,
+          lastName,
+          avatar: editAvatar,
+        };
+      }
+      
+      navigate("/profile"); // Volta para a página de perfil
+    } catch (e: any) {
+      pushToast({ message: e?.message || "Erro ao salvar perfil", tone: "err" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      pushToast({ message: "Preencha todos os campos", tone: "err" });
+      return;
+    }
+    if (newPassword.length < 8) {
+      pushToast({ message: "A senha deve ter no mínimo 8 caracteres", tone: "err" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      pushToast({ message: "As senhas não coincidem", tone: "err" });
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const idToken = localStorage.getItem('vetra:idToken');
+      if (!idToken) {
+        pushToast({ message: "Você precisa estar autenticado. Faça login novamente.", tone: "err" });
+        setChangingPassword(false);
+        return;
+      }
+      
+      const result = await changePassword(newPassword, idToken);
+      if (result.ok) {
+        pushToast({ message: "Senha alterada com sucesso! Faça login novamente.", tone: "ok" });
+        setShowPasswordSection(false);
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setIsLoggedIn(false);
+        setUser(null);
+        localStorage.removeItem('vetra:idToken');
+        localStorage.removeItem('vetra:refreshToken');
+        navigate("/");
+      } else {
+        const errorMsg = result.error || result.message || "Erro ao alterar senha";
+        if (errorMsg.includes("Token") || errorMsg.includes("token") || errorMsg.includes("Reautentique")) {
+          pushToast({ message: "Sua sessão expirou. Faça login novamente para alterar a senha.", tone: "err" });
+        } else {
+          pushToast({ message: errorMsg, tone: "err" });
+        }
+      }
+    } catch (e: any) {
+      pushToast({ message: e?.message || e?.error || "Erro ao alterar senha.", tone: "err" });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const stats = {
+    favorites: favorites.length,
+    lists: lists.length,
+    watched: Object.values(userStates).filter(s => s.state === "watched").length,
+    want: Object.values(userStates).filter(s => s.state === "want").length,
+  };
+
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-slate-900 flex items-center justify-center px-4">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Acesso restrito</h1>
+          <p className="text-slate-600 dark:text-gray-400 mb-6">Você precisa estar logado para editar seu perfil.</p>
+          <button
+            onClick={() => navigate("/")}
+            className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            Voltar para o início
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-white dark:bg-slate-900">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-lime-400/20 border-b border-slate-200 dark:border-slate-700">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-1">Editar Perfil</h1>
+              <p className="text-sm text-slate-600 dark:text-gray-400">Gerencie suas informações e preferências</p>
+            </div>
+            <button
+              onClick={() => {
+                if (editProfileHasChanges) {
+                  setPendingTabChange(null);
+                  setPendingCategoryChange(null);
+                  setShowExitEditProfileConfirm(true);
+                } else {
+                  navigate(-1);
+                }
+              }}
+              className="text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition-colors p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              aria-label="Fechar"
+            >
+              <X size={24} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid md:grid-cols-2 gap-6 lg:gap-8">
+          {/* Left Column - Avatar and Stats */}
+          <div className="space-y-6">
+            <div className="flex flex-col items-center bg-slate-50 dark:bg-slate-800/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+              <label className="cursor-pointer group">
+                {editAvatar ? (
+                  <div className="relative">
+                    <img
+                      src={editAvatar}
+                      alt="Avatar"
+                      className="w-32 h-32 rounded-full object-cover border-4 border-slate-300 dark:border-slate-600 shadow-xl group-hover:border-cyan-500/50 transition-all duration-300"
+                    />
+                    <div className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <Pencil size={24} className="text-white" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-32 h-32 rounded-full bg-gradient-to-br from-cyan-400 via-purple-500 to-lime-400 flex items-center justify-center text-white font-bold text-3xl border-4 border-slate-300 dark:border-slate-600 shadow-xl group-hover:border-cyan-500/50 transition-all duration-300">
+                    {(editFirstName || user?.name || "U").charAt(0)?.toUpperCase() || "U"}
+                  </div>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="mt-4 px-4 py-2 text-sm font-semibold text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-all duration-200"
+              >
+                {editAvatar ? "Alterar foto" : "Adicionar foto"}
+              </button>
+              {editAvatar && (
+                <button
+                  onClick={() => {
+                    setEditAvatar(null);
+                    setAvatarFile(null);
+                  }}
+                  className="mt-2 text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+                >
+                  Remover foto
+                </button>
+              )}
+            </div>
+
+            {/* Statistics */}
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+              <h3 className="text-sm font-semibold text-slate-600 dark:text-gray-400 mb-4 uppercase tracking-wide">Estatísticas</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="text-center p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">{stats.favorites}</div>
+                  <div className="text-xs text-slate-600 dark:text-gray-400 mt-1">Favoritos</div>
+                </div>
+                <div className="text-center p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.lists}</div>
+                  <div className="text-xs text-slate-600 dark:text-gray-400 mt-1">Listas</div>
+                </div>
+                <div className="text-center p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="text-2xl font-bold text-lime-600 dark:text-lime-400">{stats.watched}</div>
+                  <div className="text-xs text-slate-600 dark:text-gray-400 mt-1">Assistidos</div>
+                </div>
+                <div className="text-center p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.want}</div>
+                  <div className="text-xs text-slate-600 dark:text-gray-400 mt-1">Quero ver</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column - Form */}
+          <div className="space-y-5">
+            <div>
+              <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                Nome <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={editFirstName}
+                onChange={(e) => setEditFirstName(e.target.value)}
+                autoComplete="given-name"
+                className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 focus:outline-none transition-all duration-200"
+                placeholder="Seu nome"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                Sobrenome
+              </label>
+              <input
+                type="text"
+                value={editLastName}
+                onChange={(e) => setEditLastName(e.target.value)}
+                autoComplete="family-name"
+                className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 focus:outline-none transition-all duration-200"
+                placeholder="Seu sobrenome"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">Email</label>
+              <div className="relative">
+                <input
+                  type="email"
+                  value={user?.email || ""}
+                  disabled
+                  className="w-full bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-gray-500 px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 cursor-not-allowed"
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <Lock size={16} className="text-slate-400 dark:text-gray-600" />
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-slate-500 dark:text-gray-500 flex items-center gap-1">
+                <Lock size={12} />
+                O email não pode ser alterado
+              </p>
+            </div>
+
+            {/* Password Section */}
+            <div className="border-t border-slate-200 dark:border-slate-700 pt-5">
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-semibold text-slate-900 dark:text-white">
+                  Senha
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordSection(!showPasswordSection)}
+                  className="text-xs text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 transition-colors"
+                >
+                  {showPasswordSection ? "Cancelar" : "Alterar senha"}
+                </button>
+              </div>
+              {showPasswordSection && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs text-slate-600 dark:text-gray-400 mb-1.5">Nova senha</label>
+                    <div className="relative">
+                      <input
+                        type={showPasswords ? "text" : "password"}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 focus:outline-none transition-all text-sm"
+                        placeholder="Mínimo 8 caracteres"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPasswords(!showPasswords)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300"
+                      >
+                        {showPasswords ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-600 dark:text-gray-400 mb-1.5">Confirmar nova senha</label>
+                    <input
+                      type={showPasswords ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 focus:outline-none transition-all text-sm"
+                      placeholder="Digite a senha novamente"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleChangePassword}
+                    disabled={changingPassword || !newPassword || !confirmPassword}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-700 dark:bg-slate-600 text-white font-semibold text-sm hover:bg-slate-600 dark:hover:bg-slate-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                  >
+                    {changingPassword ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Alterando...
+                      </span>
+                    ) : (
+                      "Alterar senha"
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4">
+              <button
+                onClick={() => navigate("/profile")}
+                className="flex-1 px-5 py-3 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-semibold transition-all duration-200 border border-slate-300 dark:border-slate-600"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving || !editFirstName.trim()}
+                className="flex-1 px-5 py-3 rounded-xl bg-blue-600 dark:bg-blue-500 text-white font-semibold hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg"
+              >
+                {saving ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Salvando...
+                  </span>
+                ) : (
+                  "Salvar alterações"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ======================= App =======================
 const AppShell: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -215,6 +701,12 @@ const AppShell: React.FC = () => {
     } catch {}
     return "home";
   });
+
+  // Estados para interceptar navegação quando estiver na página de edição de perfil
+  const [showExitEditProfileConfirm, setShowExitEditProfileConfirm] = useState(false);
+  const [pendingTabChange, setPendingTabChange] = useState<TabKey | null>(null);
+  const [pendingCategoryChange, setPendingCategoryChange] = useState<"movies" | "tv" | "people" | "home" | null>(null);
+  const [editProfileHasChanges, setEditProfileHasChanges] = useState(false);
 
   const [cats, setCats] = useState<Record<CatKey, CatState>>({
     trending: { items: [], page: 0, loading: false, initialized: false },
@@ -2338,6 +2830,88 @@ const AppShell: React.FC = () => {
   useEffect(() => { try { localStorage.setItem(KEY_HISTORY, JSON.stringify(watchHistory)); } catch {} }, [watchHistory]);
   useEffect(() => { try { localStorage.setItem(KEY_STATS, JSON.stringify(userStats)); } catch {} }, [userStats]);
   
+  // Função wrapper para setActiveTab que intercepta quando está na página de edição
+  const handleTabChange = (newTab: TabKey) => {
+    const isOnEditProfile = location.pathname === "/profile/edit" || location.pathname === "/edit-profile";
+    const isOnViewProfile = location.pathname === "/profile" || location.pathname === "/me";
+    
+    // Se está apenas visualizando o perfil, permitir navegação normal
+    if (isOnViewProfile) {
+      setActiveTab(newTab);
+      navigate("/");
+      return;
+    }
+    
+    // Se está na página de edição e há alterações, mostrar modal de confirmação
+    if (isOnEditProfile && editProfileHasChanges) {
+      setPendingTabChange(newTab);
+      setPendingCategoryChange(null);
+      setShowExitEditProfileConfirm(true);
+      return; // Importante: retornar para não executar o código abaixo
+    }
+    
+    // Caso contrário, mudar o tab normalmente
+    setActiveTab(newTab);
+    // Se estava na página de edição (sem alterações), navegar de volta
+    if (isOnEditProfile) {
+      navigate("/");
+    }
+  };
+
+  // Função wrapper para setActiveCategory que intercepta quando está na página de edição
+  const handleCategoryChange = (newCategory: "movies" | "tv" | "people" | "home") => {
+    const isOnEditProfile = location.pathname === "/profile/edit" || location.pathname === "/edit-profile";
+    const isOnViewProfile = location.pathname === "/profile" || location.pathname === "/me";
+    
+    // Se está apenas visualizando o perfil, permitir navegação normal
+    if (isOnViewProfile) {
+      setActiveCategory(newCategory);
+      navigate("/");
+      return;
+    }
+    
+    // Se está na página de edição e há alterações, mostrar modal de confirmação
+    if (isOnEditProfile && editProfileHasChanges) {
+      setPendingTabChange(null);
+      setPendingCategoryChange(newCategory);
+      setShowExitEditProfileConfirm(true);
+      return; // Importante: retornar para não executar o código abaixo
+    }
+    
+    // Caso contrário, mudar a categoria normalmente
+    setActiveCategory(newCategory);
+    // Se estava na página de edição (sem alterações), navegar de volta
+    if (isOnEditProfile) {
+      navigate("/");
+    }
+  };
+
+  // Função para confirmar saída da página de edição
+  const confirmExitEditProfile = () => {
+    setShowExitEditProfileConfirm(false);
+    setEditProfileHasChanges(false);
+    
+    // Aplicar mudanças pendentes
+    if (pendingTabChange) {
+      setActiveTab(pendingTabChange);
+      setPendingTabChange(null);
+    }
+    if (pendingCategoryChange) {
+      setActiveCategory(pendingCategoryChange);
+      setPendingCategoryChange(null);
+    }
+    
+    // Navegar de volta
+    navigate("/");
+  };
+
+  // Função para cancelar saída da página de edição
+  const cancelExitEditProfile = () => {
+    setShowExitEditProfileConfirm(false);
+    setPendingTabChange(null);
+    setPendingCategoryChange(null);
+  };
+
   // Salvar estado de navegação no localStorage
   useEffect(() => { 
     try { 
@@ -8493,379 +9067,133 @@ const AppShell: React.FC = () => {
     );
   }
 
-  // Página de Edição de Perfil
-  const EditProfilePage: React.FC = () => {
+  // Página de Visualização do Perfil
+  const ProfileViewPage: React.FC = () => {
     const navigate = useNavigate();
-    const [editFirstName, setEditFirstName] = useState("");
-    const [editLastName, setEditLastName] = useState("");
-    const [editAvatar, setEditAvatar] = useState<string | null>(null);
-    const [avatarFile, setAvatarFile] = useState<File | null>(null);
-    const [saving, setSaving] = useState(false);
-    const [showPasswordSection, setShowPasswordSection] = useState(false);
-    const [currentPassword, setCurrentPassword] = useState("");
-    const [newPassword, setNewPassword] = useState("");
-    const [confirmPassword, setConfirmPassword] = useState("");
-    const [changingPassword, setChangingPassword] = useState(false);
-    const [showPasswords, setShowPasswords] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-      if (user) {
-        const fullName = user.name || "";
-        const nameParts = fullName.split(' ');
-        setEditFirstName(nameParts[0] || "");
-        setEditLastName(nameParts.slice(1).join(' ') || "");
-        setEditAvatar(user.avatar_url || null);
-        setAvatarFile(null);
-        setShowPasswordSection(false);
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-      }
-    }, [user]);
-
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        if (file.size > 5 * 1024 * 1024) {
-          pushToast({ message: "A imagem deve ter no máximo 5MB", tone: "err" });
-          return;
-        }
-        if (!file.type.startsWith("image/")) {
-          pushToast({ message: "Por favor, selecione uma imagem", tone: "err" });
-          return;
-        }
-        setAvatarFile(file);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setEditAvatar(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-      }
-    };
-
-    const handleSave = async () => {
-      if (!editFirstName.trim()) {
-        pushToast({ message: "O nome é obrigatório", tone: "err" });
-        return;
-      }
-      const fullName = editLastName.trim() 
-        ? `${editFirstName.trim()} ${editLastName.trim()}`
-        : editFirstName.trim();
-      setSaving(true);
-      try {
-        await saveProfile({ name: fullName, avatar_url: editAvatar });
-        pushToast({ message: "Perfil atualizado com sucesso!", tone: "ok" });
-        navigate(-1); // Volta para a página anterior
-      } catch (e: any) {
-        pushToast({ message: e?.message || "Erro ao salvar perfil", tone: "err" });
-      } finally {
-        setSaving(false);
-      }
-    };
-
-    const handleChangePassword = async () => {
-      if (!newPassword || !confirmPassword) {
-        pushToast({ message: "Preencha todos os campos", tone: "err" });
-        return;
-      }
-      if (newPassword.length < 8) {
-        pushToast({ message: "A senha deve ter no mínimo 8 caracteres", tone: "err" });
-        return;
-      }
-      if (newPassword !== confirmPassword) {
-        pushToast({ message: "As senhas não coincidem", tone: "err" });
-        return;
-      }
-      setChangingPassword(true);
-      try {
-        const idToken = localStorage.getItem('vetra:idToken');
-        if (!idToken) {
-          pushToast({ message: "Você precisa estar autenticado. Faça login novamente.", tone: "err" });
-          setChangingPassword(false);
-          return;
-        }
-        
-        const result = await changePassword(newPassword, idToken);
-        if (result.ok) {
-          pushToast({ message: "Senha alterada com sucesso! Faça login novamente.", tone: "ok" });
-          setShowPasswordSection(false);
-          setCurrentPassword("");
-          setNewPassword("");
-          setConfirmPassword("");
-          setIsLoggedIn(false);
-          setUser(null);
-          localStorage.removeItem('vetra:idToken');
-          localStorage.removeItem('vetra:refreshToken');
-          navigate("/");
-        } else {
-          const errorMsg = result.error || result.message || "Erro ao alterar senha";
-          if (errorMsg.includes("Token") || errorMsg.includes("token") || errorMsg.includes("Reautentique")) {
-            pushToast({ message: "Sua sessão expirou. Faça login novamente para alterar a senha.", tone: "err" });
-          } else {
-            pushToast({ message: errorMsg, tone: "err" });
-          }
-        }
-      } catch (e: any) {
-        pushToast({ message: e?.message || e?.error || "Erro ao alterar senha.", tone: "err" });
-      } finally {
-        setChangingPassword(false);
-      }
-    };
-
-    const stats = {
-      favorites: favorites.length,
-      lists: lists.length,
-      watched: Object.values(userStates).filter(s => s.state === "watched").length,
-      want: Object.values(userStates).filter(s => s.state === "want").length,
-    };
-
-    if (!isLoggedIn) {
-      return (
-        <div className="min-h-screen bg-white dark:bg-slate-900 flex items-center justify-center px-4">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">Acesso restrito</h1>
-            <p className="text-slate-600 dark:text-gray-400 mb-6">Você precisa estar logado para editar seu perfil.</p>
-            <button
-              onClick={() => navigate("/")}
-              className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-            >
-              Voltar para o início
-            </button>
-          </div>
-        </div>
-      );
-    }
+    
+    // Calcular estatísticas
+    const stats = useMemo(() => {
+      const watched = Object.values(userStates || {}).filter(s => s?.state === "watched").length;
+      const want = Object.values(userStates || {}).filter(s => s?.state === "want").length;
+      const favoriteCount = favorites?.length || 0;
+      const listCount = lists?.length || 0;
+      
+      return { watched, want, favorite: favoriteCount, lists: listCount };
+    }, [userStates, favorites, lists]);
+    
+    const fullName = user?.name || "";
+    const nameParts = fullName.split(' ');
+    const firstName = nameParts[0] || "";
+    const lastName = nameParts.slice(1).join(' ') || "";
 
     return (
-      <div className="min-h-screen bg-white dark:bg-slate-900">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-lime-400/20 border-b border-slate-200 dark:border-slate-700">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-1">Editar Perfil</h1>
-                <p className="text-sm text-slate-600 dark:text-gray-400">Gerencie suas informações e preferências</p>
-              </div>
-              <button
-                onClick={() => navigate(-1)}
-                className="text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white transition-colors p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-                aria-label="Fechar"
-              >
-                <X size={24} />
-              </button>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-1">Meu Perfil</h1>
+              <p className="text-sm text-slate-600 dark:text-gray-400">Visualize suas informações e estatísticas</p>
             </div>
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              aria-label="Voltar"
+            >
+              <X size={20} className="text-slate-600 dark:text-gray-400" />
+            </button>
           </div>
-        </div>
 
-        {/* Content */}
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="grid md:grid-cols-2 gap-6 lg:gap-8">
-            {/* Left Column - Avatar and Stats */}
-            <div className="space-y-6">
-              <div className="flex flex-col items-center bg-slate-50 dark:bg-slate-800/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
-                <label className="cursor-pointer group">
-                  {editAvatar ? (
-                    <div className="relative">
-                      <img
-                        src={editAvatar}
-                        alt="Avatar"
-                        className="w-32 h-32 rounded-full object-cover border-4 border-slate-300 dark:border-slate-600 shadow-xl group-hover:border-cyan-500/50 transition-all duration-300"
-                      />
-                      <div className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <Pencil size={24} className="text-white" />
-                      </div>
-                    </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Coluna Esquerda - Informações do Usuário */}
+            <div className="lg:col-span-1">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6">
+                {/* Avatar */}
+                <div className="flex flex-col items-center mb-6">
+                  {user?.avatar_url ? (
+                    <img
+                      src={user.avatar_url}
+                      alt={user.name || "Usuário"}
+                      className="w-32 h-32 rounded-full object-cover border-4 border-cyan-500 dark:border-cyan-400 shadow-lg"
+                    />
                   ) : (
-                    <div className="w-32 h-32 rounded-full bg-gradient-to-br from-cyan-400 via-purple-500 to-lime-400 flex items-center justify-center text-white font-bold text-3xl border-4 border-slate-300 dark:border-slate-600 shadow-xl group-hover:border-cyan-500/50 transition-all duration-300">
-                      {editFirstName.charAt(0)?.toUpperCase() || "U"}
+                    <div className="w-32 h-32 rounded-full bg-gradient-to-br from-cyan-400 via-purple-500 to-lime-400 flex items-center justify-center text-white text-4xl font-bold border-4 border-cyan-500 dark:border-cyan-400 shadow-lg">
+                      {user?.name?.charAt(0)?.toUpperCase() || "U"}
                     </div>
                   )}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageUpload}
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="mt-4 px-4 py-2 text-sm font-semibold text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-all duration-200"
-                >
-                  {editAvatar ? "Alterar foto" : "Adicionar foto"}
-                </button>
-                {editAvatar && (
-                  <button
-                    onClick={() => {
-                      setEditAvatar(null);
-                      setAvatarFile(null);
-                    }}
-                    className="mt-2 text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
-                  >
-                    Remover foto
-                  </button>
-                )}
-              </div>
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white mt-4 text-center">
+                    {user?.name || "Usuário"}
+                  </h2>
+                  <p className="text-sm text-slate-600 dark:text-gray-400 mt-1 text-center">
+                    {user?.email || ""}
+                  </p>
+                </div>
 
-              {/* Statistics */}
-              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
-                <h3 className="text-sm font-semibold text-slate-600 dark:text-gray-400 mb-4 uppercase tracking-wide">Estatísticas</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="text-center p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
-                    <div className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">{stats.favorites}</div>
+                {/* Botão Editar Perfil */}
+                <button
+                  onClick={() => navigate("/profile/edit")}
+                  className="w-full bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-600 hover:to-purple-700 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                >
+                  <Pencil size={18} />
+                  Editar Perfil
+                </button>
+              </div>
+            </div>
+
+            {/* Coluna Direita - Estatísticas e Informações */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Estatísticas */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Estatísticas</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="text-center p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <div className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">{stats.favorite}</div>
                     <div className="text-xs text-slate-600 dark:text-gray-400 mt-1">Favoritos</div>
                   </div>
-                  <div className="text-center p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="text-center p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
                     <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.lists}</div>
                     <div className="text-xs text-slate-600 dark:text-gray-400 mt-1">Listas</div>
                   </div>
-                  <div className="text-center p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="text-center p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
                     <div className="text-2xl font-bold text-lime-600 dark:text-lime-400">{stats.watched}</div>
                     <div className="text-xs text-slate-600 dark:text-gray-400 mt-1">Assistidos</div>
                   </div>
-                  <div className="text-center p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="text-center p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
                     <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.want}</div>
                     <div className="text-xs text-slate-600 dark:text-gray-400 mt-1">Quero ver</div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Right Column - Form */}
-            <div className="space-y-5">
-              <div>
-                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                  Nome <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={editFirstName}
-                  onChange={(e) => setEditFirstName(e.target.value)}
-                  className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 focus:outline-none transition-all duration-200"
-                  placeholder="Seu nome"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                  Sobrenome
-                </label>
-                <input
-                  type="text"
-                  value={editLastName}
-                  onChange={(e) => setEditLastName(e.target.value)}
-                  className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 focus:outline-none transition-all duration-200"
-                  placeholder="Seu sobrenome"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">Email</label>
-                <div className="relative">
-                  <input
-                    type="email"
-                    value={user?.email || ""}
-                    disabled
-                    className="w-full bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-gray-500 px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 cursor-not-allowed"
-                  />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <Lock size={16} className="text-slate-400 dark:text-gray-600" />
+              {/* Informações Pessoais */}
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Informações Pessoais</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-600 dark:text-gray-400 mb-1">
+                      Nome
+                    </label>
+                    <div className="text-base text-slate-900 dark:text-white">
+                      {firstName || "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-600 dark:text-gray-400 mb-1">
+                      Sobrenome
+                    </label>
+                    <div className="text-base text-slate-900 dark:text-white">
+                      {lastName || "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-600 dark:text-gray-400 mb-1">
+                      Email
+                    </label>
+                    <div className="text-base text-slate-900 dark:text-white">
+                      {user?.email || "—"}
+                    </div>
                   </div>
                 </div>
-                <p className="mt-2 text-xs text-slate-500 dark:text-gray-500 flex items-center gap-1">
-                  <Lock size={12} />
-                  O email não pode ser alterado
-                </p>
-              </div>
-
-              {/* Password Section */}
-              <div className="border-t border-slate-200 dark:border-slate-700 pt-5">
-                <div className="flex items-center justify-between mb-3">
-                  <label className="block text-sm font-semibold text-slate-900 dark:text-white">
-                    Senha
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowPasswordSection(!showPasswordSection)}
-                    className="text-xs text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 transition-colors"
-                  >
-                    {showPasswordSection ? "Cancelar" : "Alterar senha"}
-                  </button>
-                </div>
-                {showPasswordSection && (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs text-slate-600 dark:text-gray-400 mb-1.5">Nova senha</label>
-                      <div className="relative">
-                        <input
-                          type={showPasswords ? "text" : "password"}
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 focus:outline-none transition-all text-sm"
-                          placeholder="Mínimo 8 caracteres"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPasswords(!showPasswords)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300"
-                        >
-                          {showPasswords ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-600 dark:text-gray-400 mb-1.5">Confirmar nova senha</label>
-                      <input
-                        type={showPasswords ? "text" : "password"}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20 dark:focus:ring-cyan-400/20 focus:outline-none transition-all text-sm"
-                        placeholder="Digite a senha novamente"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleChangePassword}
-                      disabled={changingPassword || !newPassword || !confirmPassword}
-                      className="w-full px-4 py-2.5 rounded-xl bg-slate-700 dark:bg-slate-600 text-white font-semibold text-sm hover:bg-slate-600 dark:hover:bg-slate-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                    >
-                      {changingPassword ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          Alterando...
-                        </span>
-                      ) : (
-                        "Alterar senha"
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => navigate(-1)}
-                  className="flex-1 px-5 py-3 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-semibold transition-all duration-200 border border-slate-300 dark:border-slate-600"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving || !editFirstName.trim()}
-                  className="flex-1 px-5 py-3 rounded-xl bg-blue-600 dark:bg-blue-500 text-white font-semibold hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg"
-                >
-                  {saving ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Salvando...
-                    </span>
-                  ) : (
-                    "Salvar alterações"
-                  )}
-                </button>
               </div>
             </div>
           </div>
@@ -8899,7 +9227,7 @@ const AppShell: React.FC = () => {
                       <Menu size={24} className="text-slate-900 dark:text-white" />
                     </button>
                   )}
-                  <div className="flex items-center gap-2 sm:gap-3 cursor-pointer flex-shrink-0" onClick={() => { setActiveTab("home"); setActiveCategory("home"); setShowMobileMenu(false); }}>
+                  <div className="flex items-center gap-2 sm:gap-3 cursor-pointer flex-shrink-0" onClick={() => { handleTabChange("home"); handleCategoryChange("home"); setShowMobileMenu(false); }}>
                     <svg width="32" height="32" className="sm:w-9 sm:h-9 flex-shrink-0" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path d="M8 8 L8 32 L20 20 Z" fill="#00BCD4" />
                       <path d="M12 12 L12 28 L24 20 Z" fill="#7B3FF2" />
@@ -8955,13 +9283,13 @@ const AppShell: React.FC = () => {
                       </div>
                       <button
                         onClick={() => {
-                          navigate("/profile/edit");
+                          navigate("/profile");
                           setShowProfileMenu(false);
                         }}
                         className="w-full px-4 py-2 text-left text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors"
                       >
-                        <Settings size={16} />
-                        Editar Perfil
+                        <User size={16} />
+                        Meu perfil
                       </button>
                       <button
                         onClick={() => {
@@ -9055,7 +9383,7 @@ const AppShell: React.FC = () => {
                   aria-label={t("nav.main_navigation")}
                 >
                   <button 
-                    onClick={() => { setActiveTab("home"); setActiveCategory("home"); }}
+                    onClick={() => { handleTabChange("home"); handleCategoryChange("home"); }}
                     role="tab"
                     aria-selected={activeTab==="home" && activeCategory==="home"}
                     aria-controls="home-content"
@@ -9076,7 +9404,7 @@ const AppShell: React.FC = () => {
                     )}
                   </button>
                   <button 
-                    onClick={() => { setActiveTab("home"); setActiveCategory("movies"); }}
+                    onClick={() => { handleTabChange("home"); handleCategoryChange("movies"); }}
                     role="tab"
                     aria-selected={activeTab==="home" && activeCategory==="movies"}
                     aria-controls="movies-content"
@@ -9097,7 +9425,7 @@ const AppShell: React.FC = () => {
                     )}
                   </button>
                   <button 
-                    onClick={() => { setActiveTab("home"); setActiveCategory("tv"); }}
+                    onClick={() => { handleTabChange("home"); handleCategoryChange("tv"); }}
                     role="tab"
                     aria-selected={activeTab==="home" && activeCategory==="tv"}
                     aria-controls="tv-content"
@@ -9118,7 +9446,7 @@ const AppShell: React.FC = () => {
                     )}
                   </button>
                   <button 
-                    onClick={() => { setActiveTab("favorites"); }}
+                    onClick={() => { handleTabChange("favorites"); }}
                     role="tab"
                     aria-selected={activeTab==="favorites"}
                     aria-controls="favorites-content"
@@ -9140,7 +9468,7 @@ const AppShell: React.FC = () => {
                     )}
                   </button>
                   <button 
-                    onClick={() => { setActiveTab("lists"); }}
+                    onClick={() => { handleTabChange("lists"); }}
                     role="tab"
                     aria-selected={activeTab==="lists"}
                     aria-controls="lists-content"
@@ -9159,7 +9487,7 @@ const AppShell: React.FC = () => {
                     )}
                   </button>
                   <button 
-                    onClick={() => { setActiveTab("watchlist"); }}
+                    onClick={() => { handleTabChange("watchlist"); }}
                     role="tab"
                     aria-selected={activeTab==="watchlist" || activeTab.startsWith("watchlist-")}
                     aria-controls="watchlist-content"
@@ -9178,7 +9506,7 @@ const AppShell: React.FC = () => {
                     )}
                   </button>
                   <button 
-                    onClick={() => { setActiveTab("people"); }}
+                    onClick={() => { handleTabChange("people"); }}
                     role="tab"
                     aria-selected={activeTab==="people"}
                     aria-controls="people-content"
@@ -9215,7 +9543,7 @@ const AppShell: React.FC = () => {
               </div>
               <nav className="p-2">
                 <button
-                  onClick={() => { setActiveTab("home"); setActiveCategory("home"); setShowMobileMenu(false); }}
+                  onClick={() => { handleTabChange("home"); handleCategoryChange("home"); setShowMobileMenu(false); }}
                   className={`relative w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${
                     activeTab === "home" && activeCategory === "home"
                       ? "text-slate-900 dark:text-white font-semibold"
@@ -9229,7 +9557,7 @@ const AppShell: React.FC = () => {
                   )}
                 </button>
                 <button
-                  onClick={() => { setActiveTab("home"); setActiveCategory("movies"); setShowMobileMenu(false); }}
+                  onClick={() => { handleTabChange("home"); handleCategoryChange("movies"); setShowMobileMenu(false); }}
                   className={`relative w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${
                     activeTab === "home" && activeCategory === "movies"
                       ? "text-slate-900 dark:text-white font-semibold"
@@ -9243,7 +9571,7 @@ const AppShell: React.FC = () => {
                   )}
                 </button>
                 <button
-                  onClick={() => { setActiveTab("home"); setActiveCategory("tv"); setShowMobileMenu(false); }}
+                  onClick={() => { handleTabChange("home"); handleCategoryChange("tv"); setShowMobileMenu(false); }}
                   className={`relative w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${
                     activeTab === "home" && activeCategory === "tv"
                       ? "text-slate-900 dark:text-white font-semibold"
@@ -9257,7 +9585,7 @@ const AppShell: React.FC = () => {
                   )}
                 </button>
                 <button
-                  onClick={() => { setActiveTab("favorites"); setShowMobileMenu(false); }}
+                  onClick={() => { handleTabChange("favorites"); setShowMobileMenu(false); }}
                   className={`relative w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${
                     activeTab === "favorites"
                       ? "text-slate-900 dark:text-white font-semibold"
@@ -9271,7 +9599,7 @@ const AppShell: React.FC = () => {
                   )}
                 </button>
                 <button
-                  onClick={() => { setActiveListId(null); setActiveTab("lists"); setShowMobileMenu(false); }}
+                  onClick={() => { setActiveListId(null); handleTabChange("lists"); setShowMobileMenu(false); }}
                   className={`relative w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${
                     activeTab === "lists"
                       ? "text-slate-900 dark:text-white font-semibold"
@@ -9285,7 +9613,7 @@ const AppShell: React.FC = () => {
                   )}
                 </button>
                 <button
-                  onClick={() => { setActiveTab("watchlist"); setShowMobileMenu(false); }}
+                  onClick={() => { handleTabChange("watchlist"); setShowMobileMenu(false); }}
                   className={`relative w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${
                     activeTab === "watchlist" || activeTab.startsWith("watchlist-")
                       ? "text-slate-900 dark:text-white font-semibold"
@@ -9299,7 +9627,7 @@ const AppShell: React.FC = () => {
                   )}
                 </button>
                 <button
-                  onClick={() => { setActiveTab("people"); setShowMobileMenu(false); }}
+                  onClick={() => { handleTabChange("people"); setShowMobileMenu(false); }}
                   className={`relative w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${
                     activeTab === "people"
                       ? "text-slate-900 dark:text-white font-semibold"
@@ -9349,13 +9677,13 @@ const AppShell: React.FC = () => {
                 <div className="border-t border-slate-200 dark:border-slate-700 my-2"></div>
                 <button
                   onClick={() => {
-                    navigate("/profile/edit");
+                    navigate("/profile");
                     setShowMobileMenu(false);
                   }}
                   className="w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
-                  <Settings size={20} />
-                  <span>Editar Perfil</span>
+                  <User size={20} />
+                  <span>Meu perfil</span>
                 </button>
                 <button
                   onClick={() => {
@@ -9395,10 +9723,30 @@ const AppShell: React.FC = () => {
             ...(isLoggedIn && useBottomNav ? { paddingBottom: `calc(56px + max(env(safe-area-inset-bottom), 0px))` } : {})
           }}
         >
-          {(location.pathname === "/profile/edit" || location.pathname === "/edit-profile") ? (
-            <EditProfilePage />
-          ) : activeTab === "home" && activeCategory === "home" && HomeContent}
-          {activeTab === "home" && activeCategory !== "home" && (
+          {/* Se estiver na página de perfil ou edição de perfil, renderizar APENAS ela, sem conteúdo adicional */}
+          {location.pathname === "/profile" || location.pathname === "/me" ? (
+            <ProfileViewPage />
+          ) : (location.pathname === "/profile/edit" || location.pathname === "/edit-profile") ? (
+            <EditProfilePage
+              user={user}
+              isLoggedIn={isLoggedIn}
+              favorites={favorites}
+              lists={lists}
+              userStates={userStates}
+              pushToast={pushToast}
+              saveProfile={saveProfile}
+              setIsLoggedIn={setIsLoggedIn}
+              setUser={setUser}
+              setEditProfileHasChanges={setEditProfileHasChanges}
+              editProfileHasChanges={editProfileHasChanges}
+              setPendingTabChange={setPendingTabChange}
+              setPendingCategoryChange={setPendingCategoryChange}
+              setShowExitEditProfileConfirm={setShowExitEditProfileConfirm}
+            />
+          ) : (
+            <>
+              {activeTab === "home" && activeCategory === "home" && HomeContent}
+              {activeTab === "home" && activeCategory !== "home" && (
             <div className={`container mx-auto px-3 sm:px-4 md:px-6 pt-12 sm:pt-14 md:pt-16 lg:pt-20 ${viewingShared && !isLoggedIn ? "pt-20 sm:pt-24" : ""}`}>
                 {activeTab === "home" && activeCategory === "movies" && (
                   <div className="flex flex-col min-[1280px]:flex-row gap-4 sm:gap-6">
@@ -10003,6 +10351,8 @@ const AppShell: React.FC = () => {
               )
             )}
             {activeTab === "stats" && <div className="container mx-auto px-3 sm:px-4 md:px-6 pt-12 sm:pt-14 md:pt-16 lg:pt-20">{StatsContent}</div>}
+            </>
+          )}
         </main>
       )}
 
@@ -10017,10 +10367,38 @@ const AppShell: React.FC = () => {
       {isLoggedIn && <MobileFooter 
         useBottomNav={useBottomNav}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleTabChange}
         setActiveListId={setActiveListId}
         t={t}
       />}
+
+      {/* Modal de confirmação para sair da página de edição de perfil */}
+      {showExitEditProfileConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+              Alterações não salvas
+            </h3>
+            <p className="text-slate-600 dark:text-gray-400 mb-6">
+              Você tem alterações não salvas no seu perfil. Deseja sair e descartar essas alterações?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={cancelExitEditProfile}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-semibold transition-colors"
+              >
+                Continuar editando
+              </button>
+              <button
+                onClick={confirmExitEditProfile}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 via-purple-500 to-lime-400 text-white font-semibold hover:opacity-90 transition-opacity"
+              >
+                Sair sem salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Edição de Perfil */}
       {/* Modal de edição de perfil removido - agora é uma página própria em /profile/edit */}
@@ -10584,6 +10962,7 @@ const PlaceholderPage: React.FC<{ title: string; route: string }> = ({ title, ro
 export default function App() {
   const location = useLocation();
   
+  // Rotas que devem ser renderizadas fora do AppShell
   if (location.pathname === "/privacy") return <PrivacyPage />;
   if (location.pathname === "/terms") return <TermsPage />;
   if (location.pathname === "/about") return <AboutPage />;
@@ -10597,6 +10976,7 @@ export default function App() {
     return <PlaceholderPage title="Explorar" route={location.pathname} />;
   }
   
+  // A rota /profile/edit será tratada dentro do AppShell, mas precisa garantir que não renderize conteúdo adicional
   return <AppShell />;
 }
 
