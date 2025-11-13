@@ -12,14 +12,14 @@ Plataforma moderna para organização, descoberta e compartilhamento de filmes e
 VETRA é uma aplicação web full-stack que permite aos usuários descobrir, organizar e compartilhar seus filmes e séries favoritos. O projeto implementa requisitos funcionais e não funcionais, além de funcionalidades extras.
 
 
-## Histórico por Data (deploys/atualizações)
+## Histórico por Data (deploys/atualizações/correções de bugs)
 
 
 | Data       | Versão | Tipo        | Descrição curta                                      |
 |------------|--------|-------------|----------------------------------------------------------------|
 | 2025-11-11 | 1.0.0  | no ar       | Primeira versão estável do VETRA.                              |
 | 2025-11-12 | 1.0.1  | Minor       |  **Adiciona capa (thumbnail) nas listas** e pequenos ajustes  |
- 2025-11-13 | 1.1.1  | Patch  | Verificação de sessão no load, limpeza completa de tokens no logout/remoção de conta e preservação de rota.(continuando) |
+ 2025-11-13 | 1.1.1  | Patch  | Verificação de sessão no load, limpeza completa de tokens no logout/remoção de conta e preservação de rota|
 
 
 ### Implementação
