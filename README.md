@@ -21,6 +21,7 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 | 2025-11-13 | 1.1.1  | Bugfix  | Verificação de sessão, limpeza total de tokens e preservação de rota.                            |
 | 2025-11-13 | 1.2.0  | Minor   | Reforço da busca: normalização, busca local e busca híbrida TMDb+local com deduplicação.         |
 | 2025-11-13 | 1.2.1  | Bugfix  | **Busca** limpa resultados ao campo vazio (onChange/Enter/botão), reseta filtros e estado padrão. |
+ 2025-11-13 | 1.2.1  | Bugfix  | **Limpeza automática**: campo vazio limpa resultados, filtros, paginação e URL.                  |
 
 
 
