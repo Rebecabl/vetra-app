@@ -11,17 +11,17 @@ Plataforma moderna para organização, descoberta e compartilhamento de filmes e
 
 VETRA é uma aplicação web full-stack que permite aos usuários descobrir, organizar e compartilhar seus filmes e séries favoritos. O projeto implementa requisitos funcionais e não funcionais, além de funcionalidades extras.
 
+## Histórico por Data (deploys/atualizações/correções de bugs)
 
+| Data       | Versão | Tipo    | Descrição curta                                                                                 |
+|------------|--------|---------|--------------------------------------------------------------------------------------------------|
+| 2025-11-11 | 1.0.0  | Produção| Primeira versão estável do VETRA.                                                                |
+| 2025-11-12 | 1.0.1  | Hotfix  | Corrige erro 401 ao trocar idioma sem recarregar.                                                |
+| 2025-11-13 | 1.1.0  | Minor   | Capa (thumbnail) nas listas + ajustes de layout.                                                 |
+| 2025-11-13 | 1.1.1  | Bugfix  | Verificação de sessão, limpeza total de tokens e preservação de rota.                            |
+| 2025-11-13 | 1.2.0  | Minor   | Reforço da busca: normalização, busca local e busca híbrida TMDb+local com deduplicação.         |
+| 2025-11-13 | 1.2.1  | Bugfix  | **Busca** limpa resultados ao campo vazio (onChange/Enter/botão), reseta filtros e estado padrão. |
 
-## 🗓️ Histórico por Data (deploys/atualizações/correções de bugs)
-
-| Data       | Versão | Tipo      | Descrição curta                                                                         |
-|------------|--------|-----------|-----------------------------------------------------------------------------------------|
-| 2025-11-11 | 1.0.0  | Produção  | Primeira versão estável do VETRA.                                                       |
-| 2025-11-12 | 1.0.1  | Hotfix    | Corrige erro 401 ao trocar idioma sem recarregar.                                       |
-| 2025-11-13 | 1.1.0  | Minor     | Capa (thumbnail) nas listas + ajustes de layout.                                        |
-| 2025-11-13 | 1.1.1  | Bugfix    | Verificação de sessão, limpeza total de tokens e preservação de rota.                   |
-| 2025-11-13 | 1.2.0  | Minor     | Reforço da busca: normalização, busca local e busca híbrida TMDb+local com deduplicação. |
 
 
 ### Implementação
