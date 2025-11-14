@@ -23,7 +23,8 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 | 2025-11-13 | 1.3.0  | Minor    | **Editar Perfil** virou página `/profile/edit` + **correção de padding do header** (navbar fixa). 
 | 2025-11-13 | 1.3.1  | Bugfix  | Estabilidade do formulário de edição de perfil (sem “tremor”/reset durante digitação).            
 | 2025-11-13 | 1.3.2  | Bugfix  | Perfil: navegação normal, confirmação só com alterações não salvas e modal de confirmação com botões corretos. 
-| 2025-11-13 | 1.3.3  | UI   | Padroniza tamanho do ícone de globo vs. botão de tema e remove tamanhos responsivos. |
+| 2025-11-13 | 1.3.3  | UI   | Padroniza tamanho do ícone de globo vs. botão de tema e remove tamanhos responsivos. 
+NO MOMENTO, MELHORANDO A ARQUITETURA DO PROJETO...|
 
 
 
