@@ -19,8 +19,6 @@ export const PersonRouteModal: React.FC = () => {
   const modalRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
 
-  // Todos os hooks devem vir ANTES de qualquer return condicional
-
   useEffect(() => {
     if (!id) {
       setPerson(null);
@@ -57,7 +55,6 @@ export const PersonRouteModal: React.FC = () => {
     };
   }, [id, lang, pushToast]);
 
-  // Gerenciar resize da janela
   useEffect(() => {
     const handleResize = () => {
       setWindowWidth(window.innerWidth);
@@ -68,21 +65,18 @@ export const PersonRouteModal: React.FC = () => {
     }
   }, []);
 
-  // Foco inicial no título e trap de foco no modal
   useEffect(() => {
     if (!loading && person && titleRef.current) {
       titleRef.current.focus();
     }
   }, [loading, person]);
 
-  // Gerenciar scroll do body - não bloquear completamente
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
   }, []);
 
-  // Fechar com ESC
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -93,13 +87,12 @@ export const PersonRouteModal: React.FC = () => {
     return () => window.removeEventListener("keydown", handleEsc);
   }, [navigate]);
 
-  // Agora podemos fazer returns condicionais
   if (!id) return null;
   
   if (loading) {
     return (
       <div 
-        className="fixed inset-0 bg-white dark:bg-slate-900 z-[1100] overflow-y-auto overscroll-contain" 
+        className="fixed inset-0 bg-white dark:bg-slate-900 z-[9999] overflow-y-auto overscroll-contain" 
         role="dialog"
         aria-modal="true"
         aria-label="Carregando pessoa"
@@ -117,7 +110,7 @@ export const PersonRouteModal: React.FC = () => {
   if (error || !person) {
     return (
       <div 
-        className="fixed inset-0 bg-white dark:bg-slate-900 z-[1100] overflow-y-auto overscroll-contain" 
+        className="fixed inset-0 bg-white dark:bg-slate-900 z-[9999] overflow-y-auto overscroll-contain" 
         role="dialog"
         aria-modal="true"
         aria-label="Erro ao carregar pessoa"
@@ -138,10 +131,7 @@ export const PersonRouteModal: React.FC = () => {
     );
   }
 
-  // A partir daqui, person está garantido (já passamos pelos returns condicionais)
-  // Não precisamos verificar novamente, TypeScript pode reclamar mas sabemos que está OK
-
-  // Determinar tamanho da imagem do perfil
+  // Person está garantido após os returns condicionais acima
   const getProfileSize = () => {
     if (windowWidth < 480) return 'w185';
     if (windowWidth < 768) return 'w300';
@@ -150,11 +140,9 @@ export const PersonRouteModal: React.FC = () => {
   };
 
   const profileSize = getProfileSize();
-  // Garantir que profile_path não tenha barra inicial e seja válido
   const profilePath = person.profile_path 
-    ? person.profile_path.replace(/^\/+/, '').replace(/\/+/g, '/') // Remove barras iniciais e duplicadas
+    ? person.profile_path.replace(/^\/+/, '').replace(/\/+/g, '/')
     : null;
-  // Construir URL da imagem - usar w500 como padrão para garantir que funcione
   const profileUrl = profilePath && profilePath.length > 0
     ? `https://image.tmdb.org/t/p/w500/${profilePath}`
     : null;
@@ -175,7 +163,6 @@ export const PersonRouteModal: React.FC = () => {
     }
   };
 
-  // Calcular dados dos créditos
   const cast = person.combined_credits?.cast || [];
   const crew = person.combined_credits?.crew || [];
   const allCredits = [...cast, ...crew].sort((a: any, b: any) => {
@@ -184,7 +171,6 @@ export const PersonRouteModal: React.FC = () => {
     return dateB.localeCompare(dateA);
   });
 
-  // Agrupar créditos por ano
   const creditsByYear: Record<string, any[]> = {};
   allCredits.forEach((credit: any) => {
     const year = credit.release_date || credit.first_air_date 
@@ -196,7 +182,6 @@ export const PersonRouteModal: React.FC = () => {
     creditsByYear[year].push(credit);
   });
 
-  // Obter trabalhos mais conhecidos (top rated ou mais populares)
   const knownFor = [...cast, ...crew]
     .filter((c: any) => c.vote_average && c.vote_average > 0)
     .sort((a: any, b: any) => (b.vote_average || 0) - (a.vote_average || 0))
@@ -207,7 +192,6 @@ export const PersonRouteModal: React.FC = () => {
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(true);
 
-    // Verificar se pode rolar - usando useCallback para manter referência estável
     const checkScroll = useCallback(() => {
       if (!scrollContainerRef.current) return;
       const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
@@ -222,7 +206,6 @@ export const PersonRouteModal: React.FC = () => {
         return;
       }
 
-      // Aguardar um pouco para o DOM estar pronto
       const timeoutId = setTimeout(() => {
         checkScroll();
         const container = scrollContainerRef.current;
@@ -242,17 +225,15 @@ export const PersonRouteModal: React.FC = () => {
       };
     }, [items, checkScroll]);
 
-    // Renderização condicional DEPOIS dos hooks
     if (items.length === 0) return null;
 
     const scroll = (direction: 'left' | 'right') => {
       if (!scrollContainerRef.current) return;
       const scrollAmount = 300;
       const newScrollLeft = scrollContainerRef.current.scrollLeft + (direction === 'left' ? -scrollAmount : scrollAmount);
-      scrollContainerRef.current.scrollTo({ left: newScrollLeft, behavior: 'smooth' });
+      scrollContainerRef.current.scrollTo({ left: newScrollLeft,       behavior: 'smooth' });
     };
 
-    // Determinar tamanho de imagem baseado na viewport
     const getPosterSize = () => {
       if (typeof window === 'undefined') return 'w185';
       const width = window.innerWidth;
@@ -355,7 +336,7 @@ export const PersonRouteModal: React.FC = () => {
     );
   };
 
-  // Calcular se biografia precisa de "Ler mais"
+  // Verifica se biografia precisa de "Ler mais"
   const biographyLines = person.biography ? person.biography.split('\n').length : 0;
   const needsReadMore = biographyLines > 8 || (person.biography && person.biography.length > 600);
   const biographyPreview = person.biography && needsReadMore && !biographyExpanded
@@ -704,7 +685,7 @@ export const PersonRouteModal: React.FC = () => {
                                 ? String(credit.release_date || credit.first_air_date).slice(0, 4) 
                                 : null;
                               
-                              // Determinar tamanho de poster baseado na viewport
+                              // Tamanho de poster baseado na viewport
                               const posterSize = typeof window !== 'undefined' && window.innerWidth < 480 ? 'w185' : 'w342';
                               const posterUrl = credit.poster_path 
                                 ? `https://image.tmdb.org/t/p/${posterSize}${credit.poster_path}`

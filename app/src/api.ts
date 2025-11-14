@@ -156,6 +156,9 @@ export type UserProfile = {
   uid?: string;
   avatar_url?: string | null;
   updatedAt?: string | null;
+  status?: string;
+  deletedAt?: string;
+  deletionScheduledFor?: string;
 };
 
 
@@ -480,7 +483,6 @@ function normalizeDetailsFromBackend(d: any): ApiDetails {
     videos: vids,
     trailers,
     trailer_url: trailer,
-    // Novos campos
     writers: d.writers || [],
     producers: d.producers || [],
     cinematographers: d.cinematographers || [],
@@ -518,15 +520,12 @@ function normalizeDetailsFromTMDb(media: "movie" | "tv", raw: any): ApiDetails {
   const date = media === "movie" ? raw.release_date : raw.first_air_date;
   const year = date ? String(date).slice(0, 4) : null;
 
-  // genres
   const genres: string[] = Array.isArray(raw.genres) ? raw.genres.map((g: any) => g.name).filter(Boolean) : [];
 
-  // directors (de crew)
   const directors: string[] = Array.isArray(raw?.credits?.crew)
     ? raw.credits.crew.filter((c: any) => c.job === "Director").map((c: any) => c.name)
     : [];
 
-  // cast
   const cast =
     Array.isArray(raw?.credits?.cast)
       ? raw.credits.cast.slice(0, 24).map((c: any) => ({
@@ -537,14 +536,11 @@ function normalizeDetailsFromTMDb(media: "movie" | "tv", raw: any): ApiDetails {
         }))
       : [];
 
-  // recommendations (deixa o crú do TMDb; o front mapeia)
   const recommendations = Array.isArray(raw?.recommendations?.results) ? raw.recommendations.results : [];
 
-  // videos
   const vids = Array.isArray(raw?.videos?.results) ? raw.videos.results : [];
   const trailers = mapVideosToTrailers(vids);
 
-  // trailer_url (principal)
   let trailer: string | null = null;
   const ytTrailer =
     vids.find((v: any) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser")) ||
@@ -579,7 +575,6 @@ function normalizeDetailsFromTMDb(media: "movie" | "tv", raw: any): ApiDetails {
   };
 }
 
-// ---- person details
 export async function personDetails(id: number, lang?: string): Promise<ApiPersonDetails> {
   const language = (lang || LANG);
 
@@ -592,7 +587,6 @@ export async function personDetails(id: number, lang?: string): Promise<ApiPerso
   });
   const p = await fetchJSON(url, tmdbHeaders(), 12000);
   
-  // Normalizar créditos
   const cast = (p.combined_credits?.cast || []).map((credit: any) => ({
     id: credit.id,
     media: credit.media_type || (credit.first_air_date ? "tv" : "movie"),
@@ -655,7 +649,6 @@ export async function personDetails(id: number, lang?: string): Promise<ApiPerso
   };
 }
 
-// ---- popular people
 export async function popularPeople(page = 1, lang?: string): Promise<ApiBrowseResp> {
   const language = (lang || LANG);
 
@@ -667,7 +660,6 @@ export async function popularPeople(page = 1, lang?: string): Promise<ApiBrowseR
   return data;
 }
 
-// ---- search people
 export async function searchPeople(query: string, page = 1, lang?: string): Promise<ApiBrowseResp> {
   const language = (lang || LANG);
 
@@ -683,12 +675,11 @@ export async function searchPeople(query: string, page = 1, lang?: string): Prom
   return data;
 }
 
-// ---- share (backend ou fallback localStorage)
 function localShareKey(slug: string) {
   return `vetra:share:${slug}`;
 }
 
-// Base58 alphabet (sem 0, O, l, I para evitar confusão)
+// Base58 sem caracteres ambíguos (0, O, l, I)
 const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 function randomSlug(len = 10) {
@@ -698,7 +689,6 @@ function randomSlug(len = 10) {
   return s;
 }
 
-// Gera código no formato V9-XXXX-XXXX-XXXX com checksum
 export function generateShareCode(): string {
   const randomPart = Array.from({ length: 9 }, () => 
     BASE58_ALPHABET[Math.floor(Math.random() * BASE58_ALPHABET.length)]
@@ -710,7 +700,7 @@ export function generateShareCode(): string {
     randomPart.slice(6, 9)
   ];
   
-  // Checksum simples: soma dos valores dos caracteres mod 58
+  // Checksum: soma dos índices dos caracteres mod 58
   let checksum = 0;
   for (const char of randomPart) {
     checksum = (checksum + BASE58_ALPHABET.indexOf(char)) % 58;
@@ -720,30 +710,22 @@ export function generateShareCode(): string {
   return `V9-${blocks[0]}-${blocks[1]}-${blocks[2]}${checksumChar}`;
 }
 
-// Valida código e extrai slug
 export function validateAndExtractSlug(input: string): string | null {
-  // Remove espaços e converte para maiúsculo
   const cleaned = input.trim().toUpperCase().replace(/\s+/g, "");
-  
-  // Padrão: V9-XXXX-XXXX-XXXX ou apenas o código sem prefixo
   let code = cleaned;
   
-  // Se começa com V9-, remove o prefixo
   if (code.startsWith("V9-")) {
     code = code.slice(3);
   }
   
-  // Remove hífens
   code = code.replace(/-/g, "");
   
-  // Deve ter 10 caracteres (9 + 1 checksum)
   if (code.length !== 10) {
-    // Tenta extrair de URL
+    // Tenta extrair de URL ou path
     const urlMatch = input.match(/[?&#]share=([^&?#]+)/i);
     if (urlMatch) {
       return urlMatch[1];
     }
-    // Tenta extrair de path
     const pathMatch = input.match(/\/share\/([^\/]+)/i);
     if (pathMatch) {
       return pathMatch[1];
@@ -751,7 +733,6 @@ export function validateAndExtractSlug(input: string): string | null {
     return null;
   }
   
-  // Valida checksum
   const dataPart = code.slice(0, 9);
   const checksumChar = code.slice(9);
   
@@ -763,7 +744,7 @@ export function validateAndExtractSlug(input: string): string | null {
   }
   
   if (BASE58_ALPHABET[checksum] !== checksumChar) {
-    // Checksum inválido, mas ainda pode ser um slug antigo
+    // Checksum inválido, mas pode ser slug antigo sem validação
     return code;
   }
   
@@ -781,7 +762,7 @@ export async function shareCreate(items: any[], type: 'favorites' | 'list' | 'co
       },
       12000
     );
-    // Backend pode retornar slug ou url, normalizamos para sempre ter code
+    // Normaliza resposta do backend para sempre ter code
     if (resp.slug) {
       const code = resp.slug.length === 10 && resp.slug.match(/^[A-Za-z0-9]+$/) 
         ? `V9-${resp.slug.slice(0, 3)}-${resp.slug.slice(3, 6)}-${resp.slug.slice(6, 9)}${resp.slug.slice(9)}`
@@ -798,7 +779,6 @@ export async function shareCreate(items: any[], type: 'favorites' | 'list' | 'co
 }
 
 export async function shareGet(slugOrCode: string) {
-  // Normaliza: extrai slug de código ou URL
   const slug = validateAndExtractSlug(slugOrCode) || slugOrCode;
   
   if (await ensureBackendHealth()) {
@@ -809,9 +789,7 @@ export async function shareGet(slugOrCode: string) {
   return JSON.parse(txt);
 }
 
-// ---- auth (autenticação real)
 export async function authSignup(name: string, email: string, password: string): Promise<{ ok: boolean; user?: any; customToken?: string; error?: string }> {
-  // Normalizar dados
   const normalizedEmail = email?.trim().toLowerCase() || "";
   const normalizedName = name?.trim() || "Usuário";
   const trimmedPassword = password?.trim() || "";
@@ -840,12 +818,11 @@ export async function authSignup(name: string, email: string, password: string):
       return { ok: false, error: e?.message || "Erro ao criar conta" };
     }
   }
-  // Fallback: criar localmente (sem validação real)
+  // Fallback local quando backend não disponível
   return { ok: true, user: { name: normalizedName, email: normalizedEmail, uid: `local_${Date.now()}` } };
 }
 
 export async function authSignin(email: string, password: string): Promise<{ ok: boolean; user?: any; customToken?: string; idToken?: string; refreshToken?: string; error?: string }> {
-  // Normalizar dados
   const normalizedEmail = email?.trim().toLowerCase() || "";
   const trimmedPassword = password?.trim() || "";
   
@@ -856,7 +833,7 @@ export async function authSignin(email: string, password: string): Promise<{ ok:
   console.log("[authSignin] Tentando fazer login para:", normalizedEmail.substring(0, 3) + "***");
   console.log("[authSignin] API_BASE:", API_BASE);
   
-  // Força verificação do backend (ignora cache)
+  // Força verificação do backend ignorando cache
   const backendHealthy = await ensureBackendHealth(true);
   console.log("[authSignin] Backend health check:", backendHealthy);
   
@@ -888,7 +865,7 @@ export async function authSignin(email: string, password: string): Promise<{ ok:
     } catch (e: any) {
     console.error("[authSignin] Erro na requisição:", e);
     const errorMessage = e?.message || "Erro ao fazer login. Verifique se o backend está rodando.";
-    // Tentar extrair JSON do erro se possível
+    // Tenta extrair JSON do erro se possível
     if (typeof errorMessage === "string" && errorMessage.includes("{")) {
       try {
         const jsonMatch = errorMessage.match(/\{.*\}/);
@@ -897,14 +874,13 @@ export async function authSignin(email: string, password: string): Promise<{ ok:
           return { ok: false, ...parsedError };
         }
       } catch {
-        // Se falhar, continuar com erro original
+        // Ignora erro de parsing e usa mensagem original
       }
     }
     return { ok: false, error: errorMessage };
     }
 }
 
-// Verificar se email existe
 export async function checkEmailExists(email: string): Promise<{ ok: boolean; exists?: boolean; error?: string }> {
   const normalizedEmail = email.trim().toLowerCase();
   
@@ -951,7 +927,6 @@ export async function checkEmailExists(email: string): Promise<{ ok: boolean; ex
   }
 }
 
-// Redefinir senha diretamente
 export async function resetPassword(email: string, newPassword: string): Promise<{ ok: boolean; message?: string; error?: string }> {
   const normalizedEmail = email.trim().toLowerCase();
   
@@ -1094,9 +1069,7 @@ export async function authVerify(idToken: string): Promise<{ ok: boolean; user?:
   return { ok: false, error: "Backend não disponível" };
 }
 
-// ---- profile (backend opcional)
 export async function profileGet(email: string): Promise<UserProfile> {
-  // Normalizar email
   const normalizedEmail = email?.trim().toLowerCase() || "";
   
   if (!normalizedEmail) {
@@ -1108,7 +1081,6 @@ export async function profileGet(email: string): Promise<UserProfile> {
       return await fetchJSON(`${API_BASE}/api/profile/${encodeURIComponent(normalizedEmail)}`, {}, 8000);
     } catch (e: any) {
       console.error("[profileGet] Erro ao buscar perfil:", e);
-      // Fallback para localStorage
       const raw = localStorage.getItem(`vetra:profile:${normalizedEmail}`);
       if (raw) {
         try {
@@ -1120,7 +1092,7 @@ export async function profileGet(email: string): Promise<UserProfile> {
       return { name: "Usuário", email: normalizedEmail, avatar_url: null, updatedAt: null };
     }
   }
-  // fallback "fake"
+  // Fallback para localStorage quando backend não disponível
   const raw = localStorage.getItem(`vetra:profile:${normalizedEmail}`);
   if (raw) {
     try {
@@ -1155,20 +1127,123 @@ export async function profileUpdate(p: UserProfile): Promise<UserProfile> {
       return result;
     } catch (e: any) {
       console.error("[profileUpdate] Erro ao atualizar perfil:", e);
-      // Fallback para localStorage
       const updated = { ...p, updatedAt: new Date().toISOString() };
       localStorage.setItem(`vetra:profile:${p.email}`, JSON.stringify(updated));
       return updated;
     }
   }
-  // Fallback para localStorage
+  // Usa localStorage quando backend não disponível
   const updated = { ...p, updatedAt: new Date().toISOString() };
   localStorage.setItem(`vetra:profile:${p.email}`, JSON.stringify(updated));
   return updated;
 }
 
+export async function reEnableAccount(email: string): Promise<{ ok: boolean; message?: string; error?: string }> {
+  const backendHealthy = await ensureBackendHealth();
+  if (!backendHealthy) {
+    return { 
+      ok: false, 
+      error: "Backend não disponível" 
+    };
+  }
+
+  if (!API_BASE) {
+    return { 
+      ok: false, 
+      error: "API_BASE não configurado" 
+    };
+  }
+
+  try {
+    const url = `${API_BASE}/api/auth/re-enable-account`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ email })
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      return { 
+        ok: false, 
+        error: data.error || data.message || "Erro ao reabilitar conta" 
+      };
+    }
+
+    return { 
+      ok: true, 
+      message: data.message || "Conta reabilitada com sucesso!" 
+    };
+  } catch (error: any) {
+    console.error("[reEnableAccount] Erro:", error);
+    return { 
+      ok: false, 
+      error: error?.message || "Erro ao reabilitar conta" 
+    };
+  }
+}
+
+export async function reactivateAccount(): Promise<{ ok: boolean; message?: string; error?: string }> {
+  const backendHealthy = await ensureBackendHealth();
+  if (!backendHealthy) {
+    return { 
+      ok: false, 
+      error: "Backend não disponível" 
+    };
+  }
+
+  if (!API_BASE) {
+    return { 
+      ok: false, 
+      error: "API_BASE não configurado" 
+    };
+  }
+
+  try {
+    const idToken = localStorage.getItem("vetra:idToken");
+    if (!idToken) {
+      return { 
+        ok: false, 
+        error: "Token de autenticação não encontrado. Faça login novamente." 
+      };
+    }
+
+    const url = `${API_BASE}/api/auth/reactivate-account`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${idToken}`
+      },
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      return { 
+        ok: false, 
+        error: data.error || data.message || "Erro ao reativar conta" 
+      };
+    }
+
+    return { 
+      ok: true, 
+      message: data.message || "Conta reativada com sucesso!" 
+    };
+  } catch (error: any) {
+    console.error("[reactivateAccount] Erro:", error);
+    return { 
+      ok: false, 
+      error: error?.message || "Erro ao reativar conta" 
+    };
+  }
+}
+
 export async function changePassword(newPassword: string, idToken?: string): Promise<{ ok: boolean; message?: string; error?: string }> {
-  // Obter idToken do localStorage se não fornecido
+  // Usa idToken do localStorage se não fornecido
   const token = idToken || localStorage.getItem('vetra:idToken') || '';
   
   if (!token) {
@@ -1236,14 +1311,14 @@ export async function changePassword(newPassword: string, idToken?: string): Pro
     }
     
     if (!response.ok) {
-      // Retornar erro com mensagem do backend
+      // Retorna erro com mensagem do backend
       return { 
         ok: false, 
         error: data.message || data.error || `Erro ${response.status}: ${response.statusText}` 
       };
     }
     
-    // Se sucesso, limpar tokens (logout global após mudança de senha)
+    // Limpa tokens após mudança de senha (logout global)
     if (data.ok) {
       localStorage.removeItem('vetra:idToken');
       localStorage.removeItem('vetra:refreshToken');
@@ -1265,7 +1340,6 @@ export async function changePassword(newPassword: string, idToken?: string): Pro
   }
 }
 
-// ========== Comentários e Reações ==========
 export type Comment = {
   id: string;
   mediaKey: string;
@@ -1322,7 +1396,7 @@ export async function createComment(media: "movie" | "tv", id: number, text: str
     if (!res.ok) {
       return { ok: false, error: data.error || data.message || "Erro ao criar comentário" };
     }
-    // Validar estrutura do comentário retornado
+    // Valida estrutura do comentário retornado
     if (!data.comment || !data.comment.id) {
       console.error("[createComment] Comentário retornado sem ID:", data.comment);
       return { ok: false, error: "Comentário criado mas estrutura inválida" };
@@ -1445,7 +1519,7 @@ export async function removeListItem(userId: string, listId: string, itemId: str
       
       return { ok: true };
     }
-    // Fallback: apenas retorna ok (sem sincronização com backend)
+    // Retorna ok sem sincronização quando backend não disponível
     return { ok: true };
   } catch (error: any) {
     return { ok: false, error: error.message || "Erro ao remover item da lista" };
@@ -1479,7 +1553,7 @@ export async function addListItem(userId: string, listId: string, item: { id: nu
       
       return { ok: true };
     }
-    // Fallback: apenas retorna ok (sem sincronização com backend)
+    // Retorna ok sem sincronização quando backend não disponível
     return { ok: true };
   } catch (error: any) {
     return { ok: false, error: error.message || "Erro ao adicionar item à lista" };
@@ -1496,7 +1570,7 @@ export const getDetails = details;
 // getTrending("day" | "week", page)
 export async function getTrending(window: "day" | "week" = "day", page = 1): Promise<ApiBrowseResp> {
   if (await ensureBackendHealth()) {
-    // Backend suporta parâmetro window
+    // Backend suporta parâmetro window para day/week
     return fetchJSON(`${API_BASE}/api/browse/trending?window=${window}&page=${page}&lang=${encodeURIComponent(LANG)}`, {}, 12000);
   }
   const path = `/trending/all/${window}`;
@@ -1504,14 +1578,12 @@ export async function getTrending(window: "day" | "week" = "day", page = 1): Pro
   return fetchJSON(url, tmdbHeaders(), 12000);
 }
 
-// getCategory("movie"|"tv", "popular"|"top_rated", page)
 export async function getCategory(
   media: "movie" | "tv",
   cat: "popular" | "top_rated",
   page = 1
 ): Promise<ApiBrowseResp> {
   if (await ensureBackendHealth()) {
-    // Ajuste a rota se seu backend expõe diferente
     return fetchJSON(
       `${API_BASE}/api/category/${media}/${cat}?page=${page}&lang=${encodeURIComponent(LANG)}`,
       {},
@@ -1522,7 +1594,6 @@ export async function getCategory(
   return fetchJSON(url, tmdbHeaders(), 12000);
 }
 
-// discover com filtros avançados
 export interface DiscoverFilters {
   sortBy?: string;
   genres?: number[];
@@ -1575,7 +1646,7 @@ export async function discover(
     );
   }
 
-  // Fallback: usar discover direto do TMDB
+  // Usa discover direto do TMDB quando backend não disponível
   const params: any = {
     page,
     language: LANG,
@@ -1614,7 +1685,6 @@ export async function discover(
   return fetchJSON(url, tmdbHeaders(), 12000);
 }
 
-// getGenres
 export interface Genre {
   id: number;
   name: string;
@@ -1634,7 +1704,6 @@ export async function getGenres(media: "movie" | "tv"): Promise<Genre[]> {
   return data.genres || [];
 }
 
-// getWatchProviders
 export interface WatchProvider {
   display_priority: number;
   logo_path: string;
@@ -1656,7 +1725,6 @@ export async function getWatchProviders(region = "BR"): Promise<WatchProvider[]>
   return data.results || [];
 }
 
-// ---------- default export ----------
 const api = {
   health,
   browse,
@@ -1673,8 +1741,9 @@ const api = {
   authSignup,
   authSignin,
   authVerify,
+  reactivateAccount,
+  reEnableAccount,
 
-  // aliases
   getDetails,
   getTrending,
   getCategory,
@@ -1683,19 +1752,16 @@ const api = {
   getGenres,
   getWatchProviders,
   
-  // people
-  searchPeople,     // (query, page, lang?)
+  searchPeople,
   
-  // comments
   getComments,
   createComment,
   likeComment,
   reactToComment,
   deleteComment,
-  // lists
   addListItem,
   removeListItem,
-  // auth
+  
   forgotPassword,
   checkEmailExists,
   resetPassword,
