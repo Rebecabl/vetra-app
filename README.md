@@ -13,18 +13,20 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 
 ## 🗓️ Histórico por Data (deploys/atualizações/correções de bugs)
 
-| Data       | Versão | Tipo     | Descrição curta                                                                                   |
-|------------|--------|----------|-----------------------------------------------------------------------------------------------------|
-| 2025-11-11 | 1.0.0  | Produção | Primeira versão estável do VETRA.                                                                   |
-| 2025-11-12 | 1.0.1  | Hotfix   | Corrige erro 401 ao trocar idioma sem recarregar.                                                   |
-| 2025-11-13 | 1.1.1  | Bugfix   | Sessão persistente (mantém login) e preservação de navegação (aba/categoria após refresh).          |
-| 2025-11-13 | 1.2.0  | Minor    | Busca híbrida: TMDb + dados locais, ignora acentos/caixa e faz deduplicação.                        |
-| 2025-11-13 | 1.2.1  | Bugfix   | Campo de busca vazio limpa resultados, filtros, paginação e URL; volta ao estado padrão.            |
-| 2025-11-13 | 1.3.0  | Minor    | **Editar Perfil** virou página `/profile/edit` + **correção de padding do header** (navbar fixa). 
-| 2025-11-13 | 1.3.1  | Bugfix  | Estabilidade do formulário de edição de perfil (sem “tremor”/reset durante digitação).            
-| 2025-11-13 | 1.3.2  | Bugfix  | Perfil: navegação normal, confirmação só com alterações não salvas e modal de confirmação com botões corretos. 
-| 2025-11-13 | 1.3.3  | UI   | Padroniza tamanho do ícone de globo vs. botão de tema e remove tamanhos responsivos. 
-NO MOMENTO, MELHORANDO A ARQUITETURA DO PROJETO...|
+| Data       | Versão | Tipo      | Descrição curta                                                                                               |
+|------------|--------|-----------|----------------------------------------------------------------------------------------------------------------|
+| 2025-11-11 | 1.0.0  | Produção  | Primeira versão estável do VETRA.                                                                             |
+| 2025-11-12 | 1.0.1  | Hotfix    | Corrige erro 401 ao trocar idioma sem recarregar.                                                             |
+| 2025-11-13 | 1.1.1  | Bugfix    | Sessão persistente (mantém login) e preservação de navegação (aba/categoria após refresh).                    |
+| 2025-11-13 | 1.2.0  | Minor     | Busca híbrida: TMDb + dados locais, ignora acentos/caixa e faz deduplicação.                                  |
+| 2025-11-13 | 1.2.1  | Bugfix    | Campo de busca vazio limpa resultados, filtros, paginação e URL; volta ao estado padrão.                       |
+| 2025-11-13 | 1.3.0  | Minor     | **Editar Perfil** virou página `/profile/edit` + **correção de padding do header** (navbar fixa).             |
+| 2025-11-13 | 1.3.1  | Bugfix    | Estabilidade do formulário de edição de perfil (sem “tremor”/reset durante digitação).                        |
+| 2025-11-13 | 1.3.2  | Bugfix    | Perfil: navegação normal, confirmação só com alterações não salvas e modal de confirmação com botões corretos. |
+| 2025-11-13 | 1.3.3  | UI        | Padroniza tamanho do ícone de globo vs. botão de tema e remove tamanhos responsivos.                          |
+
+> **Em andamento:** melhorando a arquitetura do projeto e reduzindo o tamanho do `App.tsx`.
+|
 
 
 
