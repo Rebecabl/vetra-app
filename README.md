@@ -27,7 +27,7 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 | 2025-11-14 | 1.4.0  | Minor     | Endpoint de exclusão de conta; busca/compartilhamento mais seguros; mensagens de erro detalhadas; footer fix. |
 | 2025-11-14 | 1.5.0  | Major     | Refatoração completa: novas páginas dedicadas, hooks customizados, sistema de histórico de atividades, componentes modulares, melhorias de arquitetura. |
 | 2025-11-15 | 1.6.0  | Major     | Verificação de email por código, isolamento de dados por usuário, revisão geral de comentários/logs e melhorias no fluxo de autenticação. |
-
+| 2025-11-15 | 1.7.0  | Minor     | Preparação para produção: remoção de código de teste.
 ### Implementação
 
 - **Arquitetura**: Frontend React + Backend Express com separação clara de responsabilidades
@@ -405,6 +405,9 @@ Vetra/
 | `POST` | `/api/auth/signin` | Login |
 | `POST` | `/api/auth/verify` | Validar token |
 | `POST` | `/api/auth/forgot-password` | Recuperar senha |
+| `POST` | `/api/auth/reset-password` | Redefinir senha com código |
+| `POST` | `/api/auth/verify-code` | Verificar código de email e ativar conta |
+| `POST` | `/api/auth/resend-verification-code` | Reenviar código de verificação |
 | `DELETE` | `/api/auth/delete-account` | Excluir conta (soft delete) |
 | `POST` | `/api/auth/reactivate-account` | Reativar conta |
 | `POST` | `/api/auth/re-enable-account` | Reabilitar conta desabilitada |
@@ -577,27 +580,21 @@ Acesse `http://localhost:5173` para ver a aplicação em funcionamento.
 
 ## Segurança
 
-🔹 Autenticação via Firebase Auth (tokens verificados no backend)
-
-🔹 Helmet, CORS restritivo, compression e rate limiting
-
-🔹 Validação e sanitização de entrada (schemas)
-
-🔹 Logs e tratamento padronizado de erros (sem vazar stack sensível em produção)
-
-🔹 Validação de senhas fortes e proteção contra força bruta
+- Autenticação via Firebase Auth (tokens verificados no backend)
+- Helmet, CORS restritivo, compression e rate limiting
+- Validação e sanitização de entrada (schemas)
+- Logs e tratamento padronizado de erros (sem vazar stack sensível em produção)
+- Validação de senhas fortes e proteção contra força bruta
+- Verificação de email obrigatória no cadastro com código de 6 dígitos
+- Recuperação de senha com código de 6 dígitos enviado por email
 
 ## Responsividade
 
-🔹 **Breakpoints**: xs (< 480px), sm (480-768px), md (768-1024px), lg (1024-1440px), xl (> 1440px)
-
-🔹 **Navegação Mobile**: Menu inferior responsivo que aparece quando viewport < 900px ou janela estreita (< 60% da largura do monitor)
-
-🔹 **Tipografia Fluida**: Fontes com `clamp()` para adaptação automática
-
-🔹 **Hit Areas**: Mínimo de 44x44px para todos os elementos interativos (padrão Apple/Google)
-
-🔹 **Safe Area**: Suporte completo a dispositivos com notch (iPhone)
+- **Breakpoints**: xs (< 480px), sm (480-768px), md (768-1024px), lg (1024-1440px), xl (> 1440px)
+- **Navegação Mobile**: Menu inferior responsivo que aparece quando viewport < 900px ou janela estreita (< 60% da largura do monitor)
+- **Tipografia Fluida**: Fontes com `clamp()` para adaptação automática
+- **Hit Areas**: Mínimo de 44x44px para todos os elementos interativos (padrão Apple/Google)
+- **Safe Area**: Suporte completo a dispositivos com notch (iPhone)
 
 ## Testes
 
@@ -616,15 +613,13 @@ npm run test:coverage # Com cobertura
 
 ### Firebase não inicializa
 
-🔹 Checar credenciais e formato da FIREBASE_PRIVATE_KEY com \n
-
-🔹 Confirmar permissões da conta de serviço e projeto ativo no console
+- Checar credenciais e formato da FIREBASE_PRIVATE_KEY com \n
+- Confirmar permissões da conta de serviço e projeto ativo no console
 
 ### TMDB retornando 401
 
-🔹 Verificar TMDB_V3_API_KEY e se a chave está ativa
-
-🔹 Checar espaços em branco; regerar chave se necessário
+- Verificar TMDB_V3_API_KEY e se a chave está ativa
+- Checar espaços em branco; regerar chave se necessário
 
 ### Porta em uso
 
@@ -686,7 +681,15 @@ npm run test:coverage # Com cobertura
 
 ## Versão
 
-**Versão Atual: 1.6.0**
+**Versão Atual: 1.7.0**
+
+### Principais Mudanças na Versão 1.7.0
+
+#### Preparação para Produção
+- **Remoção de Código de Teste**: Endpoint temporário `/clear-rate-limit` e função `clearRateLimit` removidos do código de produção.
+- **Limpeza de Emojis**: Todos os emojis foram substituídos por texto simples ou ícones Lucide React na UI, mantendo a mesma funcionalidade visual.
+- **Logs Profissionais**: Mensagens de log agora usam texto simples em vez de emojis, adequadas para ambientes de produção.
+- **Revisão Final de Comentários**: Comentários revisados em todo o projeto para estilo mais direto e natural, mantendo apenas informações relevantes.
 
 ### Principais Mudanças na Versão 1.6.0
 
@@ -760,7 +763,7 @@ npm run test:coverage # Com cobertura
 - Código mais limpo e organizado
 - Melhor separação de responsabilidades
 
-Esta é a versão atual do VETRA. Correções de possíveis bugs serão feitas conforme identificados e reportados.
+Esta é a versão atual do VETRA. Correções de possíveis bugs serão feitas conforme identificados.
 
 ## Roadmap (Melhorias Futuras)
 
