@@ -4,6 +4,7 @@ import { getUserProfileByEmail } from "../repositories/users.repository.js";
 import bcrypt from "bcryptjs";
 import nodemailer from "nodemailer";
 import admin from "firebase-admin";
+import crypto from "crypto";
 import { validatePassword, validateEmail } from "../utils/passwordValidator.js";
 import { checkLock, recordFailedAttempt, clearFailedAttempts, checkAuthLock, getClientIP } from "../utils/authLock.js";
 import { logAuditEvent, getClientIP as getAuditIP, getUserAgent } from "../utils/auditLog.js";
@@ -113,8 +114,8 @@ async function sendVerificationCodeEmail(email, name, code) {
   const transporter = getEmailTransporter();
   if (!transporter) {
     const errorMsg = "SMTP não configurado. Configure as variáveis SMTP_USER e SMTP_PASS no arquivo .env";
-    console.error("[SMTP] ❌", errorMsg);
-    console.error("[SMTP] 📖 Consulte: api/ENV_EXAMPLE.md para ver como configurar");
+    console.error("[SMTP] Erro:", errorMsg);
+    console.error("[SMTP] Consulte: api/ENV_EXAMPLE.md para ver como configurar");
     throw new Error(errorMsg);
   }
   
@@ -161,9 +162,9 @@ async function sendVerificationCodeEmail(email, name, code) {
       </html>
     `,
     });
-    console.log("[SMTP] ✅ E-mail de verificação enviado com sucesso para:", email);
+    console.log("[SMTP] E-mail de verificação enviado com sucesso para:", email);
   } catch (sendError) {
-    console.error("[SMTP] ❌ Erro ao enviar e-mail:", sendError.message);
+    console.error("[SMTP] Erro ao enviar e-mail:", sendError.message);
     console.error("[SMTP] Detalhes:", sendError);
     throw sendError;
   }
@@ -181,10 +182,14 @@ function getEmailTransporter() {
   };
 
   if (!emailConfig.auth.user || !emailConfig.auth.pass) {
-    console.warn("[SMTP] Configuração ausente - emails não serão enviados");
+    console.warn("[SMTP] Atenção: Configuração ausente - emails não serão enviados");
+    console.warn("[SMTP] SMTP_USER:", emailConfig.auth.user ? "Configurado" : "Não configurado");
+    console.warn("[SMTP] SMTP_PASS:", emailConfig.auth.pass ? "Configurado" : "Não configurado");
+    console.warn("[SMTP] Consulte: api/CONFIGURAR_SMTP.md para ver como configurar");
     return null;
   }
 
+  console.log("[SMTP] Configuração encontrada - Host:", emailConfig.host, "Port:", emailConfig.port);
   return nodemailer.createTransport(emailConfig);
 }
 
@@ -256,6 +261,264 @@ async function sendWelcomeEmail(email, name) {
   }
 }
 
+const RESET_TOKEN_EXPIRATION_MINUTES = Number(process.env.RESET_TOKEN_EXPIRES_MINUTES || 30);
+
+function generatePasswordResetToken() {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+function hashPasswordResetToken(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+function getResetPasswordBaseUrl() {
+  if (process.env.RESET_PASSWORD_URL) return process.env.RESET_PASSWORD_URL;
+  if (process.env.FRONT_RESET_URL) return `${process.env.FRONT_RESET_URL}`;
+  const frontOrigin = process.env.FRONT_ORIGIN || "http://localhost:5173";
+  return `${frontOrigin}/reset-password`;
+}
+
+async function getLatestPasswordResetRecord(email) {
+  const db = getFirestore();
+  const snapshot = await db
+    .collection("password_resets")
+    .where("email", "==", email.trim().toLowerCase())
+    .limit(10)
+    .get();
+
+  for (const doc of snapshot.docs) {
+    const data = doc.data();
+    if (data.status === "active") {
+      return { id: doc.id, ...data };
+    }
+  }
+  return null;
+}
+
+async function savePasswordResetToken(email, token, metadata = {}) {
+  const db = getFirestore();
+  const now = admin.firestore.Timestamp.now();
+  const expiresAt = admin.firestore.Timestamp.fromMillis(
+    now.toMillis() + RESET_TOKEN_EXPIRATION_MINUTES * 60 * 1000
+  );
+
+  const previousTokens = await db
+    .collection("password_resets")
+    .where("email", "==", email.trim().toLowerCase())
+    .limit(20)
+    .get();
+
+  const batch = db.batch();
+  previousTokens.docs.forEach((doc) => {
+    if (doc.data().status === "active") {
+      batch.update(doc.ref, { status: "invalidated", invalidatedAt: now });
+    }
+  });
+
+  const docRef = db.collection("password_resets").doc();
+  batch.set(docRef, {
+    email: email.trim().toLowerCase(),
+    tokenHash: hashPasswordResetToken(token),
+    status: "active",
+    createdAt: now,
+    expiresAt,
+    ...metadata,
+  });
+
+  await batch.commit();
+  return docRef.id;
+}
+
+async function markPasswordResetToken(recordId, updates) {
+  const db = getFirestore();
+  await db.collection("password_resets").doc(recordId).update(updates);
+}
+
+async function validatePasswordResetToken(email, token) {
+  const record = await getLatestPasswordResetRecord(email);
+  if (!record) {
+    return { valid: false, error: "token_invalido", message: "Solicitação não encontrada. Peça uma nova recuperação." };
+  }
+
+  const now = admin.firestore.Timestamp.now();
+  let expiresAtMillis = record.expiresAt;
+  if (record.expiresAt?.toMillis) {
+    expiresAtMillis = record.expiresAt.toMillis();
+  } else if (record.expiresAt instanceof Date) {
+    expiresAtMillis = record.expiresAt.getTime();
+  }
+
+  if (expiresAtMillis && expiresAtMillis < now.toMillis()) {
+    await markPasswordResetToken(record.id, { status: "expired", expiredAt: now });
+    return { valid: false, error: "token_expirado", message: "Este link expirou. Solicite uma nova recuperação." };
+  }
+
+  const hashed = hashPasswordResetToken(token);
+  if (hashed !== record.tokenHash) {
+    return { valid: false, error: "token_invalido", message: "Link ou token inválido. Solicite novamente." };
+  }
+
+  return { valid: true, record };
+}
+
+async function savePasswordResetCode(email, code) {
+  try {
+    const db = getFirestore();
+    const now = admin.firestore.Timestamp.now();
+    const expiresAt = admin.firestore.Timestamp.fromMillis(now.toMillis() + RESET_TOKEN_EXPIRATION_MINUTES * 60 * 1000);
+    
+    const existingCodes = await db.collection("password_reset_codes")
+      .where("email", "==", email.trim().toLowerCase())
+      .where("status", "==", "active")
+      .get();
+    
+    const batch = db.batch();
+    existingCodes.forEach(doc => {
+      batch.update(doc.ref, { status: "invalidated" });
+    });
+    
+    const codeRef = db.collection("password_reset_codes").doc();
+    batch.set(codeRef, {
+      email: email.trim().toLowerCase(),
+      code: code,
+      createdAt: now,
+      expiresAt: expiresAt,
+      status: "active",
+      attempts: 0,
+      maxAttempts: 5
+    });
+    
+    await batch.commit();
+    return codeRef.id;
+  } catch (error) {
+    console.error("[savePasswordResetCode] Erro ao salvar código:", error);
+    throw error;
+  }
+}
+
+async function validatePasswordResetCode(email, code) {
+  const db = getFirestore();
+  const now = admin.firestore.Timestamp.now();
+  
+  const codesSnapshot = await db.collection("password_reset_codes")
+    .where("email", "==", email.trim().toLowerCase())
+    .where("status", "==", "active")
+    .get();
+  
+  if (codesSnapshot.empty) {
+    return { valid: false, error: "Código inválido", message: "Código inválido. Verifique o código enviado para o seu e-mail." };
+  }
+  
+  const codes = codesSnapshot.docs
+    .map(doc => ({ id: doc.id, ...doc.data() }))
+    .sort((a, b) => {
+      const dateA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0);
+      const dateB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0);
+      return dateB - dateA;
+    });
+  
+  const codeData = codes[0];
+  const codeRef = db.collection("password_reset_codes").doc(codeData.id);
+  
+  let expiresAt;
+  if (codeData.expiresAt?.toMillis) {
+    expiresAt = codeData.expiresAt.toMillis();
+  } else if (codeData.expiresAt?.toDate) {
+    expiresAt = codeData.expiresAt.toDate().getTime();
+  } else {
+    expiresAt = new Date(codeData.expiresAt).getTime();
+  }
+  
+  if (expiresAt < now.toMillis()) {
+    await codeRef.update({ status: "expired" });
+    return { valid: false, error: "Código expirado", message: "Este código expirou. Solicite uma nova recuperação de senha." };
+  }
+  
+  if ((codeData.attempts || 0) >= (codeData.maxAttempts || 5)) {
+    await codeRef.update({ status: "blocked" });
+    return { valid: false, error: "Código bloqueado", message: "Código bloqueado por muitas tentativas. Solicite um novo código." };
+  }
+  
+  if (codeData.code !== code) {
+    await codeRef.update({ 
+      attempts: (codeData.attempts || 0) + 1
+    });
+    return { valid: false, error: "Código inválido", message: "Código inválido. Verifique o código enviado para o seu e-mail." };
+  }
+  
+  await codeRef.update({ 
+    status: "consumed",
+    consumedAt: now
+  });
+  
+  return { valid: true, codeId: codeData.id };
+}
+
+async function sendPasswordResetEmail(email, name, code) {
+  const transporter = getEmailTransporter();
+  if (!transporter) {
+    const errorMsg = "SMTP não configurado. Configure as variáveis SMTP_USER e SMTP_PASS no arquivo .env";
+    console.error("[SMTP] Erro:", errorMsg);
+    throw new Error(errorMsg);
+  }
+
+  const expiresLabel = `${RESET_TOKEN_EXPIRATION_MINUTES} minuto${RESET_TOKEN_EXPIRATION_MINUTES === 1 ? "" : "s"}`;
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(90deg, #22D3EE, #8B5CF6, #A3E635); padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .header h1 { color: white; margin: 0; font-size: 28px; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .code-box { background: #fff; border: 3px solid #22D3EE; border-radius: 10px; padding: 20px; text-align: center; margin: 20px 0; }
+        .code { font-size: 36px; font-weight: bold; color: #22D3EE; letter-spacing: 8px; font-family: monospace; }
+        .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>VETRA</h1>
+        </div>
+        <div class="content">
+          <p>Olá, ${name || "usuário"}! 👋</p>
+          <p>Recebemos uma solicitação para redefinir a senha da sua conta no VETRA.</p>
+          <p>Aqui está o seu código para redefinir sua senha:</p>
+          <div class="code-box">
+            <div class="code">${code}</div>
+          </div>
+          <p>O código vale por até ${expiresLabel}. Depois desse prazo, solicite a recuperação novamente.</p>
+          <p>Se você não fez esta solicitação, pode ignorar esta mensagem — sua senha atual continuará funcionando normalmente.</p>
+        </div>
+        <div class="footer">
+          <p>Equipe VETRA</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: `"VETRA" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: "VETRA – Código para redefinir sua senha",
+      html,
+    });
+
+    console.log("[SMTP] E-mail de redefinição enviado para:", email);
+  } catch (sendError) {
+    console.error("[SMTP] Erro ao enviar e-mail de redefinição:", sendError.message);
+    console.error("[SMTP] Detalhes:", sendError);
+    throw sendError;
+  }
+}
+
 // POST /api/auth/signup
 router.post("/signup", 
   rateLimitMiddleware("signup", (req) => getClientIP(req), 10, 15 * 60 * 1000), // 10 tentativas a cada 15 minutos
@@ -295,20 +558,17 @@ router.post("/signup",
       existingUser = await auth.getUserByEmail(normalizedEmail);
       
       if (existingUser.emailVerified) {
-        return res.status(409).json({ ok: false, error: "email_ja_cadastrado" });
+      return res.status(409).json({ ok: false, error: "email_ja_cadastrado" });
       }
       
-      // Usuário não verificado: atualizar senha e gerar novo código
       console.log("[signup] Usuário existe mas não está verificado. Atualizando senha e gerando novo código...");
-      
-      // Não dar trim na senha
       try {
         await auth.updateUser(existingUser.uid, {
           password: password
         });
-        console.log("[signup] ✅ Senha atualizada no Firebase Auth");
+        console.log("[signup] Senha atualizada no Firebase Auth");
       } catch (updateError) {
-        console.error("[signup] ⚠️ Erro ao atualizar senha:", updateError.message);
+        console.error("[signup] Atenção: Erro ao atualizar senha:", updateError.message);
       }
       
       let verificationCode;
@@ -322,7 +582,7 @@ router.post("/signup",
             name?.trim() || "Usuário",
             verificationCode
           );
-          console.log("[signup] ✅ Novo código de verificação enviado com sucesso para:", normalizedEmail);
+          console.log("[signup] Novo código de verificação enviado com sucesso para:", normalizedEmail);
           
           return res.json({
             ok: true,
@@ -333,7 +593,7 @@ router.post("/signup",
               : "Novo código de verificação enviado para o seu e-mail."
           });
         } catch (emailError) {
-          console.error("[signup] ❌ Erro ao enviar e-mail com código:", emailError.message);
+          console.error("[signup] Erro ao enviar e-mail com código:", emailError.message);
           
           if (process.env.NODE_ENV === "production") {
             return res.status(500).json({
@@ -351,7 +611,7 @@ router.post("/signup",
           }
         }
       } catch (codeError) {
-        console.error("[signup] ❌ Erro ao gerar código de verificação:", codeError);
+        console.error("[signup] Erro ao gerar código de verificação:", codeError);
         return res.status(500).json({
           ok: false,
           error: "erro_gerar_codigo",
@@ -361,9 +621,9 @@ router.post("/signup",
     } catch (e) {
       if (e.code !== "auth/user-not-found") {
         if (e.code === "auth/internal-error" && e.message?.includes("PERMISSION_DENIED")) {
-          console.error("[signup] ❌ Erro de permissão da Service Account!");
+          console.error("[signup] Erro de permissão da Service Account!");
           console.error("[signup] A Service Account não tem permissões suficientes.");
-          console.error("[signup] 📖 Consulte: api/CORRIGIR_PERMISSOES_SERVICE_ACCOUNT.md");
+          console.error("[signup] Consulte: api/CORRIGIR_PERMISSOES_SERVICE_ACCOUNT.md");
           return res.status(500).json({
             ok: false,
             error: "permissao_service_account",
@@ -373,13 +633,10 @@ router.post("/signup",
         }
         throw e;
       }
-      // Se não encontrou o usuário, continuar com a criação
     }
-
-    // Criar novo usuário
     const passwordHash = await bcrypt.hash(password, 10);
     
-    console.log("[signup] 🔐 Criando usuário com senha");
+    console.log("[signup] Criando usuário com senha");
     console.log("[signup] Tamanho da senha:", password?.length);
     console.log("[signup] Primeiros 3 caracteres (debug):", password?.substring(0, 3) + "***");
     console.log("[signup] Últimos 3 caracteres (debug):", "***" + password?.substring(password.length - 3));
@@ -392,7 +649,7 @@ router.post("/signup",
         displayName: name?.trim() || "Usuário",
         emailVerified: false,
       });
-      console.log("[signup] ✅ Usuário criado no Firebase Auth com sucesso");
+      console.log("[signup] Usuário criado no Firebase Auth com sucesso");
     } catch (createError) {
       // Race condition: email já existe
       if (createError.code === "auth/email-already-exists") {
@@ -412,9 +669,9 @@ router.post("/signup",
       }
       
       if (createError.code === "auth/internal-error" && createError.message?.includes("PERMISSION_DENIED")) {
-        console.error("[signup] ❌ Erro de permissão ao criar usuário!");
+        console.error("[signup] Erro de permissão ao criar usuário!");
         console.error("[signup] A Service Account não tem permissões para criar usuários.");
-        console.error("[signup] 📖 Consulte: api/CORRIGIR_PERMISSOES_SERVICE_ACCOUNT.md");
+        console.error("[signup] Consulte: api/CORRIGIR_PERMISSOES_SERVICE_ACCOUNT.md");
         return res.status(500).json({
           ok: false,
           error: "permissao_service_account",
@@ -451,17 +708,17 @@ router.post("/signup",
           name?.trim() || "Usuário",
           verificationCode
         );
-        console.log("[signup] ✅ Código de verificação enviado com sucesso para:", normalizedEmail);
+        console.log("[signup] Código de verificação enviado com sucesso para:", normalizedEmail);
       } catch (emailError) {
-        console.error("[signup] ❌ Erro ao enviar e-mail com código:", emailError.message);
+        console.error("[signup] Erro ao enviar e-mail com código:", emailError.message);
         
         // Rollback: deletar usuário e perfil se falhar
         try {
           await auth.deleteUser(userRecord.uid);
           await db.collection("profiles").doc(userRecord.uid).delete();
-          console.log("[signup] ✅ Rollback realizado: usuário e perfil deletados após falha no envio de e-mail");
+          console.log("[signup] Rollback realizado: usuário e perfil deletados após falha no envio de e-mail");
         } catch (rollbackError) {
-          console.error("[signup] ⚠️ Erro ao fazer rollback:", rollbackError);
+          console.error("[signup] Atenção: Erro ao fazer rollback:", rollbackError);
         }
         
         return res.status(500).json({
@@ -471,15 +728,15 @@ router.post("/signup",
         });
       }
       } catch (codeError) {
-        console.error("[signup] ❌ Erro ao gerar código de verificação:", codeError);
+        console.error("[signup] Erro ao gerar código de verificação:", codeError);
         
         // Rollback: deletar usuário e perfil se falhar
         try {
         await auth.deleteUser(userRecord.uid);
         await db.collection("profiles").doc(userRecord.uid).delete();
-        console.log("[signup] ✅ Rollback realizado: usuário e perfil deletados após falha ao gerar código");
+        console.log("[signup] Rollback realizado: usuário e perfil deletados após falha ao gerar código");
       } catch (rollbackError) {
-        console.error("[signup] ⚠️ Erro ao fazer rollback:", rollbackError);
+        console.error("[signup] Atenção: Erro ao fazer rollback:", rollbackError);
       }
       
       return res.status(500).json({
@@ -522,9 +779,8 @@ async function loginWithPassword(email, password) {
     throw new Error("FIREBASE_API_KEY não configurado. Configure no .env");
   }
 
-  // Validar formato da API key (deve começar com AIzaSy e ter ~39 caracteres)
   if (!FIREBASE_API_KEY.startsWith("AIzaSy") || FIREBASE_API_KEY.length < 35) {
-    console.error("[loginWithPassword] ⚠️ API Key com formato inválido!");
+    console.error("[loginWithPassword] Atenção: API Key com formato inválido!");
     console.error("[loginWithPassword] A chave deve começar com 'AIzaSy' e ter ~39 caracteres");
     console.error("[loginWithPassword] Verifique o arquivo api/COMO_OBTER_FIREBASE_API_KEY.md para instruções");
     throw Object.assign(new Error("API Key inválida. Verifique o formato da chave no .env"), {
@@ -581,12 +837,12 @@ async function loginWithPassword(email, password) {
     // Erro específico de configuração não encontrada (Firebase Auth não habilitado ou projeto incorreto)
     if (errorCode.includes("CONFIGURATION_NOT_FOUND") || 
         errorDetails?.status === "CONFIGURATION_NOT_FOUND") {
-      console.error("[loginWithPassword] ❌ CONFIGURAÇÃO NÃO ENCONTRADA!");
+      console.error("[loginWithPassword] Erro: CONFIGURAÇÃO NÃO ENCONTRADA!");
       console.error("[loginWithPassword] Possíveis causas:");
       console.error("[loginWithPassword] 1. Firebase Authentication não está habilitado no Firebase Console");
       console.error("[loginWithPassword] 2. Email/Password não está habilitado como método de login");
       console.error("[loginWithPassword] 3. Projeto ID não corresponde (verifique FIREBASE_PROJECT_ID no .env)");
-      console.error("[loginWithPassword] 📖 Consulte: api/DIAGNOSTICAR_CONFIGURACAO.md");
+      console.error("[loginWithPassword] Consulte: api/DIAGNOSTICAR_CONFIGURACAO.md");
       throw Object.assign(new Error("Firebase Authentication não está configurado corretamente. Consulte api/DIAGNOSTICAR_CONFIGURACAO.md"), {
         status: 500,
         code: "api_nao_habilitada",
@@ -597,9 +853,9 @@ async function loginWithPassword(email, password) {
     if (errorCode.includes("API key not valid") || 
         errorCode.includes("INVALID_ARGUMENT") ||
         errorDetails?.status === "INVALID_ARGUMENT") {
-      console.error("[loginWithPassword] ❌ API KEY INVÁLIDA!");
+      console.error("[loginWithPassword] Erro: API KEY INVÁLIDA!");
       console.error("[loginWithPassword] A chave no .env não é válida para este projeto Firebase.");
-      console.error("[loginWithPassword] 📖 Consulte: api/COMO_OBTER_FIREBASE_API_KEY.md");
+      console.error("[loginWithPassword] Consulte: api/COMO_OBTER_FIREBASE_API_KEY.md");
       throw Object.assign(new Error("API Key do Firebase inválida. Consulte api/COMO_OBTER_FIREBASE_API_KEY.md para obter a chave correta."), {
         status: 500,
         code: "api_key_invalida",
@@ -783,11 +1039,11 @@ router.post("/signin",
             });
           }
         } else {
-          return res.status(authError.status || 401).json({ 
-            ok: false, 
-            error: authError.code || "credenciais_invalidas",
-            message: authError.message || "Senha incorreta"
-          });
+        return res.status(authError.status || 401).json({ 
+          ok: false, 
+          error: authError.code || "credenciais_invalidas",
+          message: authError.message || "Senha incorreta"
+        });
         }
       }
 
@@ -798,11 +1054,8 @@ router.post("/signin",
       const db = getFirestore();
       const uid = firebaseTokens.localId;
 
-      // Buscar ou criar perfil no Firestore
       let profileDoc = await db.collection("profiles").doc(uid).get();
       let profile = profileDoc.exists ? profileDoc.data() : null;
-
-      // Se não existe perfil, criar um básico
       if (!profile) {
         const userRecord = await auth.getUser(uid);
         profile = {
@@ -831,7 +1084,6 @@ router.post("/signin",
         status: "success"
       });
 
-      // Retornar ID Token do Firebase (não customToken)
       res.json({
         ok: true,
         user: profileData,
@@ -866,10 +1118,7 @@ router.post("/verify", async (req, res) => {
     const decoded = await auth.verifyIdToken(idToken);
     const db = getFirestore();
 
-    // Buscar perfil
     const profileDoc = await db.collection("profiles").doc(decoded.uid).get();
-    
-    // Verificar se a conta está marcada para exclusão
     if (profileDoc.exists) {
       const profile = profileDoc.data();
       if (profile.status === "pending_deletion" || profile.deletedAt) {
@@ -907,83 +1156,152 @@ router.post("/verify", async (req, res) => {
 });
 
 // POST /api/auth/forgot-password
-router.post("/forgot-password",
-  rateLimitMiddleware("forgot_password", (req) => {
+router.post(
+  "/forgot-password",
+  rateLimitMiddleware(
+    "forgot_password",
+    (req) => {
     const email = req.body?.email?.trim().toLowerCase() || "";
     const ip = getClientIP(req);
     return email || ip;
-  }, 3, 60 * 60 * 1000), // 3 tentativas por hora
+    },
+    5,
+    15 * 60 * 1000 // 5 tentativas a cada 15 minutos
+  ),
   async (req, res) => {
     try {
+      console.log("[forgot-password] Requisição recebida");
       const { email } = req.body || {};
+      console.log("[forgot-password] Email recebido:", email ? `${email.substring(0, 3)}***` : "não fornecido");
       
       if (!email) {
-        return res.status(400).json({ ok: false, error: "email_obrigatorio" });
+        console.log("[forgot-password] Erro: Email não fornecido");
+        return res.status(400).json({ ok: false, error: "email_obrigatorio", message: "Informe o e-mail da conta." });
       }
 
       const normalizedEmail = email.trim().toLowerCase();
       const emailValidation = validateEmail(normalizedEmail);
-      
       if (!emailValidation.valid) {
-        // Mensagem genérica mesmo para email inválido
-        return res.json({
-          ok: true,
-          message: "Se este email estiver cadastrado, você receberá instruções para redefinir sua senha."
-        });
+        console.log("[forgot-password] Erro: Email inválido:", normalizedEmail);
+        return res.status(400).json({ ok: false, error: "email_invalido", message: "Digite um e-mail válido." });
       }
+      
+      console.log("[forgot-password] Email validado:", normalizedEmail);
 
       const auth = getAuth();
+      const db = getFirestore();
       const ip = getClientIP(req);
       const userAgent = getUserAgent(req);
 
+      let user;
       try {
-        // Usar Firebase Auth para enviar email de reset
-        // Nota: Isso requer configuração no Firebase Console
-        const user = await auth.getUserByEmail(normalizedEmail);
+        user = await auth.getUserByEmail(normalizedEmail);
+      } catch (error) {
+        if (error.code === "auth/user-not-found") {
+          return res.status(404).json({
+            ok: false,
+            error: "usuario_nao_encontrado",
+            message: "Não encontramos uma conta com este e-mail.",
+          });
+        }
+        throw error;
+      }
+
+      const profileDoc = await db.collection("profiles").doc(user.uid).get();
+      const profile = profileDoc.exists ? profileDoc.data() : null;
+
+      const resetCode = generateVerificationCode();
+      await savePasswordResetCode(normalizedEmail, resetCode);
+
+      try {
+        await sendPasswordResetEmail(normalizedEmail, profile?.name || user.displayName || "Usuário", resetCode);
+      } catch (emailError) {
+        console.error("[forgot-password] Erro ao enviar e-mail:", emailError);
         
-        // Gerar link de reset (isso normalmente é feito pelo Firebase Auth)
-        // Por enquanto, apenas logamos
         await logAuditEvent({
           type: "forgot_password_request",
           uid: user.uid,
           email: normalizedEmail,
           ip,
           userAgent,
-          status: "success"
+          status: "failure",
+          details: `Erro ao enviar email: ${emailError.message}`,
         });
 
-        // Resposta genérica (não vazar se email existe)
-        return res.json({
-          ok: true,
-          message: "Se este email estiver cadastrado, você receberá instruções para redefinir sua senha."
+        if (emailError.message?.includes("SMTP não configurado")) {
+          return res.status(500).json({
+            ok: false,
+            error: "erro_envio_email",
+            message: "Não foi possível enviar o e-mail de recuperação. Verifique a configuração do SMTP no arquivo .env. Consulte api/CONFIGURAR_SMTP.md para mais informações.",
+          });
+        }
+
+        return res.status(500).json({
+          ok: false,
+          error: "erro_envio_email",
+          message: "Não foi possível enviar o e-mail de recuperação. Verifique a configuração do SMTP e tente novamente.",
         });
-      } catch (error) {
-        if (error.code === "auth/user-not-found") {
-          // Mesmo assim, retornar mensagem genérica
+      }
+
+      console.log("[forgot-password] E-mail enviado com sucesso para:", normalizedEmail);
+      console.log("[forgot-password] Código de redefinição gerado:", resetCode);
+
           await logAuditEvent({
             type: "forgot_password_request",
+        uid: user.uid,
             email: normalizedEmail,
             ip,
             userAgent,
-            status: "failure",
-            details: "Email não encontrado"
+        status: "success",
           });
           
+      console.log("[forgot-password] 📤 Retornando resposta de sucesso para o frontend");
           return res.json({
             ok: true,
-            message: "Se este email estiver cadastrado, você receberá instruções para redefinir sua senha."
+        message: `Enviamos um código para redefinir sua senha para ${normalizedEmail}. Verifique sua caixa de entrada e o spam.`,
+        email: normalizedEmail,
           });
-        }
-        throw error;
-      }
     } catch (error) {
-      console.error("Erro em forgot-password:", error);
-      // Sempre retornar mensagem genérica
-      return res.json({
-        ok: true,
-        message: "Se este email estiver cadastrado, você receberá instruções para redefinir sua senha."
+      console.error("[forgot-password] Erro geral:", error);
+      return res.status(500).json({
+        ok: false,
+        error: "erro_interno",
+        message: "Não foi possível gerar o link de recuperação. Tente novamente em instantes.",
       });
     }
+  }
+);
+
+router.post(
+  "/validate-reset-token",
+  rateLimitMiddleware(
+    "validate_reset_token",
+    (req) => {
+      const email = req.body?.email?.trim().toLowerCase() || "";
+      const ip = getClientIP(req);
+      return email || ip;
+    },
+    10,
+    15 * 60 * 1000
+  ),
+  async (req, res) => {
+    const { email, token } = req.body || {};
+    if (!email || !token) {
+      return res.status(400).json({ ok: false, error: "dados_obrigatorios", message: "Email e token são obrigatórios." });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const emailValidation = validateEmail(normalizedEmail);
+    if (!emailValidation.valid) {
+      return res.status(400).json({ ok: false, error: "email_invalido", message: "Digite um e-mail válido." });
+    }
+
+    const validation = await validatePasswordResetToken(normalizedEmail, token);
+    if (!validation.valid) {
+      return res.status(400).json({ ok: false, error: validation.error, message: validation.message });
+    }
+
+    return res.json({ ok: true, message: "Token válido." });
   }
 );
 
@@ -1016,7 +1334,6 @@ router.post("/check-email",
       const auth = getAuth();
       const db = getFirestore();
 
-      // Verificar primeiro no Firestore (mais confiável)
       try {
         const profilesSnapshot = await db.collection("profiles")
           .where("email", "==", normalizedEmail)
@@ -1032,10 +1349,7 @@ router.post("/check-email",
         }
       } catch (firestoreError) {
         console.error("[check-email] Erro ao verificar no Firestore:", firestoreError);
-        // Continuar para verificar no Firebase Auth
       }
-
-      // Se não encontrou no Firestore, verificar no Firebase Auth
       try {
         const user = await auth.getUserByEmail(normalizedEmail);
         return res.json({
@@ -1049,10 +1363,8 @@ router.post("/check-email",
             exists: false
           });
         }
-        // Se for erro de permissão, ainda tentar verificar no Firestore como fallback
         if (error.code === "auth/internal-error" || error.message?.includes("PERMISSION_DENIED")) {
           console.warn("[check-email] Erro de permissão no Firebase Auth, usando Firestore como fallback");
-          // Já verificamos no Firestore acima, então retornar false
           return res.json({
             ok: true,
             exists: false
@@ -1071,7 +1383,6 @@ router.post("/check-email",
   }
 );
 
-// POST /api/auth/reset-password (reset direto sem email)
 router.post("/reset-password",
   rateLimitMiddleware("reset_password", (req) => {
     const email = req.body?.email?.trim().toLowerCase() || "";
@@ -1080,17 +1391,22 @@ router.post("/reset-password",
   }, 5, 60 * 60 * 1000), // 5 tentativas por hora
   async (req, res) => {
     try {
-      const { email, newPassword } = req.body || {};
+      const { email, code, newPassword } = req.body || {};
       
       if (!email) {
-        return res.status(400).json({ ok: false, error: "email_obrigatorio" });
+        return res.status(400).json({ ok: false, error: "email_obrigatorio", message: "Email é obrigatório." });
+      }
+
+      if (!code) {
+        return res.status(400).json({ ok: false, error: "codigo_obrigatorio", message: "Código de verificação é obrigatório." });
       }
 
       if (!newPassword) {
-        return res.status(400).json({ ok: false, error: "senha_obrigatoria" });
+        return res.status(400).json({ ok: false, error: "senha_obrigatoria", message: "Nova senha é obrigatória." });
       }
 
       const normalizedEmail = email.trim().toLowerCase();
+      const normalizedCode = code.trim();
       const emailValidation = validateEmail(normalizedEmail);
       
       if (!emailValidation.valid) {
@@ -1106,7 +1422,15 @@ router.post("/reset-password",
       const ip = getClientIP(req);
       const userAgent = getUserAgent(req);
 
-      // Verificar primeiro no Firestore (mais confiável)
+      const codeValidation = await validatePasswordResetCode(normalizedEmail, normalizedCode);
+      if (!codeValidation.valid) {
+        return res.status(400).json({
+          ok: false,
+          error: codeValidation.error === "Código expirado" ? "codigo_expirado" : codeValidation.error === "Código bloqueado" ? "codigo_bloqueado" : "codigo_invalido",
+          message: codeValidation.message || "Código inválido ou expirado. Solicite novamente.",
+        });
+      }
+
       let uid = null;
       let profile = null;
       
@@ -1125,13 +1449,10 @@ router.post("/reset-password",
         console.error("[reset-password] Erro ao verificar no Firestore:", firestoreError);
       }
 
-      // Se não encontrou no Firestore, verificar no Firebase Auth
       if (!uid) {
         try {
           const user = await auth.getUserByEmail(normalizedEmail);
           uid = user.uid;
-          
-          // Buscar perfil no Firestore usando o UID do Firebase Auth
           const profileDoc = await db.collection("profiles").doc(uid).get();
           if (profileDoc.exists) {
             profile = profileDoc.data();
@@ -1157,7 +1478,6 @@ router.post("/reset-password",
         }
       }
 
-      // Se ainda não encontrou, retornar erro
       if (!uid || !profile) {
         await logAuditEvent({
           type: "password_reset",
@@ -1175,7 +1495,6 @@ router.post("/reset-password",
         });
       }
 
-      // Validar força da senha
       const passwordValidation = validatePassword(newPassword, normalizedEmail, profile.name || "");
       
       if (!passwordValidation.valid) {
@@ -1187,16 +1506,12 @@ router.post("/reset-password",
         });
       }
 
-      // Atualizar senha no Firebase Auth (se o usuário existir lá)
       try {
         await auth.updateUser(uid, {
           password: newPassword
         });
-
-        // Revogar todos os refresh tokens (logout global)
         await auth.revokeRefreshTokens(uid);
       } catch (authError) {
-        // Se o usuário não existir no Firebase Auth, apenas atualizar no Firestore
         if (authError.code === "auth/user-not-found") {
           console.warn("[reset-password] Usuário não encontrado no Firebase Auth, atualizando apenas no Firestore");
         } else {
@@ -1210,6 +1525,7 @@ router.post("/reset-password",
         passwordHash: newPasswordHash,
         updatedAt: new Date().toISOString(),
       });
+
 
       await logAuditEvent({
         type: "password_reset",
@@ -1265,13 +1581,11 @@ router.post("/change-password",
       const ip = getClientIP(req);
       const userAgent = getUserAgent(req);
 
-      // Verificar token e obter dados do usuário
       let decodedToken;
       try {
         decodedToken = await auth.verifyIdToken(idToken);
         
-        // Verificar se o token é recente (auth_time <= 10 minutos)
-        const authTime = decodedToken.auth_time * 1000; // Converter para ms
+        const authTime = decodedToken.auth_time * 1000;
         const now = Date.now();
         const maxAge = 10 * 60 * 1000; // 10 minutos
         
@@ -1304,7 +1618,6 @@ router.post("/change-password",
         return res.status(401).json({ ok: false, error: "token_invalido" });
       }
 
-      // Validar força da senha
       const profileDoc = await db.collection("profiles").doc(uid).get();
       if (!profileDoc.exists) {
         return res.status(404).json({ ok: false, error: "usuario_nao_encontrado" });
@@ -1322,15 +1635,11 @@ router.post("/change-password",
         });
       }
 
-      // Atualizar senha no Firebase Auth
       await auth.updateUser(uid, {
         password: newPassword
       });
-
-      // Revogar todos os refresh tokens (logout global)
       await auth.revokeRefreshTokens(uid);
 
-      // Atualizar hash no Firestore
       const newPasswordHash = await bcrypt.hash(newPassword, 10);
       await db.collection("profiles").doc(uid).update({
         passwordHash: newPasswordHash,
@@ -1449,7 +1758,6 @@ router.post("/delete-account",
           });
         }
 
-        // Outros erros de autenticação
         return res.status(401).json({
           ok: false,
           error: "erro_validacao_senha",
@@ -1457,13 +1765,10 @@ router.post("/delete-account",
         });
       }
 
-      // Verificar se o perfil existe, criar se não existir
       const profileRef = db.collection("profiles").doc(uid);
       let profileDoc = await profileRef.get();
 
       if (!profileDoc.exists) {
-        // Se o perfil não existe, criar um básico com os dados do token
-        // Isso pode acontecer se o usuário foi criado antes do sistema criar perfis automaticamente
         console.log(`[delete-account] Perfil não encontrado para UID ${uid}, criando perfil básico...`);
         try {
           const userRecord = await auth.getUser(uid);
@@ -1488,7 +1793,6 @@ router.post("/delete-account",
         }
       }
 
-      // Verificar novamente se o perfil existe após tentar criar
       if (!profileDoc.exists) {
         console.error(`[delete-account] Perfil ainda não existe após tentativa de criação para UID ${uid}`);
         return res.status(500).json({ 
@@ -1498,10 +1802,8 @@ router.post("/delete-account",
         });
       }
 
-      // Marcar conta para exclusão (soft delete)
-      // A conta será permanentemente excluída após 30 dias
       const deletionDate = new Date();
-      deletionDate.setDate(deletionDate.getDate() + 30); // 30 dias a partir de agora
+      deletionDate.setDate(deletionDate.getDate() + 30);
 
       await profileRef.update({
         deletedAt: new Date().toISOString(),
@@ -1580,7 +1882,6 @@ router.post("/reactivate-account",
       const ip = getAuditIP(req);
       const userAgent = getUserAgent(req);
 
-      // Verificar se o perfil existe
       const profileRef = db.collection("profiles").doc(uid);
       const profileDoc = await profileRef.get();
 
@@ -1594,7 +1895,6 @@ router.post("/reactivate-account",
 
       const profileData = profileDoc.data();
       
-      // Verificar se a conta está marcada para exclusão
       if (profileData?.status !== "pending_deletion") {
         return res.status(400).json({ 
           ok: false, 
@@ -1603,7 +1903,6 @@ router.post("/reactivate-account",
         });
       }
 
-      // Verificar se ainda está dentro do prazo de 30 dias
       const deletionScheduledFor = profileData?.deletionScheduledFor;
       if (deletionScheduledFor) {
         const deletionDate = new Date(deletionScheduledFor);
@@ -1618,7 +1917,6 @@ router.post("/reactivate-account",
         }
       }
 
-      // Reativar conta: remover status de exclusão
       await profileRef.update({
         status: "active",
         deletedAt: null,
@@ -1626,14 +1924,12 @@ router.post("/reactivate-account",
         updatedAt: new Date().toISOString(),
       });
 
-      // Reabilitar o usuário no Firebase Auth
       try {
         await auth.updateUser(uid, {
           disabled: false
         });
       } catch (authError) {
         console.error("[reactivate-account] Erro ao reabilitar usuário no Firebase Auth:", authError);
-        // Continuar mesmo se falhar, pois o perfil já foi atualizado
       }
 
       await logAuditEvent({
@@ -1699,7 +1995,6 @@ router.post("/re-enable-account",
       const ip = getClientIP(req);
       const userAgent = getUserAgent(req);
 
-      // Buscar perfil no Firestore
       const profileSnapshot = await db
         .collection("profiles")
         .where("email", "==", normalizedEmail)
@@ -1716,7 +2011,6 @@ router.post("/re-enable-account",
 
       const profileData = profileSnapshot.docs[0].data();
       
-      // Verificar se a conta está marcada para exclusão
       if (profileData?.status !== "pending_deletion") {
         return res.status(400).json({ 
           ok: false, 
@@ -1725,7 +2019,6 @@ router.post("/re-enable-account",
         });
       }
 
-      // Verificar se ainda está dentro do prazo de 30 dias
       const deletionScheduledFor = profileData?.deletionScheduledFor;
       if (deletionScheduledFor) {
         const deletionDate = new Date(deletionScheduledFor);
@@ -1740,7 +2033,6 @@ router.post("/re-enable-account",
         }
       }
 
-      // Reabilitar a conta no Firebase Auth
       try {
         const userRecord = await auth.getUserByEmail(normalizedEmail);
         await auth.updateUser(userRecord.uid, {
@@ -1749,7 +2041,6 @@ router.post("/re-enable-account",
         console.log("[re-enable-account] Conta reabilitada no Firebase Auth:", normalizedEmail);
       } catch (authError) {
         console.error("[re-enable-account] Erro ao reabilitar conta no Firebase Auth:", authError);
-        // Se o usuário não existir no Firebase Auth, não é um problema crítico
         if (authError.code !== "auth/user-not-found") {
           return res.status(500).json({ 
             ok: false, 
@@ -1802,7 +2093,7 @@ router.post("/verify-code",
     try {
       const { email, code, password } = req.body || {};
       
-      console.log("[verify-code] 📧 Recebida requisição de verificação");
+      console.log("[verify-code] Recebida requisição de verificação");
       console.log("[verify-code] Email:", email);
       console.log("[verify-code] Código recebido:", code);
       console.log("[verify-code] Senha recebida (tamanho):", password?.length || 0);
@@ -1842,7 +2133,6 @@ router.post("/verify-code",
       const auth = getAuth();
       const db = getFirestore();
       
-      // Buscar usuário pelo email
       let userRecord;
       try {
         userRecord = await auth.getUserByEmail(normalizedEmail);
@@ -1857,47 +2147,40 @@ router.post("/verify-code",
         throw error;
       }
       
-      // Verificar senha
       try {
-        console.log("[verify-code] 🔐 Verificando senha para:", normalizedEmail);
+        console.log("[verify-code] Verificando senha para:", normalizedEmail);
         console.log("[verify-code] Tamanho da senha recebida:", password?.length);
         console.log("[verify-code] Primeiros 3 caracteres da senha (para debug):", password?.substring(0, 3) + "***");
         console.log("[verify-code] Últimos 3 caracteres da senha (para debug):", "***" + password?.substring(password.length - 3));
         
-        // Tentar fazer login com a senha exatamente como recebida
         try {
           await loginWithPassword(normalizedEmail, password);
-          console.log("[verify-code] ✅ Senha válida - login bem-sucedido");
+          console.log("[verify-code] Senha válida - login bem-sucedido");
         } catch (firstAttemptError) {
-          // Se falhar, pode ser que a conta foi criada antes da correção (com trim)
-          // Tentar novamente com a senha com trim() para compatibilidade com contas antigas
-          console.log("[verify-code] ⚠️ Primeira tentativa falhou, tentando com senha com trim() para compatibilidade...");
+          console.log("[verify-code] Atenção: Primeira tentativa falhou, tentando com senha com trim() para compatibilidade...");
           const trimmedPassword = password?.trim() || "";
           
           if (trimmedPassword !== password && trimmedPassword.length > 0) {
             try {
               await loginWithPassword(normalizedEmail, trimmedPassword);
-              console.log("[verify-code] ✅ Senha válida com trim() - login bem-sucedido (conta antiga)");
+              console.log("[verify-code] Senha válida com trim() - login bem-sucedido (conta antiga)");
             } catch (secondAttemptError) {
-              // Se ambas falharem, retornar o erro original
               throw firstAttemptError;
             }
           } else {
-            // Se não há diferença ou senha vazia, retornar erro original
             throw firstAttemptError;
           }
         }
       } catch (loginError) {
-        console.error("[verify-code] ❌ Erro ao validar senha");
+        console.error("[verify-code] Erro ao validar senha");
         console.error("[verify-code] Mensagem do erro:", loginError.message);
         console.error("[verify-code] Código do erro:", loginError.code);
         console.error("[verify-code] Status do erro:", loginError.status);
         console.error("[verify-code] Detalhes completos:", JSON.stringify(loginError, null, 2));
         
-        // Se for erro de credenciais inválidas, pode ser que a senha foi salva diferente
         if (loginError.code === "credenciais_invalidas" || loginError.message?.includes("INVALID_PASSWORD") || loginError.message?.includes("INVALID_LOGIN_CREDENTIALS")) {
-          console.error("[verify-code] ⚠️ POSSÍVEL CAUSA: A senha pode ter sido salva com espaços removidos durante o cadastro");
-          console.error("[verify-code] 💡 SUGESTÃO: Tente criar uma nova conta ou verifique se há espaços no início/fim da senha");
+          console.error("[verify-code] Atenção: POSSÍVEL CAUSA: A senha pode ter sido salva com espaços removidos durante o cadastro");
+          console.error("[verify-code] SUGESTÃO: Tente criar uma nova conta ou verifique se há espaços no início/fim da senha");
         }
         
         return res.status(401).json({
@@ -1912,21 +2195,16 @@ router.post("/verify-code",
         emailVerified: true
       });
       
-      // Atualizar perfil no Firestore
       const profileRef = db.collection("profiles").doc(userRecord.uid);
-      // Limpar status de exclusão se existir (reativação da conta)
       await profileRef.update({
         emailVerified: true,
-        status: "active", // Limpar pending_deletion
-        deletedAt: null, // Limpar deletedAt
-        deletionScheduledFor: null, // Limpar deletionScheduledFor
+        status: "active",
+        deletedAt: null,
+        deletionScheduledFor: null,
         updatedAt: new Date().toISOString()
       });
       
-      // Fazer login para obter tokens
       const tokens = await loginWithPassword(normalizedEmail, password);
-      
-      // Buscar dados do perfil
       const profileDoc = await profileRef.get();
       const profileData = profileDoc.data();
       
@@ -1994,7 +2272,6 @@ router.post("/resend-verification-code",
       
       const normalizedEmail = email.trim().toLowerCase();
       
-      // Verificar se o usuário existe e não está verificado
       const auth = getAuth();
       const db = getFirestore();
       
@@ -2012,7 +2289,6 @@ router.post("/resend-verification-code",
         throw error;
       }
       
-      // Se já estiver verificado, não permitir reenvio
       if (userRecord.emailVerified) {
         return res.status(400).json({
           ok: false,
@@ -2021,19 +2297,15 @@ router.post("/resend-verification-code",
         });
       }
       
-      // Buscar nome do perfil
       const profileDoc = await db.collection("profiles").doc(userRecord.uid).get();
       const profileData = profileDoc.data();
       const userName = profileData?.name || userRecord.displayName || "Usuário";
       
-      // Gerar novo código
       const verificationCode = generateVerificationCode();
       await saveVerificationCode(normalizedEmail, verificationCode);
-      
-      // Enviar e-mail
       try {
         await sendVerificationCodeEmail(normalizedEmail, userName, verificationCode);
-        console.log("[resend-verification-code] ✅ Novo código enviado para:", normalizedEmail);
+        console.log("[resend-verification-code] Novo código enviado para:", normalizedEmail);
         
         await logAuditEvent({
           type: "verification_code_resent",
@@ -2049,7 +2321,7 @@ router.post("/resend-verification-code",
           message: "Novo código de verificação enviado para o seu e-mail."
         });
       } catch (emailError) {
-        console.error("[resend-verification-code] ❌ Erro ao enviar e-mail:", emailError.message);
+        console.error("[resend-verification-code] Erro ao enviar e-mail:", emailError.message);
         return res.status(500).json({
           ok: false,
           error: "erro_envio_email",

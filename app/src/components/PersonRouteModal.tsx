@@ -336,7 +336,6 @@ export const PersonRouteModal: React.FC = () => {
     );
   };
 
-  // Verifica se biografia precisa de "Ler mais"
   const biographyLines = person.biography ? person.biography.split('\n').length : 0;
   const needsReadMore = biographyLines > 8 || (person.biography && person.biography.length > 600);
   const biographyPreview = person.biography && needsReadMore && !biographyExpanded

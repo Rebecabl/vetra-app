@@ -83,18 +83,18 @@ const shareBase = process.env.SHARE_BASE || 'http://localhost:5173';
 
 // Adicionar tratamento de erros não capturados
 process.on('uncaughtException', (err) => {
-  console.error('\n❌ [FATAL] Erro não capturado:', err);
+  console.error('\n[FATAL] Erro não capturado:', err);
   console.error('Stack:', err.stack);
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('\n❌ [FATAL] Promise rejeitada não tratada:', reason);
+  console.error('\n[FATAL] Promise rejeitada não tratada:', reason);
   console.error('Promise:', promise);
 });
 
 const server = app.listen(port, host, () => {
-  console.log(`\n✅ VETRA API — ouvindo em http://${host}:${port}`);
+  console.log(`\nVETRA API — ouvindo em http://${host}:${port}`);
   console.log(`   Health:            http://${host}:${port}/api/health`);
   console.log(`   Health (alt):      http://localhost:${port}/api/health`);
   console.log(`   TMDB v4 Bearer?    ${hasBearer ? 'SIM' : 'NÃO'}`);
@@ -102,12 +102,12 @@ const server = app.listen(port, host, () => {
   console.log(`   TMDB Lang:         ${lang}`);
   console.log(`   Share Base:        ${shareBase}`);
   console.log(`   Firebase Admin:    ${firebaseReady ? 'OK' : '— (não inicializado)'}`);
-  console.log(`\n   ✅ Servidor PRONTO para receber requisições!\n`);
+  console.log(`\n   Servidor PRONTO para receber requisições!\n`);
 });
 
 server.on('error', (err) => {
   if (err && err.code === 'EADDRINUSE') {
-    console.error(`\n❌ [api] Porta ${port} já está em uso após tentativa de encerrar processos.`);
+    console.error(`\n[api] Erro: Porta ${port} já está em uso após tentativa de encerrar processos.`);
     console.error('Tente encerrar manualmente:');
     console.error(`  > netstat -ano | findstr :${port}`);
     console.error('  (anote o PID) e depois:');

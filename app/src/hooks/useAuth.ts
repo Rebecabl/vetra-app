@@ -56,19 +56,24 @@ interface UseAuthReturn {
   forgotPasswordEmail: string;
   setForgotPasswordEmail: (email: string) => void;
   forgotPasswordLoading: boolean;
-  setForgotPasswordLoading: (value: boolean) => void;
-  forgotPasswordMessage: string;
-  setForgotPasswordMessage: (message: string) => void;
   forgotPasswordError: string;
   setForgotPasswordError: (error: string) => void;
-  forgotPasswordStep: "email" | "password";
-  setForgotPasswordStep: (step: "email" | "password") => void;
+  forgotPasswordStep: "email" | "code" | "password";
+  setForgotPasswordStep: (step: "email" | "code" | "password") => void;
+  forgotPasswordCode: string[];
+  setForgotPasswordCode: (code: string[]) => void;
   forgotPasswordNewPassword: string;
   setForgotPasswordNewPassword: (password: string) => void;
   forgotPasswordConfirmPassword: string;
   setForgotPasswordConfirmPassword: (password: string) => void;
   forgotPasswordShowPassword: boolean;
   setForgotPasswordShowPassword: (show: boolean) => void;
+  forgotPasswordStrength: "muito-fraca" | "fraca" | "boa" | "forte";
+  forgotPasswordErrors: string[];
+  forgotPasswordShowTips: boolean;
+  setForgotPasswordShowTips: (show: boolean) => void;
+  handleForgotPasswordConfirmCode: () => Promise<void>;
+  handleForgotPasswordReset: () => Promise<void>;
   emailVerified: boolean;
   setEmailVerified: (verified: boolean) => void;
   showVerificationEmailModal: boolean;
@@ -83,7 +88,6 @@ interface UseAuthReturn {
   saveProfile: (profileData: { name: string; avatar_url?: string | null }) => Promise<void>;
   generatePassword: () => void;
   handleForgotPasswordCheckEmail: (e?: React.MouseEvent) => Promise<void>;
-  handleForgotPasswordReset: (e?: React.MouseEvent) => Promise<void>;
   
   pendingAction: (() => void) | null;
   setPendingAction: (action: (() => void) | null) => void;
@@ -126,12 +130,15 @@ export const useAuth = (
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
-  const [forgotPasswordMessage, setForgotPasswordMessage] = useState("");
   const [forgotPasswordError, setForgotPasswordError] = useState("");
-  const [forgotPasswordStep, setForgotPasswordStep] = useState<"email" | "password">("email");
+  const [forgotPasswordStep, setForgotPasswordStep] = useState<"email" | "code" | "password">("email");
+  const [forgotPasswordCode, setForgotPasswordCode] = useState(["", "", "", "", "", ""]);
   const [forgotPasswordNewPassword, setForgotPasswordNewPassword] = useState("");
   const [forgotPasswordConfirmPassword, setForgotPasswordConfirmPassword] = useState("");
   const [forgotPasswordShowPassword, setForgotPasswordShowPassword] = useState(false);
+  const [forgotPasswordStrength, setForgotPasswordStrength] = useState<"muito-fraca" | "fraca" | "boa" | "forte">("muito-fraca");
+  const [forgotPasswordErrors, setForgotPasswordErrors] = useState<string[]>([]);
+  const [forgotPasswordShowTips, setForgotPasswordShowTips] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
   const [showVerificationEmailModal, setShowVerificationEmailModal] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState("");
@@ -139,7 +146,6 @@ export const useAuth = (
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [pendingRoute, setPendingRoute] = useState<string | null>(null);
   
-  // Refs para evitar dependências problemáticas no useCallback
   const validationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const emailErrorRef = useRef(emailError);
   const passwordErrorRef = useRef(passwordError);
@@ -172,10 +178,8 @@ export const useAuth = (
         deletionScheduledFor: data?.deletionScheduledFor
       });
       
-      // Não limpar sessão se usuário está logado (pode ser sincronização/dados antigos)
       if (data?.status === "pending_deletion" || (data?.deletedAt && data.deletedAt !== null)) {
         if (isLoggedIn) {
-          // Backend valida via authVerify, não o frontend
           return;
         }
       }
@@ -186,8 +190,6 @@ export const useAuth = (
         avatar_url: data?.avatar_url ?? null,
         updatedAt: data?.updatedAt ?? null,
       };
-      
-      // Se logado, assumir ativo (backend já validou)
       if (!isLoggedIn) {
         userUpdate.status = data?.status;
         userUpdate.deletedAt = data?.deletedAt;
@@ -653,7 +655,6 @@ export const useAuth = (
       if (result.user) {
         const userEmail = result.user.email || formData.email.trim().toLowerCase();
         
-        // Salvar tokens antes de atualizar estado
         if (result.idToken) {
           try {
             localStorage.removeItem('vetra:activeTab');
@@ -680,7 +681,6 @@ export const useAuth = (
           } catch {}
         }
         
-        // Definir user antes de isLoggedIn
         setUser({
           name: result.user.name || (loginType === "signup" ? (formData.lastName?.trim() ? `${formData.firstName.trim()} ${formData.lastName.trim()}` : formData.firstName.trim()) : "Usuário") || "Usuário",
           email: userEmail,
@@ -691,19 +691,16 @@ export const useAuth = (
         
         setIsLoggedIn(true);
         
-        console.log("[handleSubmit] ✅ Estado atualizado - isLoggedIn: true, user:", {
+        console.log("[handleSubmit] Estado atualizado - isLoggedIn: true, user:", {
           email: userEmail,
           name: result.user.name
         });
         
-        // Limpar formulário
         setFormData({ firstName: "", lastName: "", email: "", password: "", confirmPassword: "", acceptTerms: false });
         setPasswordErrors([]);
         setEmailError("");
         setLoginError("");
         setAuthLoading(false);
-        
-        // useEffect carrega perfil automaticamente (evita race conditions)
         
         if (pushBanner) {
           pushBanner({ 
@@ -736,7 +733,6 @@ export const useAuth = (
       console.error("Erro na autenticação:", error);
       console.error("Erro completo:", JSON.stringify(error, null, 2));
       
-      // Reabilita conta automaticamente se desabilitada
       if (error?.error === "conta_desabilitada" || error?.message?.includes("desabilitada")) {
         const emailToReEnable = formData.email.trim().toLowerCase();
         if (emailToReEnable) {
@@ -836,7 +832,6 @@ export const useAuth = (
     }
   };
   
-  // Verifica sessão persistente na inicialização
   useEffect(() => {
     const checkPersistedSession = async () => {
       try {
@@ -920,7 +915,6 @@ export const useAuth = (
     checkPersistedSession();
   }, []);
   
-  // Delay no loadProfile para evitar race conditions após verificação/login
   const hasLoadedProfileRef = useRef(false);
   
   useEffect(() => {
@@ -942,10 +936,163 @@ export const useAuth = (
   
   const handleForgotPasswordCheckEmail = async (e?: React.MouseEvent) => {
     if (e) e.preventDefault();
+    const targetEmail = forgotPasswordEmail.trim();
+
+    if (!targetEmail) {
+      setForgotPasswordError("Digite o e-mail da sua conta.");
+      return;
+    }
+
+    const emailValidation = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailValidation.test(targetEmail)) {
+      setForgotPasswordError("Digite um e-mail válido.");
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+    setForgotPasswordError("");
+
+    try {
+      console.log("[handleForgotPasswordCheckEmail] Enviando requisição para:", targetEmail);
+      const result = await api.forgotPassword(targetEmail);
+      console.log("[handleForgotPasswordCheckEmail] Resultado completo:", JSON.stringify(result, null, 2));
+      console.log("[handleForgotPasswordCheckEmail] result.ok:", result.ok);
+      console.log("[handleForgotPasswordCheckEmail] result.message:", result.message);
+      console.log("[handleForgotPasswordCheckEmail] result.error:", result.error);
+      
+      if (!result.ok) {
+        const errorMessage = result.message || result.error || "Não foi possível enviar o e-mail. Tente novamente.";
+        console.log("[handleForgotPasswordCheckEmail] Erro detectado:", errorMessage);
+        setForgotPasswordError(errorMessage);
+        return;
+      }
+
+      console.log("[handleForgotPasswordCheckEmail] Sucesso! Avançando para passo de código...");
+      pushToast({
+        message: `Enviamos um código para ${targetEmail}. Verifique sua caixa de entrada e o spam.`,
+        tone: "info",
+      });
+
+      setForgotPasswordStep("code");
+      setForgotPasswordError("");
+    } catch (error: any) {
+      console.error("[handleForgotPasswordCheckEmail] Erro na requisição:", error);
+      console.error("[handleForgotPasswordCheckEmail] Stack:", error?.stack);
+      setForgotPasswordError(error?.message || "Não foi possível enviar o e-mail. Tente novamente.");
+    } finally {
+      setForgotPasswordLoading(false);
+    }
   };
 
-  const handleForgotPasswordReset = async (e?: React.MouseEvent) => {
-    if (e) e.preventDefault();
+  const validateForgotPassword = useCallback((password: string) => {
+    const errors: string[] = [];
+    
+    if (!password) {
+      setForgotPasswordStrength("muito-fraca");
+      setForgotPasswordErrors([]);
+      return;
+    }
+    
+    const strength = calculatePasswordStrength(password);
+    setForgotPasswordStrength(strength);
+    
+    if (password.length < 8) {
+      errors.push("A senha precisa ter pelo menos 8 caracteres");
+    }
+    
+    const hasLetters = /[a-zA-Z]/.test(password);
+    const hasDigits = /\d/.test(password);
+    const hasSymbols = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+    const groupsCount = [hasLetters, hasDigits, hasSymbols].filter(Boolean).length;
+    
+    if (password.length >= 8 && groupsCount < 2) {
+      errors.push("Use pelo menos dois tipos: letras, números ou símbolos");
+    }
+    
+    const email = forgotPasswordEmail.trim().toLowerCase();
+    if (email) {
+      const emailLocal = email.split("@")[0];
+      const pwdLower = password.toLowerCase();
+      if (pwdLower.includes(emailLocal) || pwdLower.includes(email)) {
+        errors.push("Sua senha não deve conter seu e-mail");
+      }
+    }
+    
+    setForgotPasswordErrors(errors);
+  }, [forgotPasswordEmail]);
+
+  useEffect(() => {
+    if (forgotPasswordStep === "password" && forgotPasswordNewPassword) {
+      validateForgotPassword(forgotPasswordNewPassword);
+    } else if (forgotPasswordStep !== "password") {
+      setForgotPasswordStrength("muito-fraca");
+      setForgotPasswordErrors([]);
+    }
+  }, [forgotPasswordNewPassword, forgotPasswordStep, validateForgotPassword]);
+
+  const handleForgotPasswordConfirmCode = async () => {
+    const fullCode = forgotPasswordCode.join("");
+    if (fullCode.length !== 6) {
+      setForgotPasswordError("Digite o código completo de 6 dígitos.");
+      return;
+    }
+
+    setForgotPasswordError("");
+    setForgotPasswordStep("password");
+  };
+
+  const handleForgotPasswordReset = async () => {
+    const targetEmail = forgotPasswordEmail.trim();
+    const fullCode = forgotPasswordCode.join("");
+    const newPassword = forgotPasswordNewPassword.trim();
+    const confirmPassword = forgotPasswordConfirmPassword.trim();
+
+    if (!newPassword) {
+      setForgotPasswordError("Digite a nova senha.");
+      return;
+    }
+
+    if (forgotPasswordErrors.length > 0) {
+      setForgotPasswordError(forgotPasswordErrors[0]);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setForgotPasswordError("As senhas não coincidem.");
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+    setForgotPasswordError("");
+
+    try {
+      const result = await api.resetPassword(targetEmail, fullCode, newPassword);
+      if (!result.ok) {
+        setForgotPasswordError(result.message || result.error || "Não foi possível redefinir sua senha.");
+        return;
+      }
+
+      pushToast({
+        message: "Senha redefinida com sucesso! Agora você já pode entrar com a nova senha.",
+        tone: "ok",
+      });
+
+      setShowForgotPassword(false);
+      setForgotPasswordStep("email");
+      setForgotPasswordEmail("");
+      setForgotPasswordCode(["", "", "", "", "", ""]);
+      setForgotPasswordNewPassword("");
+      setForgotPasswordConfirmPassword("");
+      setForgotPasswordError("");
+      setForgotPasswordStrength("muito-fraca");
+      setForgotPasswordErrors([]);
+      setForgotPasswordShowTips(false);
+    } catch (error: any) {
+      console.error("[handleForgotPasswordReset] Erro:", error);
+      setForgotPasswordError(error?.message || "Não foi possível redefinir sua senha. Tente novamente.");
+    } finally {
+      setForgotPasswordLoading(false);
+    }
   };
   
   return {
@@ -985,19 +1132,8 @@ export const useAuth = (
     forgotPasswordEmail,
     setForgotPasswordEmail,
     forgotPasswordLoading,
-    setForgotPasswordLoading,
-    forgotPasswordMessage,
-    setForgotPasswordMessage,
     forgotPasswordError,
     setForgotPasswordError,
-    forgotPasswordStep,
-    setForgotPasswordStep,
-    forgotPasswordNewPassword,
-    setForgotPasswordNewPassword,
-    forgotPasswordConfirmPassword,
-    setForgotPasswordConfirmPassword,
-    forgotPasswordShowPassword,
-    setForgotPasswordShowPassword,
     emailVerified,
     setEmailVerified,
     showVerificationEmailModal,
@@ -1011,6 +1147,21 @@ export const useAuth = (
     saveProfile,
     generatePassword,
     handleForgotPasswordCheckEmail,
+    forgotPasswordStep,
+    setForgotPasswordStep,
+    forgotPasswordCode,
+    setForgotPasswordCode,
+    forgotPasswordNewPassword,
+    setForgotPasswordNewPassword,
+    forgotPasswordConfirmPassword,
+    setForgotPasswordConfirmPassword,
+    forgotPasswordShowPassword,
+    setForgotPasswordShowPassword,
+    forgotPasswordStrength,
+    forgotPasswordErrors,
+    forgotPasswordShowTips,
+    setForgotPasswordShowTips,
+    handleForgotPasswordConfirmCode,
     handleForgotPasswordReset,
     pendingAction,
     setPendingAction,

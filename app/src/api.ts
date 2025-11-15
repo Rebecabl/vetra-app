@@ -1026,126 +1026,124 @@ export async function checkEmailExists(email: string): Promise<{ ok: boolean; ex
   }
 }
 
-export async function resetPassword(email: string, newPassword: string): Promise<{ ok: boolean; message?: string; error?: string }> {
+export async function resetPassword(email: string, code: string, newPassword: string): Promise<{ ok: boolean; message?: string; error?: string }> {
   const normalizedEmail = email.trim().toLowerCase();
-  
-  if (!normalizedEmail || !newPassword) {
-    return { 
-      ok: false, 
-      error: "Email e senha são obrigatórios" 
-    };
+
+  if (!normalizedEmail || !code || !newPassword) {
+    return { ok: false, error: "Email, código e nova senha são obrigatórios" };
   }
-  
+
   const backendHealthy = await ensureBackendHealth();
   if (!backendHealthy) {
-    return { 
-      ok: false, 
-      error: "Backend não disponível" 
-    };
+    return { ok: false, error: "Backend não disponível" };
   }
-  
+
   if (!API_BASE) {
-    return { 
-      ok: false, 
-      error: "API_BASE não configurado" 
-    };
+    return { ok: false, error: "API_BASE não configurado" };
   }
-  
+
   try {
-    const url = `${API_BASE}/api/auth/reset-password`;
-    const response = await fetch(url, {
+    const response = await fetch(`${API_BASE}/api/auth/reset-password`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         email: normalizedEmail,
-        newPassword: newPassword
+        code,
+        newPassword: newPassword.trim(),
       }),
     });
-    
+
     const data = await response.json();
+    if (!response.ok) {
+      return { ok: false, error: data.error, message: data.message };
+    }
     return data;
   } catch (error: any) {
     console.error("[resetPassword] Erro:", error);
-    return { 
-      ok: false, 
-      error: error?.message || "Erro ao redefinir senha" 
-    };
+    return { ok: false, error: error?.message || "Erro ao redefinir senha" };
   }
 }
 
 export async function forgotPassword(email: string): Promise<{ ok: boolean; message?: string; error?: string }> {
   const normalizedEmail = email.trim().toLowerCase();
-  
+
   if (!normalizedEmail) {
-    return { 
-      ok: false, 
-      error: "Email é obrigatório" 
-    };
+    return { ok: false, error: "Email é obrigatório" };
   }
-  
-  console.log("[forgotPassword] Solicitando reset de senha para:", normalizedEmail.substring(0, 3) + "***");
-  console.log("[forgotPassword] API_BASE:", API_BASE);
-  
+
   const backendHealthy = await ensureBackendHealth();
-  console.log("[forgotPassword] Backend health check:", backendHealthy);
-  
   if (!backendHealthy) {
-    return { 
-      ok: false, 
-      error: "Backend não disponível. Certifique-se de que o servidor está rodando na porta 4001." 
-    };
+    return { ok: false, error: "Backend não disponível. Certifique-se de que o servidor está rodando na porta 4001." };
   }
-  
+
   if (!API_BASE) {
-    return { 
-      ok: false, 
-      error: "API_BASE não configurado. Verifique o arquivo .env do frontend." 
-    };
+    return { ok: false, error: "API_BASE não configurado. Verifique o arquivo .env do frontend." };
   }
-  
+
   try {
-    const url = `${API_BASE}/api/auth/forgot-password`;
-    console.log("[forgotPassword] Fazendo requisição para:", url);
+    console.log("[forgotPassword] Fazendo requisição para:", `${API_BASE}/api/auth/forgot-password`);
+    console.log("[forgotPassword] Payload:", { email: normalizedEmail });
     
-    const response = await fetch(url, {
+    const response = await fetch(`${API_BASE}/api/auth/forgot-password`, {
       method: "POST",
-      headers: { 
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ 
-        email: normalizedEmail
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalizedEmail }),
     });
+
+    console.log("[forgotPassword] Status da resposta:", response.status, response.statusText);
     
-    console.log("[forgotPassword] Resposta recebida, status:", response.status);
+    const data = await response.json();
+    console.log("[forgotPassword] Dados recebidos:", JSON.stringify(data, null, 2));
     
-    let data;
-    try {
-      data = await response.json();
-      console.log("[forgotPassword] Dados da resposta:", { ok: data.ok, error: data.error, message: data.message });
-    } catch (parseError) {
-      const text = await response.text();
-      console.error("[forgotPassword] Erro ao parsear JSON:", text);
-      return { 
-        ok: false, 
-        error: `Erro ${response.status}: ${response.statusText}` 
-      };
+    if (!response.ok) {
+      console.log("[forgotPassword] Erro: Resposta não OK - error:", data.error, "message:", data.message);
+      return { ok: false, error: data.error, message: data.message };
     }
     
-    // O endpoint sempre retorna ok: true com mensagem genérica (por segurança)
+    console.log("[forgotPassword] Resposta OK");
     return data;
   } catch (error: any) {
     console.error("[forgotPassword] Erro na requisição:", error);
+    console.error("[forgotPassword] Stack:", error?.stack);
     if (error?.message?.includes("Failed to fetch") || error?.message?.includes("ERR_CONNECTION_REFUSED")) {
-      return { 
-        ok: false, 
-        error: "Não foi possível conectar ao servidor. Verifique se o backend está rodando." 
-      };
+      return { ok: false, error: "Não foi possível conectar ao servidor. Verifique se o backend está rodando." };
     }
-    return { 
-      ok: false, 
-      error: error?.message || "Erro ao conectar com o servidor." 
-    };
+    return { ok: false, error: error?.message || "Erro ao conectar com o servidor." };
+  }
+}
+
+
+export async function validateResetToken(email: string, token: string): Promise<{ ok: boolean; message?: string; error?: string }> {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!normalizedEmail || !token) {
+    return { ok: false, error: "Email e token são obrigatórios" };
+  }
+
+  const backendHealthy = await ensureBackendHealth();
+  if (!backendHealthy) {
+    return { ok: false, error: "Backend não disponível" };
+  }
+
+  if (!API_BASE) {
+    return { ok: false, error: "API_BASE não configurado" };
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/api/auth/validate-reset-token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalizedEmail, token }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      return { ok: false, error: data.error, message: data.message };
+    }
+    return data;
+  } catch (error: any) {
+    console.error("[validateResetToken] Erro:", error);
+    return { ok: false, error: error?.message || "Erro ao validar token" };
   }
 }
 
@@ -1888,6 +1886,7 @@ const api = {
   favoritesSave,
   
   forgotPassword,
+  validateResetToken,
   checkEmailExists,
   resetPassword,
 };

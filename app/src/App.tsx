@@ -108,7 +108,6 @@ import { applyClientSort, hasNonDefaultFilters, filterByPoster } from "./utils/s
 import { getCountryCode, getCountryFlag } from "./utils/countryUtils";
 
 const AppShell = (): JSX.Element => {
-  // Desabilita a restauração automática de scroll do navegador
   useEffect(() => {
     if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
       window.history.scrollRestoration = 'manual';
@@ -156,18 +155,24 @@ const AppShell = (): JSX.Element => {
     forgotPasswordEmail,
     setForgotPasswordEmail,
     forgotPasswordLoading,
-    forgotPasswordMessage,
-    setForgotPasswordMessage,
     forgotPasswordError,
     setForgotPasswordError,
     forgotPasswordStep,
     setForgotPasswordStep,
+    forgotPasswordCode,
+    setForgotPasswordCode,
     forgotPasswordNewPassword,
     setForgotPasswordNewPassword,
     forgotPasswordConfirmPassword,
     setForgotPasswordConfirmPassword,
     forgotPasswordShowPassword,
     setForgotPasswordShowPassword,
+    forgotPasswordStrength,
+    forgotPasswordErrors,
+    forgotPasswordShowTips,
+    setForgotPasswordShowTips,
+    handleForgotPasswordConfirmCode,
+    handleForgotPasswordReset,
     emailVerified,
     setEmailVerified,
     showVerificationEmailModal,
@@ -181,8 +186,6 @@ const AppShell = (): JSX.Element => {
     saveProfile,
     generatePassword,
     handleForgotPasswordCheckEmail,
-    handleForgotPasswordReset,
-    setForgotPasswordLoading,
     pendingAction,
     setPendingAction,
     pendingRoute,
@@ -1767,7 +1770,6 @@ const AppShell = (): JSX.Element => {
         data = await api.browse("popular", page);
         source = "vetra";
       } catch (vetraError) {
-        // Fallback para TMDb se VETRA falhar
         console.log(`[api_fallback_used] endpoint=/browse/popular reason=${vetraError} status=fallback`);
         data = await api.getCategory("movie", "popular", page);
       }
@@ -1961,7 +1963,6 @@ const AppShell = (): JSX.Element => {
           setHasActiveFilters(hasNonDefaultFilters(activeFilters, defaults) || hasSearchTerm);
         }
       } else {
-        // Search with term
         const filters: { year?: number; minRating?: number } = {};
         if (yearFrom) filters.year = yearFrom;
         if (minRating > 0) filters.minRating = minRating;
@@ -2061,7 +2062,6 @@ const AppShell = (): JSX.Element => {
         });
         
         if (activeFilters.type !== "person") {
-          // Apply year filter
           if (yearFrom || yearTo) {
             moviesPart = moviesPart.filter((x: any) => {
               const releaseYear = x.release_date || x.first_air_date;
@@ -2331,7 +2331,6 @@ const AppShell = (): JSX.Element => {
           } catch {}
         }
         
-        // Sincronizar favoritos com backend
         const favsResult = await api.favoritesGet(user.uid);
         if (favsResult.items && favsResult.items.length > 0) {
           setFavorites(favsResult.items);
@@ -2344,7 +2343,6 @@ const AppShell = (): JSX.Element => {
     loadUserData();
   }, [isLoggedIn, user?.uid]);
   
-  // Função wrapper para setActiveTab que intercepta quando está na página de edição
 
 
   const toggleFavorite = (movie: MovieT, skipConfirm = false) => {
@@ -2787,13 +2785,11 @@ const AppShell = (): JSX.Element => {
       });
     }
     
-    // Sincronizar com a API se o usuário estiver logado
     if (isLoggedIn && user?.email) {
       try {
         await api.removeListItem(user.email, listId, itemKey);
       } catch (error) {
         console.error("[removeFromList] Erro ao sincronizar com API:", error);
-        // Continua mesmo se falhar
       }
     }
     
@@ -2860,7 +2856,6 @@ const AppShell = (): JSX.Element => {
   const goToHomeCategory = (key: CatKey) => {
     setActiveTab("home");
     if (!cats[key]?.initialized && !cats[key]?.loading) loadCategory(key);
-    // Removido scroll automático para o topo
   };
 
   const navigateWithAuth = (route: string, requiresAuth: boolean = false) => {
@@ -2930,7 +2925,6 @@ const AppShell = (): JSX.Element => {
     const [showDock, setShowDock] = useState(false);
     const [commentsToShow, setCommentsToShow] = useState(3);
     
-    // Extrai o tipo de mídia da URL (movie ou tv) - memoizado para evitar re-renders
     const mediaType = useMemo(() => {
       return location.pathname.startsWith("/movie/") ? "movie" : 
              location.pathname.startsWith("/tv/") ? "tv" : null;
@@ -3362,27 +3356,27 @@ const AppShell = (): JSX.Element => {
                 <div className="flex gap-2 min-w-max">
                   {d?.certification ? (
                     <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap flex items-center gap-1">
-                      🔞 {d.certification}
+                      {d.certification}
                     </span>
                   ) : null}
                   {d?.genres?.slice(0, 2).map((genre: string, idx: number) => (
                     <span key={idx} className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                      🎭 {genre}
+                      {genre}
                     </span>
                   ))}
                   {runtimeStr ? (
                     <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap flex items-center gap-1">
-                      ⏱ {runtimeStr}
+                      <Clock className="w-3 h-3" /> {runtimeStr}
                     </span>
                   ) : null}
                   {d?.vote_average !== null && d?.vote_average !== undefined ? (
                     <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap flex items-center gap-1">
-                      ⭐ {d.vote_average.toFixed(1)}
+                      <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" /> {d.vote_average.toFixed(1)}
                       {d.vote_count ? ` (${d.vote_count.toLocaleString('pt-BR')})` : ""}
                     </span>
                   ) : null}
                   <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap flex items-center gap-1">
-                    📺 {(selectedMovie.media || d?.media) === "tv" ? "Série" : "Filme"}
+                    <Tv className="w-3 h-3" /> {(selectedMovie.media || d?.media) === "tv" ? "Série" : "Filme"}
                   </span>
                 </div>
               </div>
@@ -3563,7 +3557,6 @@ const AppShell = (): JSX.Element => {
                   )}
                   {d?.certification && (
                     <div className="flex items-center gap-2">
-                      <span className="text-slate-500 dark:text-gray-400">🔞</span>
                       <span className="text-slate-700 dark:text-gray-300">Classificação:</span>
                       <span className="text-slate-900 dark:text-white">{d.certification}</span>
                     </div>
@@ -3586,7 +3579,7 @@ const AppShell = (): JSX.Element => {
                   ) : null}
                   {d?.spoken_languages?.length ? (
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-slate-500 dark:text-gray-400">🌐</span>
+                      <Globe className="w-4 h-4 text-slate-500 dark:text-gray-400" />
                       <span className="text-slate-700 dark:text-gray-300">Idiomas:</span>
                       <span className="text-slate-900 dark:text-white">{d.spoken_languages.slice(0, 3).join(", ")}{d.spoken_languages.length > 3 ? ` +${d.spoken_languages.length - 3}` : ""}</span>
                     </div>
@@ -4593,7 +4586,6 @@ const AppShell = (): JSX.Element => {
         }
         
 
-        // Garantir que profile_path está presente
         const allResultsWithImages = allResults.map((person: any) => ({
           ...person,
           profile_path: person.profile_path || null,
@@ -5761,7 +5753,6 @@ const AppShell = (): JSX.Element => {
   }, [lists, listSearchQuery, listSortOrder]);
 
 
-  // Badge da API removido - não será mais exibido
 
   const urlParams = new URLSearchParams(window.location.search);
   const hasShareSlug = !!urlParams.get("share");
@@ -5801,8 +5792,23 @@ const AppShell = (): JSX.Element => {
           showForgotPassword={showForgotPassword}
           forgotPasswordEmail={forgotPasswordEmail}
           forgotPasswordLoading={forgotPasswordLoading}
-          forgotPasswordMessage={forgotPasswordMessage}
           forgotPasswordError={forgotPasswordError}
+          forgotPasswordStep={forgotPasswordStep}
+          setForgotPasswordStep={setForgotPasswordStep}
+          forgotPasswordCode={forgotPasswordCode}
+          setForgotPasswordCode={setForgotPasswordCode}
+          forgotPasswordNewPassword={forgotPasswordNewPassword}
+          setForgotPasswordNewPassword={setForgotPasswordNewPassword}
+          forgotPasswordConfirmPassword={forgotPasswordConfirmPassword}
+          setForgotPasswordConfirmPassword={setForgotPasswordConfirmPassword}
+          forgotPasswordShowPassword={forgotPasswordShowPassword}
+          setForgotPasswordShowPassword={setForgotPasswordShowPassword}
+          forgotPasswordStrength={forgotPasswordStrength}
+          forgotPasswordErrors={forgotPasswordErrors}
+          forgotPasswordShowTips={forgotPasswordShowTips}
+          setForgotPasswordShowTips={setForgotPasswordShowTips}
+          handleForgotPasswordConfirmCode={handleForgotPasswordConfirmCode}
+          handleForgotPasswordReset={handleForgotPasswordReset}
           t={t}
           handleInputChange={handleInputChange}
           handleInputBlur={handleInputBlur}
@@ -5818,22 +5824,12 @@ const AppShell = (): JSX.Element => {
           setShowForgotPassword={setShowForgotPassword}
           setForgotPasswordEmail={setForgotPasswordEmail}
           setForgotPasswordError={setForgotPasswordError}
-          setForgotPasswordMessage={setForgotPasswordMessage}
-          setForgotPasswordStep={setForgotPasswordStep}
-          setForgotPasswordNewPassword={setForgotPasswordNewPassword}
-          setForgotPasswordConfirmPassword={setForgotPasswordConfirmPassword}
-          setForgotPasswordShowPassword={setForgotPasswordShowPassword}
           generatePassword={generatePassword}
           setShowPasswordTips={setShowPasswordTips}
           setConfirmPasswordError={setConfirmPasswordError}
           setConfirmPasswordTouched={setConfirmPasswordTouched}
-          forgotPasswordStep={forgotPasswordStep}
-          forgotPasswordNewPassword={forgotPasswordNewPassword}
-          forgotPasswordConfirmPassword={forgotPasswordConfirmPassword}
-          forgotPasswordShowPassword={forgotPasswordShowPassword}
           emailVerified={emailVerified}
           handleForgotPasswordCheckEmail={handleForgotPasswordCheckEmail}
-          handleForgotPasswordReset={handleForgotPasswordReset}
         />}
         <BannerHost banners={banners} onClose={removeBanner} />
         <ToastHost toasts={toasts} onClose={removeToast} />
@@ -5901,7 +5897,6 @@ const AppShell = (): JSX.Element => {
                   const result = await api.reactivateAccount();
                   if (result.ok) {
                     pushBanner({ message: result.message || "Conta reativada com sucesso!", tone: "success" });
-                    // Recarregar o perfil para atualizar o status
                     if (user?.email) {
                       await loadProfile(user.email);
                     }
@@ -6063,7 +6058,7 @@ const AppShell = (): JSX.Element => {
                     <div className="bg-gradient-to-b from-cyan-500/95 via-purple-600/95 to-lime-500/95 backdrop-blur-md border-b lg:border-b-0 lg:border-l border-white/20 shadow-lg lg:rounded-l-xl p-3 lg:p-4">
                       <div className="flex flex-col gap-3">
                         <div>
-                          <h3 className="text-white text-base font-bold mb-2">💡 Gostou desta lista?</h3>
+                          <h3 className="text-white text-base font-bold mb-2">Gostou desta lista?</h3>
                           <p className="text-white text-xs font-medium mb-3 leading-snug">
                             <strong>Crie sua conta no VETRA</strong> para favoritar, comentar e criar suas próprias listas!
                           </p>
@@ -6141,7 +6136,7 @@ const AppShell = (): JSX.Element => {
                     <div className="bg-gradient-to-b from-cyan-500/95 via-purple-600/95 to-lime-500/95 backdrop-blur-md border-b lg:border-b-0 lg:border-l border-white/20 shadow-lg lg:rounded-l-xl p-3 lg:p-4">
                       <div className="flex flex-col gap-3">
                         <div>
-                          <h3 className="text-white text-base font-bold mb-2">💡 Gostou desta lista?</h3>
+                          <h3 className="text-white text-base font-bold mb-2">Gostou desta lista?</h3>
                           <p className="text-white text-xs font-medium mb-3 leading-snug">
                             <strong>Crie sua conta no VETRA</strong> para favoritar, comentar e criar suas próprias listas!
                           </p>
@@ -6243,7 +6238,7 @@ const AppShell = (): JSX.Element => {
                     <div className="bg-gradient-to-b from-cyan-500/95 via-purple-600/95 to-lime-500/95 backdrop-blur-md border-b lg:border-b-0 lg:border-l border-white/20 shadow-lg lg:rounded-l-xl p-3 lg:p-4">
                       <div className="flex flex-col gap-3">
                         <div>
-                          <h3 className="text-white text-base font-bold mb-2">💡 Gostou desta lista?</h3>
+                          <h3 className="text-white text-base font-bold mb-2">Gostou desta lista?</h3>
                           <p className="text-white text-xs font-medium mb-3 leading-snug">
                             <strong>Crie sua conta no VETRA</strong> para favoritar, comentar e criar suas próprias listas!
                           </p>
@@ -6659,8 +6654,23 @@ const AppShell = (): JSX.Element => {
         showForgotPassword={showForgotPassword}
         forgotPasswordEmail={forgotPasswordEmail}
         forgotPasswordLoading={forgotPasswordLoading}
-        forgotPasswordMessage={forgotPasswordMessage}
         forgotPasswordError={forgotPasswordError}
+        forgotPasswordStep={forgotPasswordStep}
+        setForgotPasswordStep={setForgotPasswordStep}
+        forgotPasswordCode={forgotPasswordCode}
+        setForgotPasswordCode={setForgotPasswordCode}
+        forgotPasswordNewPassword={forgotPasswordNewPassword}
+        setForgotPasswordNewPassword={setForgotPasswordNewPassword}
+        forgotPasswordConfirmPassword={forgotPasswordConfirmPassword}
+        setForgotPasswordConfirmPassword={setForgotPasswordConfirmPassword}
+        forgotPasswordShowPassword={forgotPasswordShowPassword}
+        setForgotPasswordShowPassword={setForgotPasswordShowPassword}
+        forgotPasswordStrength={forgotPasswordStrength}
+        forgotPasswordErrors={forgotPasswordErrors}
+        forgotPasswordShowTips={forgotPasswordShowTips}
+        setForgotPasswordShowTips={setForgotPasswordShowTips}
+        handleForgotPasswordConfirmCode={handleForgotPasswordConfirmCode}
+        handleForgotPasswordReset={handleForgotPasswordReset}
         t={t}
         handleInputChange={handleInputChange}
         handleInputBlur={handleInputBlur}
@@ -6676,22 +6686,12 @@ const AppShell = (): JSX.Element => {
         setShowForgotPassword={setShowForgotPassword}
         setForgotPasswordEmail={setForgotPasswordEmail}
         setForgotPasswordError={setForgotPasswordError}
-        setForgotPasswordMessage={setForgotPasswordMessage}
-        setForgotPasswordStep={setForgotPasswordStep}
-        setForgotPasswordNewPassword={setForgotPasswordNewPassword}
-        setForgotPasswordConfirmPassword={setForgotPasswordConfirmPassword}
-        setForgotPasswordShowPassword={setForgotPasswordShowPassword}
         generatePassword={generatePassword}
         setShowPasswordTips={setShowPasswordTips}
         setConfirmPasswordError={setConfirmPasswordError}
         setConfirmPasswordTouched={setConfirmPasswordTouched}
-        forgotPasswordStep={forgotPasswordStep}
-        forgotPasswordNewPassword={forgotPasswordNewPassword}
-        forgotPasswordConfirmPassword={forgotPasswordConfirmPassword}
-        forgotPasswordShowPassword={forgotPasswordShowPassword}
         emailVerified={emailVerified}
         handleForgotPasswordCheckEmail={handleForgotPasswordCheckEmail}
-        handleForgotPasswordReset={handleForgotPasswordReset}
       />}
 
       {showCoverSelector && (
@@ -6734,7 +6734,6 @@ export default function App(): JSX.Element {
       </>
     );
   }
-  
   return <AppShell />;
 }
 

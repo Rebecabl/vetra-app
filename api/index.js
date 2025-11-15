@@ -79,7 +79,7 @@ app.use((req, res, next) => {
 
 // Health check (agora com CORS aplicado)
 app.get("/health", (_req, res) => {
-  console.log("[health] ✅ Requisição recebida em /health");
+  console.log("[health] Requisição recebida em /health");
   res.json({
     ok: true,
     status: "ok",
@@ -91,7 +91,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.get("/api/health", (_req, res) => {
-  console.log("[health] ✅ Requisição recebida em /api/health");
+  console.log("[health] Requisição recebida em /api/health");
   res.json({
     ok: true,
     status: "ok",

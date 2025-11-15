@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { X, Mail, Lock, User, Eye, EyeOff, Sparkles as Dice, Check } from "lucide-react";
 
@@ -26,12 +26,23 @@ export interface LoginModalProps {
   showForgotPassword: boolean;
   forgotPasswordEmail: string;
   forgotPasswordLoading: boolean;
-  forgotPasswordMessage: string;
   forgotPasswordError: string;
-  forgotPasswordStep: "email" | "password";
+  forgotPasswordStep: "email" | "code" | "password";
+  setForgotPasswordStep: (step: "email" | "code" | "password") => void;
+  forgotPasswordCode: string[];
+  setForgotPasswordCode: (code: string[]) => void;
   forgotPasswordNewPassword: string;
+  setForgotPasswordNewPassword: (password: string) => void;
   forgotPasswordConfirmPassword: string;
+  setForgotPasswordConfirmPassword: (password: string) => void;
   forgotPasswordShowPassword: boolean;
+  setForgotPasswordShowPassword: (show: boolean) => void;
+  forgotPasswordStrength: "muito-fraca" | "fraca" | "boa" | "forte";
+  forgotPasswordErrors: string[];
+  forgotPasswordShowTips: boolean;
+  setForgotPasswordShowTips: (show: boolean) => void;
+  handleForgotPasswordConfirmCode: () => Promise<void>;
+  handleForgotPasswordReset: () => Promise<void>;
   emailVerified: boolean;
   t: (key: string) => string;
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -55,20 +66,14 @@ export interface LoginModalProps {
   setShowForgotPassword: (show: boolean) => void;
   setForgotPasswordEmail: (email: string) => void;
   setForgotPasswordError: (error: string) => void;
-  setForgotPasswordMessage: (message: string) => void;
-  setForgotPasswordStep: (step: "email" | "password") => void;
-  setForgotPasswordNewPassword: (password: string) => void;
-  setForgotPasswordConfirmPassword: (password: string) => void;
-  setForgotPasswordShowPassword: (show: boolean) => void;
   generatePassword: () => void;
   setShowPasswordTips: (show: boolean) => void;
   setConfirmPasswordError: (error: string) => void;
   setConfirmPasswordTouched: (touched: boolean) => void;
   handleForgotPasswordCheckEmail: (e?: React.MouseEvent) => Promise<void>;
-  handleForgotPasswordReset: (e?: React.MouseEvent) => Promise<void>;
 }
 
-export const LoginModal: React.FC<LoginModalProps> = React.memo(({
+const LoginModalComponent: React.FC<LoginModalProps> = ({
   formData,
   loginType,
   showPassword,
@@ -85,12 +90,23 @@ export const LoginModal: React.FC<LoginModalProps> = React.memo(({
   showForgotPassword,
   forgotPasswordEmail,
   forgotPasswordLoading,
-  forgotPasswordMessage,
   forgotPasswordError,
   forgotPasswordStep,
+  setForgotPasswordStep,
+  forgotPasswordCode,
+  setForgotPasswordCode,
   forgotPasswordNewPassword,
+  setForgotPasswordNewPassword,
   forgotPasswordConfirmPassword,
+  setForgotPasswordConfirmPassword,
   forgotPasswordShowPassword,
+  setForgotPasswordShowPassword,
+  forgotPasswordStrength,
+  forgotPasswordErrors,
+  forgotPasswordShowTips,
+  setForgotPasswordShowTips,
+  handleForgotPasswordConfirmCode,
+  handleForgotPasswordReset,
   emailVerified,
   t,
   handleInputChange,
@@ -107,18 +123,21 @@ export const LoginModal: React.FC<LoginModalProps> = React.memo(({
   setShowForgotPassword,
   setForgotPasswordEmail,
   setForgotPasswordError,
-  setForgotPasswordMessage,
-  setForgotPasswordStep,
-  setForgotPasswordNewPassword,
-  setForgotPasswordConfirmPassword,
-  setForgotPasswordShowPassword,
   generatePassword,
   setShowPasswordTips,
   setConfirmPasswordError,
   setConfirmPasswordTouched,
   handleForgotPasswordCheckEmail,
-  handleForgotPasswordReset,
-}) => (
+}) => {
+  const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    if (forgotPasswordStep === "code" && codeInputRefs.current[0]) {
+      codeInputRefs.current[0].focus();
+    }
+  }, [forgotPasswordStep]);
+
+  return (
   <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-3 sm:p-4 safe-area-inset" style={{ zIndex: 9999 }}>
     <div className="bg-white dark:bg-slate-900 rounded-lg max-w-md w-full max-h-[95vh] overflow-y-auto p-4 sm:p-6 md:p-8 relative border border-gray-200 dark:border-slate-800 shadow-xl">
       <button onClick={() => {
@@ -127,11 +146,11 @@ export const LoginModal: React.FC<LoginModalProps> = React.memo(({
         setEmailError("");
         setPasswordError("");
         setShowForgotPassword(false);
+        setForgotPasswordStep("email");
         setForgotPasswordEmail("");
+        setForgotPasswordCode(["", "", "", "", "", ""]);
         setForgotPasswordNewPassword("");
         setForgotPasswordConfirmPassword("");
-        setForgotPasswordStep("email");
-        setForgotPasswordMessage("");
         setForgotPasswordError("");
       }} className="absolute top-3 right-3 sm:top-4 sm:right-4 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-white active:text-gray-500 dark:active:text-gray-300 transition touch-manipulation" aria-label="Fechar">
         <X size={20} className="sm:w-6 sm:h-6" />
@@ -150,106 +169,255 @@ export const LoginModal: React.FC<LoginModalProps> = React.memo(({
           {forgotPasswordStep === "email" ? (
             <>
               <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-                Digite seu email para redefinir sua senha.
+                Digite o e-mail da sua conta para receber um código de redefinição de senha.
               </p>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t("email")}</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                  <input 
-                    type="email" 
-                    name="forgotPasswordEmail" 
-                    value={forgotPasswordEmail} 
+                  <input
+                    type="email"
+                    name="forgotPasswordEmail"
+                    value={forgotPasswordEmail}
                     onChange={(e) => setForgotPasswordEmail(e.target.value)}
                     autoComplete="email"
                     className="w-full bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white pl-10 pr-4 py-2.5 rounded-md focus:outline-none focus:ring-1 text-sm border border-gray-300 dark:border-slate-700 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder={t("your_email")} 
+                    placeholder="nome@email.com"
                   />
                 </div>
               </div>
-              
+
               {forgotPasswordError && (
                 <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                   <p className="text-sm text-red-700 dark:text-red-400">{forgotPasswordError}</p>
                 </div>
               )}
-              
-              <button 
+
+              <button
                 type="button"
                 onClick={handleForgotPasswordCheckEmail}
                 disabled={forgotPasswordLoading || !forgotPasswordEmail.trim()}
-                className="w-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-4">
+                className="w-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-4"
+              >
                 {forgotPasswordLoading ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Verificando...
+                    Enviando...
                   </>
                 ) : (
                   "Continuar"
                 )}
               </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForgotPassword(false);
+                  setForgotPasswordStep("email");
+                  setForgotPasswordEmail("");
+                  setForgotPasswordError("");
+                }}
+                className="w-full text-center text-blue-500 text-sm hover:text-blue-600 hover:underline mt-2"
+              >
+                Voltar para o login
+              </button>
             </>
-          ) : (
+          ) : forgotPasswordStep === "code" ? (
             <>
               <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-                Digite sua nova senha.
+                Enviamos um código de 6 dígitos para {forgotPasswordEmail}
               </p>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nova senha</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                  <input 
-                    type={forgotPasswordShowPassword ? "text" : "password"} 
-                    value={forgotPasswordNewPassword} 
-                    onChange={(e) => setForgotPasswordNewPassword(e.target.value)}
-                    className="w-full bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white pl-10 pr-10 py-2.5 rounded-md focus:outline-none focus:ring-1 text-sm border border-gray-300 dark:border-slate-700 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="••••••••" 
+              <div className="flex gap-2 justify-center">
+                {forgotPasswordCode.map((digit, index) => (
+                  <input
+                    key={index}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    ref={(el) => (codeInputRefs.current[index] = el)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value && !/^\d$/.test(value)) return;
+                      const newCode = [...forgotPasswordCode];
+                      newCode[index] = value;
+                      setForgotPasswordCode(newCode);
+                      setForgotPasswordError("");
+                      if (value && index < 5) {
+                        codeInputRefs.current[index + 1]?.focus();
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Backspace" && !forgotPasswordCode[index] && index > 0) {
+                        codeInputRefs.current[index - 1]?.focus();
+                      }
+                    }}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      const pastedData = e.clipboardData.getData("text").trim();
+                      if (/^\d{6}$/.test(pastedData)) {
+                        const digits = pastedData.split("");
+                        const newCode = [...forgotPasswordCode];
+                        digits.forEach((digit, i) => {
+                          if (i < 6) newCode[i] = digit;
+                        });
+                        setForgotPasswordCode(newCode);
+                        setForgotPasswordError("");
+                        codeInputRefs.current[5]?.focus();
+                      }
+                    }}
+                    className="w-12 h-14 text-center text-2xl font-bold bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setForgotPasswordShowPassword(!forgotPasswordShowPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {forgotPasswordShowPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
+                ))}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Confirmar senha</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                  <input 
-                    type={forgotPasswordShowPassword ? "text" : "password"} 
-                    value={forgotPasswordConfirmPassword} 
-                    onChange={(e) => setForgotPasswordConfirmPassword(e.target.value)}
-                    className="w-full bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white pl-10 pr-4 py-2.5 rounded-md focus:outline-none focus:ring-1 text-sm border border-gray-300 dark:border-slate-700 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="••••••••" 
-                  />
-                </div>
-                {forgotPasswordConfirmPassword && forgotPasswordNewPassword !== forgotPasswordConfirmPassword && (
-                  <p className="mt-1 text-xs text-red-500">As senhas não coincidem</p>
-                )}
-              </div>
-              
-              {forgotPasswordMessage && (
-                <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                  <p className="text-sm text-green-700 dark:text-green-400">{forgotPasswordMessage}</p>
-                </div>
-              )}
-              
               {forgotPasswordError && (
                 <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                   <p className="text-sm text-red-700 dark:text-red-400">{forgotPasswordError}</p>
                 </div>
               )}
-              
-              <button 
+
+              <button
+                type="button"
+                onClick={handleForgotPasswordConfirmCode}
+                disabled={forgotPasswordCode.join("").length !== 6}
+                className="w-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+              >
+                Confirmar código
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotPasswordStep("email");
+                  setForgotPasswordCode(["", "", "", "", "", ""]);
+                  setForgotPasswordError("");
+                }}
+                className="w-full text-center text-blue-500 text-sm hover:text-blue-600 hover:underline mt-2"
+              >
+                Voltar
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
+                Crie uma nova senha para sua conta. Depois é só entrar normalmente.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nova senha</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                  <input
+                    type={forgotPasswordShowPassword ? "text" : "password"}
+                    value={forgotPasswordNewPassword}
+                    onChange={(e) => setForgotPasswordNewPassword(e.target.value)}
+                    className="w-full bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white pl-10 pr-12 py-2.5 rounded-md focus:outline-none focus:ring-1 text-sm border border-gray-300 dark:border-slate-700 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setForgotPasswordShowPassword(!forgotPasswordShowPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-white transition"
+                  >
+                    {forgotPasswordShowPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+                
+                {forgotPasswordNewPassword && (
+                  <>
+                    <div className="mt-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="flex-1 h-2 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full transition-all duration-300 ${
+                              forgotPasswordStrength === "muito-fraca" ? "w-1/4 bg-red-500" :
+                              forgotPasswordStrength === "fraca" ? "w-2/4 bg-orange-500" :
+                              forgotPasswordStrength === "boa" ? "w-3/4 bg-yellow-500" :
+                              "w-full bg-green-500"
+                            }`}
+                          />
+                        </div>
+                        <span className={`text-xs font-medium ${
+                          forgotPasswordStrength === "muito-fraca" ? "text-red-500" :
+                          forgotPasswordStrength === "fraca" ? "text-orange-500" :
+                          forgotPasswordStrength === "boa" ? "text-yellow-500" :
+                          "text-green-500"
+                        }`}>
+                          {forgotPasswordStrength === "muito-fraca" ? "Muito fraca" :
+                           forgotPasswordStrength === "fraca" ? "Fraca" :
+                           forgotPasswordStrength === "boa" ? "Boa" :
+                           "Forte"}
+                        </span>
+                      </div>
+                      
+                      {forgotPasswordNewPassword.length < 8 && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1" role="alert">
+                          Use 8+ caracteres
+                        </p>
+                      )}
+                      
+                      {forgotPasswordNewPassword.length >= 8 && forgotPasswordErrors.length > 0 && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1" role="alert">
+                          {forgotPasswordErrors[0]}
+                        </p>
+                      )}
+                    </div>
+                    
+                    <button
+                      type="button"
+                      onClick={() => setForgotPasswordShowTips(!forgotPasswordShowTips)}
+                      className="text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 hover:underline mt-1"
+                    >
+                      {forgotPasswordShowTips ? "Ocultar" : "Ver"} dicas de senha
+                    </button>
+                    
+                    {forgotPasswordShowTips && (
+                      <div className="mt-2 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
+                        <ul className="space-y-1.5 text-xs text-gray-600 dark:text-gray-400">
+                          <li>• Mínimo de 8 caracteres</li>
+                          <li>• Use pelo menos dois tipos: letras, números ou símbolos</li>
+                          <li>• Evite usar seu e-mail</li>
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Confirmar nova senha</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                  <input
+                    type={forgotPasswordShowPassword ? "text" : "password"}
+                    value={forgotPasswordConfirmPassword}
+                    onChange={(e) => setForgotPasswordConfirmPassword(e.target.value)}
+                    className="w-full bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white pl-10 pr-4 py-2.5 rounded-md focus:outline-none focus:ring-1 text-sm border border-gray-300 dark:border-slate-700 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="••••••••"
+                  />
+                </div>
+                {forgotPasswordConfirmPassword && forgotPasswordNewPassword !== forgotPasswordConfirmPassword && (
+                  <p className="mt-1 text-xs text-red-600 dark:text-red-400">As senhas não coincidem.</p>
+                )}
+              </div>
+
+              {forgotPasswordError && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                  <p className="text-sm text-red-700 dark:text-red-400">{forgotPasswordError}</p>
+                </div>
+              )}
+
+              <button
                 type="button"
                 onClick={handleForgotPasswordReset}
-                disabled={forgotPasswordLoading || !forgotPasswordNewPassword.trim() || forgotPasswordNewPassword !== forgotPasswordConfirmPassword}
-                className="w-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-4">
+                disabled={
+                  forgotPasswordLoading ||
+                  !forgotPasswordNewPassword.trim() ||
+                  forgotPasswordErrors.length > 0 ||
+                  forgotPasswordNewPassword !== forgotPasswordConfirmPassword
+                }
+                className="w-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-4"
+              >
                 {forgotPasswordLoading ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -259,23 +427,19 @@ export const LoginModal: React.FC<LoginModalProps> = React.memo(({
                   "Redefinir senha"
                 )}
               </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotPasswordStep("code");
+                  setForgotPasswordError("");
+                }}
+                className="w-full text-center text-blue-500 text-sm hover:text-blue-600 hover:underline mt-2"
+              >
+                Voltar
+              </button>
             </>
           )}
-          
-          <button 
-            type="button"
-            onClick={() => {
-              setShowForgotPassword(false);
-              setForgotPasswordEmail("");
-              setForgotPasswordNewPassword("");
-              setForgotPasswordConfirmPassword("");
-              setForgotPasswordStep("email");
-              setForgotPasswordError("");
-              setForgotPasswordMessage("");
-            }}
-            className="w-full text-center text-blue-500 text-sm hover:text-blue-600 hover:underline mt-2">
-            {forgotPasswordStep === "password" ? "Voltar" : "Voltar para o login"}
-          </button>
         </div>
       ) : (
       <div className="space-y-3">
@@ -659,6 +823,9 @@ export const LoginModal: React.FC<LoginModalProps> = React.memo(({
       )}
     </div>
   </div>
-));
+  );
+};
+
+export const LoginModal = React.memo(LoginModalComponent);
 
 LoginModal.displayName = "LoginModal";
