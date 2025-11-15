@@ -95,7 +95,6 @@ async function sendWelcomeEmail(email, name) {
     console.log(`[Email] Boas-vindas enviado para ${email}`);
   } catch (error) {
     console.error("[Email] Erro ao enviar:", error);
-    // Não falha o registro se o email falhar
   }
 }
 
@@ -106,7 +105,6 @@ router.post("/signup",
   try {
     const { name, email, password } = req.body || {};
 
-    // Validações básicas
     if (!email || !password) {
       return res.status(400).json({ ok: false, error: "email_e_senha_obrigatorios" });
     }
@@ -115,13 +113,11 @@ router.post("/signup",
       return res.status(400).json({ ok: false, error: "nome_obrigatorio" });
     }
 
-    // Validar email
     const emailValidation = validateEmail(email);
     if (!emailValidation.valid) {
       return res.status(400).json({ ok: false, error: "email_invalido", message: emailValidation.error });
     }
 
-    // Validar senha
     const passwordValidation = validatePassword(password, email.trim().toLowerCase(), name.trim());
     if (!passwordValidation.valid) {
       return res.status(400).json({ 
@@ -140,7 +136,6 @@ router.post("/signup",
       return res.status(409).json({ ok: false, error: "email_ja_cadastrado" });
     } catch (e) {
       if (e.code !== "auth/user-not-found") {
-        // Se for erro de permissão, retornar mensagem específica
         if (e.code === "auth/internal-error" && e.message?.includes("PERMISSION_DENIED")) {
           console.error("[signup] ❌ Erro de permissão da Service Account!");
           console.error("[signup] A Service Account não tem permissões suficientes.");
@@ -318,7 +313,6 @@ async function loginWithPassword(email, password) {
       });
     }
     
-    // Erro específico de API key inválida
     if (errorCode.includes("API key not valid") || 
         errorCode.includes("INVALID_ARGUMENT") ||
         errorDetails?.status === "INVALID_ARGUMENT") {
@@ -332,7 +326,6 @@ async function loginWithPassword(email, password) {
       });
     }
     
-    // Mapear erros do Firebase para mensagens genéricas
     if (errorCode.includes("INVALID_PASSWORD") || 
         errorCode.includes("EMAIL_NOT_FOUND") ||
         errorCode.includes("INVALID_EMAIL") ||
@@ -408,7 +401,6 @@ router.post("/signin",
         return res.status(401).json({ ok: false, error: "credenciais_invalidas" });
       }
 
-      // Validar senha no Firebase usando Identity Toolkit
       let firebaseTokens;
       try {
         console.log("[signin] Tentando validar senha no Firebase para:", normalizedEmail.substring(0, 3) + "***");
@@ -427,7 +419,6 @@ router.post("/signin",
           });
         }
         
-        // Se for erro de API key, retornar mensagem específica (erro de configuração, não de autenticação)
         if (authError.code === "api_key_invalida") {
           return res.status(500).json({
             ok: false,
@@ -437,7 +428,6 @@ router.post("/signin",
           });
         }
         
-        // Registrar tentativa falha (apenas para erros de autenticação, não de configuração)
         const lockResult = await recordFailedAttempt(normalizedEmail, ip);
         await logAuditEvent({
           type: "login_attempt",
@@ -457,12 +447,67 @@ router.post("/signin",
           });
         }
         
-        // Retornar mensagem de senha incorreta
-        return res.status(authError.status || 401).json({ 
-          ok: false, 
-          error: authError.code || "credenciais_invalidas",
-          message: authError.message || "Senha incorreta"
-        });
+        // Se for erro de conta desabilitada, verificar se está marcada para exclusão
+        // Se estiver, reabilitar automaticamente para permitir login e reativação
+        if (authError.code === "conta_desabilitada") {
+          const db = getFirestore();
+          const profileSnapshot = await db
+            .collection("profiles")
+            .where("email", "==", normalizedEmail)
+            .limit(1)
+            .get();
+          
+          if (!profileSnapshot.empty) {
+            const profileData = profileSnapshot.docs[0].data();
+            if (profileData?.status === "pending_deletion") {
+              try {
+                const auth = getAuth();
+                const userRecord = await auth.getUserByEmail(normalizedEmail);
+                await auth.updateUser(userRecord.uid, {
+                  disabled: false
+                });
+                console.log("[signin] Conta reabilitada temporariamente para permitir reativação");
+                
+                try {
+                  firebaseTokens = await loginWithPassword(normalizedEmail, trimmedPassword);
+                  console.log("[signin] Login bem-sucedido após reabilitação");
+                } catch (retryError) {
+                  return res.status(403).json({ 
+                    ok: false, 
+                    error: "conta_desabilitada",
+                    message: "Não foi possível reabilitar a conta. Entre em contato com o suporte."
+                  });
+                }
+              } catch (rehabError) {
+                console.error("[signin] Erro ao reabilitar conta:", rehabError);
+                return res.status(403).json({ 
+                  ok: false, 
+                  error: "conta_desabilitada",
+                  message: "Conta desabilitada. Entre em contato com o suporte."
+                });
+              }
+            } else {
+              // Conta desabilitada mas não está marcada para exclusão
+              return res.status(403).json({ 
+                ok: false, 
+                error: "conta_desabilitada",
+                message: "Conta desabilitada. Entre em contato com o suporte."
+              });
+            }
+          } else {
+            return res.status(403).json({ 
+              ok: false, 
+              error: "conta_desabilitada",
+              message: "Conta desabilitada. Entre em contato com o suporte."
+            });
+          }
+        } else {
+          return res.status(authError.status || 401).json({ 
+            ok: false, 
+            error: authError.code || "credenciais_invalidas",
+            message: authError.message || "Senha incorreta"
+          });
+        }
       }
 
       // Login bem-sucedido - limpar tentativas falhas
@@ -1023,6 +1068,426 @@ router.post("/change-password",
         ok: false,
         error: "erro_interno",
         message: error.message
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/auth/delete-account
+ * 
+ * Marca a conta do usuário para exclusão (soft delete).
+ * A conta será permanentemente excluída após 30 dias, a menos que seja reativada.
+ * 
+ * Requer autenticação e confirmação de senha.
+ */
+router.post("/delete-account",
+  requireAuth,
+  async (req, res) => {
+    console.log("[delete-account] Requisição recebida");
+    try {
+      const { password } = req.body || {};
+      const uid = req.user?.uid;
+      const email = req.user?.email;
+      
+      console.log("[delete-account] Dados recebidos:", { 
+        hasPassword: !!password, 
+        uid, 
+        email: email ? email.substring(0, 3) + "***" : null 
+      });
+
+      if (!uid) {
+        return res.status(401).json({ 
+          ok: false, 
+          error: "nao_autenticado",
+          message: "Usuário não autenticado" 
+        });
+      }
+
+      if (!password) {
+        return res.status(400).json({ 
+          ok: false, 
+          error: "senha_obrigatoria",
+          message: "Senha é obrigatória para confirmar a exclusão" 
+        });
+      }
+
+      if (!email) {
+        return res.status(400).json({ 
+          ok: false, 
+          error: "email_nao_encontrado",
+          message: "Email do usuário não encontrado" 
+        });
+      }
+
+      const auth = getAuth();
+      const db = getFirestore();
+      const ip = getAuditIP(req);
+      const userAgent = getUserAgent(req);
+
+      // Validar senha usando loginWithPassword
+      try {
+        await loginWithPassword(email, password);
+      } catch (passwordError) {
+        await logAuditEvent({
+          type: "account_deletion_attempt",
+          uid,
+          email,
+          ip,
+          userAgent,
+          status: "failure",
+          details: `Senha inválida: ${passwordError.message}`
+        });
+
+        // Verificar se é erro de senha incorreta
+        if (passwordError.code === "credenciais_invalidas" || 
+            passwordError.message?.includes("Senha incorreta") ||
+            passwordError.message?.includes("INVALID_PASSWORD") ||
+            passwordError.message?.includes("INVALID_LOGIN_CREDENTIALS")) {
+          return res.status(401).json({
+            ok: false,
+            error: "senha_incorreta",
+            message: "Senha incorreta. Verifique e tente novamente."
+          });
+        }
+
+        // Outros erros de autenticação
+        return res.status(401).json({
+          ok: false,
+          error: "erro_validacao_senha",
+          message: passwordError.message || "Erro ao validar senha. Tente novamente."
+        });
+      }
+
+      // Verificar se o perfil existe, criar se não existir
+      const profileRef = db.collection("profiles").doc(uid);
+      let profileDoc = await profileRef.get();
+
+      if (!profileDoc.exists) {
+        // Se o perfil não existe, criar um básico com os dados do token
+        // Isso pode acontecer se o usuário foi criado antes do sistema criar perfis automaticamente
+        console.log(`[delete-account] Perfil não encontrado para UID ${uid}, criando perfil básico...`);
+        try {
+          const userRecord = await auth.getUser(uid);
+          const newProfileData = {
+            name: userRecord.displayName || "Usuário",
+            email: userRecord.email || email || "",
+            avatar_url: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          await profileRef.set(newProfileData);
+          console.log(`[delete-account] Perfil básico criado para UID ${uid}`, newProfileData);
+          // Recarregar o documento após criar
+          profileDoc = await profileRef.get();
+        } catch (createError) {
+          console.error(`[delete-account] Erro ao criar perfil básico:`, createError);
+          return res.status(500).json({ 
+            ok: false, 
+            error: "erro_criar_perfil",
+            message: "Erro ao processar perfil. Tente novamente." 
+          });
+        }
+      }
+
+      // Verificar novamente se o perfil existe após tentar criar
+      if (!profileDoc.exists) {
+        console.error(`[delete-account] Perfil ainda não existe após tentativa de criação para UID ${uid}`);
+        return res.status(500).json({ 
+          ok: false, 
+          error: "erro_criar_perfil",
+          message: "Não foi possível criar o perfil. Tente novamente." 
+        });
+      }
+
+      // Marcar conta para exclusão (soft delete)
+      // A conta será permanentemente excluída após 30 dias
+      const deletionDate = new Date();
+      deletionDate.setDate(deletionDate.getDate() + 30); // 30 dias a partir de agora
+
+      await profileRef.update({
+        deletedAt: new Date().toISOString(),
+        deletionScheduledFor: deletionDate.toISOString(),
+        status: "pending_deletion",
+        updatedAt: new Date().toISOString(),
+      });
+
+      // NÃO desabilitar a conta no Firebase Auth quando marcamos para exclusão
+      // O usuário precisa poder fazer login para reativar a conta dentro de 30 dias
+      // A desabilitação só deve acontecer após os 30 dias (via job/cron)
+      console.log("[delete-account] Conta marcada para exclusão, mas mantendo habilitada no Firebase Auth para permitir reativação");
+
+      await logAuditEvent({
+        type: "account_deletion",
+        uid,
+        email,
+        ip,
+        userAgent,
+        status: "success",
+        details: `Conta marcada para exclusão em ${deletionDate.toISOString()}`
+      });
+
+      res.status(200).json({
+        ok: true,
+        message: "Conta marcada para exclusão. Você pode reativar dentro de 30 dias.",
+        deletionDate: deletionDate.toISOString()
+      });
+    } catch (error) {
+      console.error("Erro em delete-account:", error);
+      const uid = req.user?.uid;
+      await logAuditEvent({
+        type: "account_deletion_error",
+        uid,
+        ip: getAuditIP(req),
+        userAgent: getUserAgent(req),
+        status: "error",
+        details: error.message
+      });
+      
+      res.status(500).json({
+        ok: false,
+        error: "erro_interno",
+        message: error.message || "Erro ao processar exclusão da conta. Tente novamente."
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/auth/reactivate-account
+ * 
+ * Reativa uma conta que foi marcada para exclusão (dentro do prazo de 30 dias).
+ * Remove o status de pending_deletion e reabilita o usuário no Firebase Auth.
+ * 
+ * Requer autenticação.
+ */
+router.post("/reactivate-account",
+  requireAuth,
+  async (req, res) => {
+    console.log("[reactivate-account] Requisição recebida");
+    try {
+      const uid = req.user?.uid;
+      const email = req.user?.email;
+
+      if (!uid) {
+        return res.status(401).json({ 
+          ok: false, 
+          error: "nao_autenticado",
+          message: "Usuário não autenticado" 
+        });
+      }
+
+      const auth = getAuth();
+      const db = getFirestore();
+      const ip = getAuditIP(req);
+      const userAgent = getUserAgent(req);
+
+      // Verificar se o perfil existe
+      const profileRef = db.collection("profiles").doc(uid);
+      const profileDoc = await profileRef.get();
+
+      if (!profileDoc.exists) {
+        return res.status(404).json({ 
+          ok: false, 
+          error: "usuario_nao_encontrado",
+          message: "Perfil do usuário não encontrado" 
+        });
+      }
+
+      const profileData = profileDoc.data();
+      
+      // Verificar se a conta está marcada para exclusão
+      if (profileData?.status !== "pending_deletion") {
+        return res.status(400).json({ 
+          ok: false, 
+          error: "conta_nao_marcada_exclusao",
+          message: "Esta conta não está marcada para exclusão." 
+        });
+      }
+
+      // Verificar se ainda está dentro do prazo de 30 dias
+      const deletionScheduledFor = profileData?.deletionScheduledFor;
+      if (deletionScheduledFor) {
+        const deletionDate = new Date(deletionScheduledFor);
+        const now = new Date();
+        
+        if (now > deletionDate) {
+          return res.status(400).json({ 
+            ok: false, 
+            error: "prazo_expirado",
+            message: "O prazo de 30 dias para reativar a conta expirou. A exclusão é permanente." 
+          });
+        }
+      }
+
+      // Reativar conta: remover status de exclusão
+      await profileRef.update({
+        status: "active",
+        deletedAt: null,
+        deletionScheduledFor: null,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Reabilitar o usuário no Firebase Auth
+      try {
+        await auth.updateUser(uid, {
+          disabled: false
+        });
+      } catch (authError) {
+        console.error("[reactivate-account] Erro ao reabilitar usuário no Firebase Auth:", authError);
+        // Continuar mesmo se falhar, pois o perfil já foi atualizado
+      }
+
+      await logAuditEvent({
+        type: "account_reactivation",
+        uid,
+        email,
+        ip,
+        userAgent,
+        status: "success",
+        details: "Conta reativada com sucesso"
+      });
+
+      res.status(200).json({
+        ok: true,
+        message: "Conta reativada com sucesso! Bem-vindo de volta."
+      });
+    } catch (error) {
+      console.error("Erro em reactivate-account:", error);
+      const uid = req.user?.uid;
+      await logAuditEvent({
+        type: "account_reactivation_error",
+        uid,
+        ip: getAuditIP(req),
+        userAgent: getUserAgent(req),
+        status: "error",
+        details: error.message
+      });
+      
+      res.status(500).json({
+        ok: false,
+        error: "erro_interno",
+        message: error.message || "Erro ao reativar conta. Tente novamente."
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/auth/re-enable-account
+ * 
+ * Reabilita uma conta que foi desabilitada no Firebase Auth mas está marcada para exclusão.
+ * Este endpoint é útil para reabilitar contas que foram desabilitadas antes da correção.
+ * 
+ * Requer autenticação (mas pode ser chamado mesmo com conta desabilitada via token antigo).
+ */
+router.post("/re-enable-account",
+  async (req, res) => {
+    console.log("[re-enable-account] Requisição recebida");
+    try {
+      const { email } = req.body || {};
+      
+      if (!email) {
+        return res.status(400).json({ 
+          ok: false, 
+          error: "email_obrigatorio",
+          message: "Email é obrigatório" 
+        });
+      }
+
+      const normalizedEmail = email.trim().toLowerCase();
+      const auth = getAuth();
+      const db = getFirestore();
+      const ip = getClientIP(req);
+      const userAgent = getUserAgent(req);
+
+      // Buscar perfil no Firestore
+      const profileSnapshot = await db
+        .collection("profiles")
+        .where("email", "==", normalizedEmail)
+        .limit(1)
+        .get();
+
+      if (profileSnapshot.empty) {
+        return res.status(404).json({ 
+          ok: false, 
+          error: "usuario_nao_encontrado",
+          message: "Perfil do usuário não encontrado" 
+        });
+      }
+
+      const profileData = profileSnapshot.docs[0].data();
+      
+      // Verificar se a conta está marcada para exclusão
+      if (profileData?.status !== "pending_deletion") {
+        return res.status(400).json({ 
+          ok: false, 
+          error: "conta_nao_marcada_exclusao",
+          message: "Esta conta não está marcada para exclusão." 
+        });
+      }
+
+      // Verificar se ainda está dentro do prazo de 30 dias
+      const deletionScheduledFor = profileData?.deletionScheduledFor;
+      if (deletionScheduledFor) {
+        const deletionDate = new Date(deletionScheduledFor);
+        const now = new Date();
+        
+        if (now > deletionDate) {
+          return res.status(400).json({ 
+            ok: false, 
+            error: "prazo_expirado",
+            message: "O prazo de 30 dias para reativar a conta expirou. A exclusão é permanente." 
+          });
+        }
+      }
+
+      // Reabilitar a conta no Firebase Auth
+      try {
+        const userRecord = await auth.getUserByEmail(normalizedEmail);
+        await auth.updateUser(userRecord.uid, {
+          disabled: false
+        });
+        console.log("[re-enable-account] Conta reabilitada no Firebase Auth:", normalizedEmail);
+      } catch (authError) {
+        console.error("[re-enable-account] Erro ao reabilitar conta no Firebase Auth:", authError);
+        // Se o usuário não existir no Firebase Auth, não é um problema crítico
+        if (authError.code !== "auth/user-not-found") {
+          return res.status(500).json({ 
+            ok: false, 
+            error: "erro_reabilitacao",
+            message: "Erro ao reabilitar conta no Firebase Auth. Tente novamente." 
+          });
+        }
+      }
+
+      await logAuditEvent({
+        type: "account_re_enable",
+        email: normalizedEmail,
+        ip,
+        userAgent,
+        status: "success",
+        details: "Conta reabilitada no Firebase Auth"
+      });
+
+      res.status(200).json({
+        ok: true,
+        message: "Conta reabilitada com sucesso! Você pode fazer login agora."
+      });
+    } catch (error) {
+      console.error("Erro em re-enable-account:", error);
+      await logAuditEvent({
+        type: "account_re_enable_error",
+        ip: getClientIP(req),
+        userAgent: getUserAgent(req),
+        status: "error",
+        details: error.message
+      });
+      
+      res.status(500).json({
+        ok: false,
+        error: "erro_interno",
+        message: error.message || "Erro ao reabilitar conta. Tente novamente."
       });
     }
   }

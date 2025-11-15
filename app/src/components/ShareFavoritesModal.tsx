@@ -12,7 +12,7 @@ export default function ShareFavoritesModal({
   sharedLink?: string
 }) {
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
       <div className="bg-slate-900 w-full max-w-3xl rounded-xl border border-slate-800 p-6 overflow-y-auto max-h-[90vh]">
         <div className="flex items-start justify-between mb-4">
           <h3 className="text-2xl font-bold">Favoritos compartilhados</h3>

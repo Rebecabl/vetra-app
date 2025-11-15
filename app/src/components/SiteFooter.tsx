@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronUp } from "lucide-react";
-import type { TabKey, CatKey } from "../types/movies";
+import type { TabKey } from "../types/movies";
+import type { CatKey } from "../lib/media.utils";
 
 export interface SiteFooterProps {
   goToHomeCategory: (cat: CatKey) => void;
@@ -31,11 +32,11 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({
 
   return (
     <>
-      <footer className="mt-20 border-t border-slate-300 dark:border-slate-800/50 bg-white dark:bg-slate-950">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8">
+      <footer className="mt-20 border-t border-slate-300 dark:border-slate-800/50 bg-white dark:bg-slate-950 pb-20 md:pb-8">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 sm:gap-6 mb-6 sm:mb-8">
             {/* Logo */}
-            <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => { setActiveTab("home"); navigate("/"); }}>
+            <div className="flex items-center gap-2.5 cursor-pointer shrink-0" onClick={() => { setActiveTab("home"); navigate("/"); }}>
               <svg width="32" height="32" viewBox="0 0 40 40" fill="none" aria-hidden="true">
                 <path d="M8 8 L8 32 L20 20 Z" fill="#22D3EE" />
                 <path d="M12 12 L12 28 L24 20 Z" fill="#8B5CF6" />
@@ -45,22 +46,22 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({
             </div>
             
             {/* Links de navegação */}
-            <div className="flex flex-wrap justify-center gap-6 text-sm text-slate-600 dark:text-gray-400">
+            <div className="flex flex-wrap justify-center gap-4 sm:gap-6 text-sm text-slate-600 dark:text-gray-400">
               <Link 
                 to="/about" 
-                className="hover:text-slate-900 dark:hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded px-2 py-1"
+                className="hover:text-slate-900 dark:hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded px-2 py-1 whitespace-nowrap"
               >
                 Sobre o VETRA
               </Link>
               <Link 
                 to="/privacy" 
-                className="hover:text-slate-900 dark:hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded px-2 py-1"
+                className="hover:text-slate-900 dark:hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded px-2 py-1 whitespace-nowrap"
               >
                 Política de Privacidade
               </Link>
               <Link 
                 to="/terms" 
-                className="hover:text-slate-900 dark:hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded px-2 py-1"
+                className="hover:text-slate-900 dark:hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded px-2 py-1 whitespace-nowrap"
               >
                 Termos de Uso
               </Link>
@@ -68,11 +69,11 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({
           </div>
           
           {/* Linha divisória */}
-          <div className="pt-6 border-t border-slate-300 dark:border-slate-800/50">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="pt-4 sm:pt-6 border-t border-slate-300 dark:border-slate-800/50">
+            <div className="space-y-3 sm:space-y-4">
+              <div className="flex flex-col md:flex-row justify-between items-center gap-3 md:gap-4">
                 {/* Copyright */}
-                <p className="text-sm text-slate-600 dark:text-gray-500 text-center md:text-left">
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-gray-500 text-center md:text-left">
                   © {new Date().getFullYear()} VETRA. Todos os direitos reservados.
                 </p>
                 
@@ -90,9 +91,9 @@ export const SiteFooter: React.FC<SiteFooterProps> = ({
                 </p>
               </div>
               
-              {/* Créditos - sempre visível, centralizado no mobile */}
-              <p className="text-xs text-slate-500 dark:text-gray-600 text-center w-full">
-                Desenvolvido por <span className="font-medium text-slate-600 dark:text-gray-400">Rebeca Barbosa Lourenço</span>
+              {/* Créditos - sempre visível, centralizado, pode quebrar linha em qualquer resolução */}
+              <p className="text-xs text-slate-600 dark:text-gray-400 text-center w-full py-1" style={{ display: 'block', visibility: 'visible', opacity: 1 }}>
+                Desenvolvido por <span className="font-medium text-slate-700 dark:text-gray-300">Rebeca Barbosa Lourenço</span>
               </p>
             </div>
           </div>

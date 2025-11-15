@@ -115,7 +115,7 @@ export const LoginModal: React.FC<LoginModalProps> = React.memo(({
   handleForgotPasswordCheckEmail,
   handleForgotPasswordReset,
 }) => (
-  <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 safe-area-inset">
+  <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-3 sm:p-4 safe-area-inset" style={{ zIndex: 9999 }}>
     <div className="bg-white dark:bg-slate-900 rounded-lg max-w-md w-full max-h-[95vh] overflow-y-auto p-4 sm:p-6 md:p-8 relative border border-gray-200 dark:border-slate-800 shadow-xl">
       <button onClick={() => {
         setShowLogin(false);
@@ -563,7 +563,7 @@ export const LoginModal: React.FC<LoginModalProps> = React.memo(({
         )}
         
         <button 
-          type="submit"
+          type="button"
           onClick={handleSubmit}
           disabled={
             authLoading || 

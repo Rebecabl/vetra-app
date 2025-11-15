@@ -61,14 +61,14 @@ export default function MovieModal({
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center" style={{ zIndex: 9999 }}>
         <div className="text-white">Carregando…</div>
       </div>
     )
   }
 
   return (
-    <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm" style={{ zIndex: 9999 }}>
       <div className="bg-gray-900 rounded-lg max-w-5xl w-full max-h-[90vh] overflow-y-auto">
         <div className="relative">
           {backdrop && <img src={backdrop} alt={title} className="w-full h-96 object-cover rounded-t-lg" />}

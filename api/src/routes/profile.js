@@ -49,10 +49,23 @@ router.get("/:email", async (req, res) => {
 
     const { passwordHash, ...profile } = data;
 
-    return res.json({
+    // Garantir que status, deletedAt e deletionScheduledFor sejam retornados
+    const response = {
       uid: doc.id,
       ...profile,
+      status: data.status || null,
+      deletedAt: data.deletedAt || null,
+      deletionScheduledFor: data.deletionScheduledFor || null,
+    };
+
+    console.log("[profile GET] Retornando perfil:", {
+      email: response.email,
+      status: response.status,
+      deletedAt: response.deletedAt,
+      deletionScheduledFor: response.deletionScheduledFor
     });
+
+    return res.json(response);
   } catch (error) {
     console.error("Erro ao buscar perfil:", error);
     return res.status(500).json({ 
@@ -88,7 +101,22 @@ router.get("/uid/:uid", async (req, res) => {
     // Remove informações sensíveis
     const { passwordHash, ...safeProfile } = profile;
 
-    return res.json(safeProfile);
+    // Garantir que status, deletedAt e deletionScheduledFor sejam retornados
+    const response = {
+      ...safeProfile,
+      status: profile.status || null,
+      deletedAt: profile.deletedAt || null,
+      deletionScheduledFor: profile.deletionScheduledFor || null,
+    };
+
+    console.log("[profile GET uid] Retornando perfil:", {
+      uid: response.uid,
+      status: response.status,
+      deletedAt: response.deletedAt,
+      deletionScheduledFor: response.deletionScheduledFor
+    });
+
+    return res.json(response);
   } catch (error) {
     console.error("Erro ao buscar perfil:", error);
     return res.status(500).json({ 

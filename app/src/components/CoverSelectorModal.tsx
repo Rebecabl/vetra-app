@@ -73,7 +73,7 @@ export const CoverSelectorModal: React.FC<CoverSelectorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/70 z-[9999] flex items-center justify-center p-4" onClick={onClose} style={{ zIndex: 9999 }}>
       <div 
         className="bg-white dark:bg-slate-900 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-700 shadow-xl"
         onClick={(e) => e.stopPropagation()}

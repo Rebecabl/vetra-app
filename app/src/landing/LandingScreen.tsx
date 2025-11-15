@@ -4,6 +4,27 @@ import { getTrending, getCategory, type ApiMovie } from "../api";
 import { poster } from "../lib/media.utils";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
+const TMDB_BLACKLIST_IDS = new Set<number>([
+  // "자매의 스와핑" (Sisters' Swapping)
+]);
+
+const isBlacklisted = (movie: { id: number; title?: string; name?: string }): boolean => {
+  if (TMDB_BLACKLIST_IDS.has(movie.id)) {
+    return true;
+  }
+  const title = (movie.title || movie.name || "").toLowerCase();
+  const blacklistedTitles = [
+    "자매의 스와핑",
+    "sisters' swapping",
+    "sisters swapping",
+  ];
+  return blacklistedTitles.some(blacklisted => title.includes(blacklisted.toLowerCase()));
+};
+
+const filterBlacklisted = <T extends { id: number; title?: string; name?: string }>(movies: T[]): T[] => {
+  return movies.filter(m => !isBlacklisted(m));
+};
+
 type Props = {
   onSignIn: () => void;
   onSignUp: () => void;
@@ -39,7 +60,7 @@ const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp }) => {
 
         if (!mounted) return;
 
-        const ctaMovies = [
+        const allMovies = [
           ...(movies?.results || []),
           ...(tv?.results || []),
           ...(top?.results || []),
@@ -49,7 +70,10 @@ const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp }) => {
           ...(movies3?.results || []),
           ...(tv3?.results || []),
           ...(top3?.results || []),
-        ].filter((m) => m.poster_path);
+        ];
+        
+        // Filtrar blacklist e depois filtrar por poster
+        const ctaMovies = filterBlacklisted(allMovies).filter((m) => m.poster_path);
 
         const uniqueCtaMovies = Array.from(
           new Map(ctaMovies.map((m) => [m.id, m])).values()
@@ -62,9 +86,9 @@ const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp }) => {
           : [...uniqueCtaMovies, ...uniqueCtaMovies.slice(0, 60 - uniqueCtaMovies.length)].slice(0, 60);
 
         setCtaBackgroundMovies(finalCtaMovies);
-        setPopularMovies((movies?.results || []).slice(0, 20));
-        setPopularTv((tv?.results || []).slice(0, 20));
-        setTopRated((top?.results || []).slice(0, 20));
+        setPopularMovies(filterBlacklisted(movies?.results || []).slice(0, 20));
+        setPopularTv(filterBlacklisted(tv?.results || []).slice(0, 20));
+        setTopRated(filterBlacklisted(top?.results || []).slice(0, 20));
       } catch (error) {
         // Silenciosamente trata erros - a landing page funciona mesmo sem backend
         // (usa TMDB diretamente como fallback)
