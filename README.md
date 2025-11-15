@@ -21,16 +21,11 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 | 2025-11-13 | 1.2.0  | Minor     | Busca híbrida: TMDb + dados locais, ignora acentos/caixa e faz deduplicação.                                  |
 | 2025-11-13 | 1.2.1  | Bugfix    | Campo de busca vazio limpa resultados, filtros, paginação e URL; volta ao estado padrão.                       |
 | 2025-11-13 | 1.3.0  | Minor     | **Editar Perfil** virou página `/profile/edit` + **correção de padding do header** (navbar fixa).             |
-| 2025-11-13 | 1.3.1  | Bugfix    | Estabilidade do formulário de edição de perfil (sem “tremor”/reset durante digitação).                        |
+| 2025-11-13 | 1.3.1  | Bugfix    | Estabilidade do formulário de edição de perfil (sem "tremor"/reset durante digitação).                        |
 | 2025-11-13 | 1.3.2  | Bugfix    | Perfil: navegação normal, confirmação só com alterações não salvas e modal de confirmação com botões corretos. |
-| 2025-11-13 | 1.3.3  | UI        | Padroniza tamanho do ícone de globo vs. botão de tema e remove tamanhos responsivos.       
-| 2025-11-14 | 1.4.0  | Minor  | Endpoint de exclusão de conta; busca/compartilhamento mais seguros; mensagens de erro detalhadas; footer fix. ||
-
-> **Em andamento:** melhorando a arquitetura do projeto e reduzindo o tamanho do `App.tsx`.
-|
-
-
-
+| 2025-11-13 | 1.3.3  | UI        | Padroniza tamanho do ícone de globo vs. botão de tema e remove tamanhos responsivos.                          |
+| 2025-11-14 | 1.4.0  | Minor     | Endpoint de exclusão de conta; busca/compartilhamento mais seguros; mensagens de erro detalhadas; footer fix. |
+| 2025-11-14 | 1.5.0  | Major     | Refatoração completa: novas páginas dedicadas, hooks customizados, sistema de histórico de atividades, componentes modulares, melhorias de arquitetura. |
 
 ### Implementação
 
@@ -53,20 +48,19 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 - **Armazenamento de Favoritos**: Persistência no Firebase Firestore
 - **Compartilhamento via Link**: Sistema de geração de links compartilháveis
 
-
 ### Funcionalidades Extras
 
-- Listas Personalizadas
-- Perfis de Pessoas (atores, diretores)
-- Sistema de Comentários
-- Histórico de Visualização
-- Dark Mode
-- Internacionalização (i18n)
-- Filtros Avançados de Busca
-- Sistema de Recomendações
-- Watch Providers
-- Autenticação completa com Firebase
-
+- **Listas Personalizadas**: Criar, editar, renomear e excluir listas personalizadas
+- **Perfis de Pessoas**: Detalhes completos de atores, diretores e outros profissionais
+- **Sistema de Comentários**: Comentar, editar, deletar e reagir a filmes e séries
+- **Histórico de Atividades**: Rastreamento completo de ações do usuário (estados, favoritos, listas, compartilhamentos, comentários) com visualização em lista e calendário
+- **Dark Mode**: Tema escuro/claro com persistência
+- **Internacionalização (i18n)**: Suporte a múltiplos idiomas
+- **Filtros Avançados de Busca**: Filtros por gênero, ano, nota, votos, provedores e tipo
+- **Sistema de Recomendações**: Recomendações personalizadas baseadas em favoritos e histórico
+- **Watch Providers**: Informações sobre onde assistir
+- **Autenticação completa**: Signup, signin, recuperação de senha, exclusão de conta
+- **Páginas dedicadas**: Home, Favoritos, Listas, Filmes, Séries, Pessoas, Perfil, Histórico, Watchlist
 
 ## Requisitos
 
@@ -81,6 +75,8 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 | **RF005** | Compartilhamento por link público | Geração de slug e leitura sem login | ✅ Implementado |
 | **RF006** | Pessoas | Listagem, busca e detalhes (atores, diretores etc.) | ✅ Implementado |
 | **RF007** | Perfil | Atualização de nome e avatar | ✅ Implementado |
+| **RF008** | Histórico de Atividades | Rastreamento e visualização de ações do usuário | ✅ Implementado |
+| **RF009** | Exclusão de Conta | Soft delete com período de reativação | ✅ Implementado |
 
 ### 3.2 Não-Funcionais
 
@@ -117,16 +113,52 @@ Vetra/
 │   └── index.js         # Entry point
 └── app/   # React + TypeScript
     ├── src/
-    │   ├── components/  # Componentes React (MobileFooter, PersonRouteModal, DiscoverFilters, etc.)
-    │   ├── pages/       # Páginas (AboutPage, HelpPage, PrivacyPage, TermsPage)
-    │   ├── hooks/       # Custom hooks (useListCover)
+    │   ├── components/  # Componentes React reutilizáveis
+    │   │   ├── layout/      # Componentes de layout (Header, MobileFooter)
+    │   │   ├── ConfirmModal.tsx
+    │   │   ├── DeleteAccountModal.tsx
+    │   │   ├── ListDetail.tsx
+    │   │   ├── MovieCard.tsx
+    │   │   ├── MovieCardInline.tsx
+    │   │   ├── MovieModal.tsx
+    │   │   ├── PersonRouteModal.tsx
+    │   │   ├── RenameListModal.tsx
+    │   │   ├── SearchFiltersPanel.tsx
+    │   │   └── ... (outros componentes)
+    │   ├── pages/       # Páginas dedicadas
+    │   │   ├── HomePage.tsx
+    │   │   ├── FavoritesPage.tsx
+    │   │   ├── ListsPage.tsx
+    │   │   ├── MoviesPage.tsx
+    │   │   ├── TvPage.tsx
+    │   │   ├── PeoplePage.tsx
+    │   │   ├── ProfileViewPage.tsx
+    │   │   ├── EditProfilePage.tsx
+    │   │   ├── ActivityHistoryPage.tsx
+    │   │   ├── WatchlistPage.tsx
+    │   │   ├── AboutPage.tsx
+    │   │   ├── HelpPage.tsx
+    │   │   ├── PrivacyPage.tsx
+    │   │   └── TermsPage.tsx
+    │   ├── hooks/       # Custom hooks
+    │   │   ├── useAuth.ts          # Autenticação e gerenciamento de sessão
+    │   │   ├── useNavigation.ts    # Navegação e persistência de estado
+    │   │   ├── useListCover.ts     # Gerenciamento de capas de listas
+    │   │   └── useTheme.ts         # Tema dark/light
+    │   ├── utils/       # Utilitários
+    │   │   ├── cacheUtils.ts       # Cache em memória e deduplicação
+    │   │   ├── countryUtils.ts     # Utilitários de países
+    │   │   ├── date.ts             # Formatação de datas
+    │   │   ├── history.utils.ts    # Gerenciamento de histórico de atividades
+    │   │   ├── movieUtils.ts       # Normalização e formatação de filmes/séries
+    │   │   ├── searchUtils.ts      # Ordenação e filtros de busca
+    │   │   └── share.utils.ts      # Utilitários de compartilhamento
     │   ├── types/       # Tipos TypeScript (movies.ts)
     │   ├── i18n/        # Internacionalização (i18n.ts)
-    │   ├── ui/          # Componentes de UI (Toast, KebabMenu)
+    │   ├── ui/          # Componentes de UI básicos (Toast, KebabMenu)
     │   ├── landing/     # Landing page
     │   ├── constants/   # Constantes (storage.ts)
-    │   ├── utils/       # Utilitários (date.ts)
-    │   └── App.tsx      # Componente principal
+    │   └── App.tsx      # Componente principal (orquestrador de rotas)
     └── vite.config.ts   # Configuração Vite
 ```
 
@@ -156,6 +188,7 @@ Vetra/
 ### Firestore Collections
 
 #### `profiles`
+
 ```typescript
 {
   uid: string;                    // Document ID (Firebase Auth UID)
@@ -174,6 +207,7 @@ Vetra/
 - `passwordHash` nunca retornado em respostas públicas
 
 #### `favorites`
+
 ```typescript
 {
   [uid: string]: {               // Document ID = UID do usuário
@@ -196,6 +230,7 @@ Vetra/
 - Não permite duplicatas (mesmo `id` + `media`)
 
 #### `user_lists`
+
 ```typescript
 {
   [userId: string]: {            // Document ID = User ID
@@ -222,6 +257,7 @@ Vetra/
 - Itens não podem ser duplicados na mesma lista
 
 #### `shared_lists`
+
 ```typescript
 {
   [slug: string]: {              // Document ID = slug (nanoid 16)
@@ -240,6 +276,7 @@ Vetra/
 - Acesso público (sem autenticação)
 
 #### `comments`
+
 ```typescript
 {
   [commentId: string]: {         // Document ID = auto-generated
@@ -273,6 +310,7 @@ Vetra/
 - Ordenado por `createdAt` DESC
 
 #### `rate_limits`
+
 ```typescript
 {
   [key: string]: {               // Document ID = "action:identifier"
@@ -294,6 +332,7 @@ Vetra/
 ### Formato de Resposta Padrão
 
 #### Sucesso (200)
+
 ```json
 {
   "ok": true,
@@ -302,6 +341,7 @@ Vetra/
 ```
 
 #### Erro de Validação (400)
+
 ```json
 {
   "ok": false,
@@ -311,6 +351,7 @@ Vetra/
 ```
 
 #### Não Autenticado (401)
+
 ```json
 {
   "ok": false,
@@ -320,6 +361,7 @@ Vetra/
 ```
 
 #### Não Encontrado (404)
+
 ```json
 {
   "ok": false,
@@ -329,6 +371,7 @@ Vetra/
 ```
 
 #### Rate Limit (429)
+
 ```json
 {
   "ok": false,
@@ -340,6 +383,7 @@ Vetra/
 ```
 
 #### Erro Interno (500)
+
 ```json
 {
   "ok": false,
@@ -358,6 +402,9 @@ Vetra/
 | `POST` | `/api/auth/signin` | Login |
 | `POST` | `/api/auth/verify` | Validar token |
 | `POST` | `/api/auth/forgot-password` | Recuperar senha |
+| `DELETE` | `/api/auth/delete-account` | Excluir conta (soft delete) |
+| `POST` | `/api/auth/reactivate-account` | Reativar conta |
+| `POST` | `/api/auth/re-enable-account` | Reabilitar conta desabilitada |
 
 ### 6.2 Conteúdo
 
@@ -427,6 +474,7 @@ Vetra/
 | `SHARE_BASE_URL` | Base dos links públicos | `http://localhost:5173` |
 
 **Como obter credenciais Firebase:**
+
 1. Firebase Console → Configurações do Projeto → Contas de Serviço
 2. Gerar nova chave privada (JSON)
 3. Mapear: `project_id` → `FIREBASE_PROJECT_ID`; `client_email` → `FIREBASE_CLIENT_EMAIL`; `private_key` → `FIREBASE_PRIVATE_KEY` (com `\n`)
@@ -465,6 +513,7 @@ npm install
 ### Modo Desenvolvimento (Dois Terminais)
 
 **Backend:**
+
 ```bash
 cd api
 npm run dev
@@ -472,6 +521,7 @@ npm run dev
 ```
 
 **Frontend:**
+
 ```bash
 cd app
 npm run dev
@@ -481,12 +531,14 @@ npm run dev
 ### Produção
 
 **Build do Frontend:**
+
 ```bash
 cd app
 npm run build   # gera app/dist
 ```
 
 **Backend:**
+
 ```bash
 cd api
 npm start
@@ -574,12 +626,14 @@ npm run test:coverage # Com cobertura
 ### Porta em uso
 
 **Windows:**
+
 ```bash
 netstat -ano | findstr :4001
 taskkill /PID <PID> /F
 ```
 
 **Linux/Mac:**
+
 ```bash
 lsof -ti:4001 | xargs kill
 ```
@@ -629,9 +683,65 @@ npm run test:coverage # Com cobertura
 
 ## Versão
 
-**Versão Atual: 1.0.0 (Primeira Versão)**
+**Versão Atual: 1.5.0**
 
-Esta é a primeira versão do VETRA. Correções de possíveis bugs serão feitas conforme identificados e reportados.
+### Principais Mudanças na Versão 1.5.0
+
+#### Arquitetura e Organização
+- **Refatoração completa**: Separação de componentes, páginas, hooks e utilitários
+- **Páginas dedicadas**: Cada funcionalidade agora possui sua própria página (Home, Favoritos, Listas, etc.)
+- **Hooks customizados**: `useAuth` e `useNavigation` para gerenciamento centralizado de estado
+- **Componentes modulares**: Header, modais e componentes reutilizáveis organizados
+
+#### Novas Funcionalidades
+- **Sistema de Histórico de Atividades**: 
+  - Rastreamento completo de ações (estados, favoritos, listas, compartilhamentos, comentários)
+  - Visualização em lista (agrupada por data)
+  - Visualização em calendário mensal
+  - Filtros por tipo de ação
+  - Limpeza de histórico
+  
+- **Páginas Dedicadas**:
+  - HomePage: Página inicial com hero simplificado
+  - FavoritesPage: Gerenciamento de favoritos
+  - ListsPage: Criação e gerenciamento de listas
+  - MoviesPage: Navegação de filmes
+  - TvPage: Navegação de séries
+  - PeoplePage: Busca e listagem de pessoas
+  - ActivityHistoryPage: Histórico completo de atividades
+  - WatchlistPage: Lista de desejos
+
+- **Componentes Novos**:
+  - DeleteAccountModal: Modal para exclusão de conta
+  - ConfirmModal: Modal de confirmação genérico
+  - ListDetail: Detalhes de listas
+  - Header: Header completo com navegação e menu de perfil
+
+- **Utilitários**:
+  - cacheUtils: Sistema de cache em memória
+  - history.utils: Gerenciamento de histórico local
+  - movieUtils: Normalização de dados de filmes/séries
+  - searchUtils: Ordenação e filtros de busca
+
+#### Melhorias de UX/UI
+- Hero section simplificado na home
+- Modais com z-index corrigido (acima do header fixo)
+- Footer responsivo corrigido
+- Navegação persistente melhorada
+- Guardas de rota para páginas privadas
+
+#### Backend
+- Endpoint de exclusão de conta (soft delete)
+- Endpoint de reativação de conta
+- Endpoint de reabilitação de conta desabilitada
+- Mensagens de erro mais detalhadas
+
+#### Código
+- Comentários revisados e simplificados
+- Código mais limpo e organizado
+- Melhor separação de responsabilidades
+
+Esta é a versão atual do VETRA. Correções de possíveis bugs serão feitas conforme identificados e reportados.
 
 ## Roadmap (Melhorias Futuras)
 
@@ -642,8 +752,12 @@ Esta é a primeira versão do VETRA. Correções de possíveis bugs serão feita
 - Integração com mais serviços de streaming
 - Sistema de reviews e ratings próprios
 - Aumentar cobertura de testes
-- Histórico de visualização
+- Histórico de visualização (watch history)
 - Código compartilhável (QR Code, código alfanumérico)
+- Exportação de histórico de atividades
+- Notificações de atividades recentes
+- Filtros avançados no histórico
+- Busca no histórico de atividades
 - Correções de bugs e melhorias de performance
 
 ---
