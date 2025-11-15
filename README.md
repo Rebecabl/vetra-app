@@ -11,7 +11,7 @@ Plataforma moderna para organização, descoberta e compartilhamento de filmes e
 
 VETRA é uma aplicação web full-stack que permite aos usuários descobrir, organizar e compartilhar seus filmes e séries favoritos. O projeto implementa requisitos funcionais e não funcionais, além de funcionalidades extras.
 
-## 🗓️ Histórico por Data (deploys/atualizações/correções de bugs)
+##  Histórico por Data (deploys/atualizações/correções de bugs)
 
 | Data       | Versão | Tipo      | Descrição curta                                                                                               |
 |------------|--------|-----------|----------------------------------------------------------------------------------------------------------------|
@@ -26,6 +26,7 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 | 2025-11-13 | 1.3.3  | UI        | Padroniza tamanho do ícone de globo vs. botão de tema e remove tamanhos responsivos.                          |
 | 2025-11-14 | 1.4.0  | Minor     | Endpoint de exclusão de conta; busca/compartilhamento mais seguros; mensagens de erro detalhadas; footer fix. |
 | 2025-11-14 | 1.5.0  | Major     | Refatoração completa: novas páginas dedicadas, hooks customizados, sistema de histórico de atividades, componentes modulares, melhorias de arquitetura. |
+| 2025-11-15 | 1.6.0  | Major     | Verificação de email por código, isolamento de dados por usuário, revisão geral de comentários/logs e melhorias no fluxo de autenticação. |
 
 ### Implementação
 
@@ -34,7 +35,7 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 - **Banco de Dados**: Firestore (NoSQL) para persistência escalável
 - **API Externa**: Integração com TMDB API para conteúdo de filmes e séries
 - **Segurança**: Rate limiting, validação de inputs, CORS restritivo, Helmet.js
-- **Performance**: Compressão HTTP, paginação, otimização de bundle
+- **Performance**: Compressão HTTP, paginação, otimização de bundle, isolamento de caches por usuário
 - **UX**: Dark mode, internacionalização (i18n), design responsivo
 
 ## Funcionalidades
@@ -47,6 +48,7 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 - **Backend com TMDB**: Gerenciamento centralizado de chamadas à API
 - **Armazenamento de Favoritos**: Persistência no Firebase Firestore
 - **Compartilhamento via Link**: Sistema de geração de links compartilháveis
+- **Verificação de Email**: Cadastro com código de 6 dígitos enviado por email, reenvio com cooldown e validação segura
 
 ### Funcionalidades Extras
 
@@ -61,6 +63,7 @@ VETRA é uma aplicação web full-stack que permite aos usuários descobrir, org
 - **Watch Providers**: Informações sobre onde assistir
 - **Autenticação completa**: Signup, signin, recuperação de senha, exclusão de conta
 - **Páginas dedicadas**: Home, Favoritos, Listas, Filmes, Séries, Pessoas, Perfil, Histórico, Watchlist
+- **Isolamento de Dados por Usuário**: Favoritos, listas, estados, histórico e stats com chaves `localStorage` e coleções Firestore por UID
 
 ## Requisitos
 
@@ -683,9 +686,23 @@ npm run test:coverage # Com cobertura
 
 ## Versão
 
-**Versão Atual: 1.5.0**
+**Versão Atual: 1.6.0**
 
-### Principais Mudanças na Versão 1.5.0
+### Principais Mudanças na Versão 1.6.0
+
+#### Autenticação e Segurança
+- **Verificação por Código**: Novo fluxo obrigatório no signup com código de 6 dígitos, tela dedicada, reenvio com cooldown e bloqueio por tentativas.
+- **Limpeza de Sessão**: Logout e exclusão de conta agora garantem limpeza completa de tokens, caches e estados locais.
+- **Conta Deletada/Pendente**: Sessões são invalidadas automaticamente quando o backend marca status `pending_deletion`.
+
+#### Persistência e Dados
+- **Isolamento por Usuário**: Chaves `localStorage` agora incluem o UID (`vetra:favorites:<uid>` etc.) e são limpas no logout, evitando vazamento entre contas.
+- **Sincronização de Favoritos/Listas**: Novos endpoints `favoritesGet`/`favoritesSave` e melhorias no carregamento inicial.
+
+#### UX e Código
+- **Página `VerificationCodePage`**: Primeira experiência pós-signup focada no código, com feedback instantâneo.
+- **Comentários Revisados**: Comentários do projeto inteiro foram enxugados para PT-BR direto, mantendo apenas o que explica regra/decisão.
+- **Mensagens Claras**: Toasts e banners padronizados para login/logout/verificação.
 
 #### Arquitetura e Organização
 - **Refatoração completa**: Separação de componentes, páginas, hooks e utilitários
@@ -735,6 +752,8 @@ npm run test:coverage # Com cobertura
 - Endpoint de reativação de conta
 - Endpoint de reabilitação de conta desabilitada
 - Mensagens de erro mais detalhadas
+- Endpoint de verificação de código (`/api/auth/verify-code`) com geração, envio e consumo de códigos
+- Endpoints de favoritos e listas agora respeitam UID em todas as operações
 
 #### Código
 - Comentários revisados e simplificados
