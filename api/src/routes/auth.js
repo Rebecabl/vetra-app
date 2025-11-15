@@ -3,6 +3,7 @@ import { getAuth, getFirestore } from "../config/firebase.config.js";
 import { getUserProfileByEmail } from "../repositories/users.repository.js";
 import bcrypt from "bcryptjs";
 import nodemailer from "nodemailer";
+import admin from "firebase-admin";
 import { validatePassword, validateEmail } from "../utils/passwordValidator.js";
 import { checkLock, recordFailedAttempt, clearFailedAttempts, checkAuthLock, getClientIP } from "../utils/authLock.js";
 import { logAuditEvent, getClientIP as getAuditIP, getUserAgent } from "../utils/auditLog.js";
@@ -10,6 +11,163 @@ import { rateLimitMiddleware } from "../utils/rateLimiter.js";
 import { requireAuth } from "../middlewares/auth.js";
 
 const router = Router();
+
+function generateVerificationCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+async function saveVerificationCode(email, code) {
+  try {
+    const db = getFirestore();
+    const now = admin.firestore.Timestamp.now();
+    const expiresAt = admin.firestore.Timestamp.fromMillis(now.toMillis() + 15 * 60 * 1000);
+    
+    const existingCodes = await db.collection("verification_codes")
+      .where("email", "==", email.trim().toLowerCase())
+      .where("status", "==", "active")
+      .get();
+    
+    const batch = db.batch();
+    existingCodes.forEach(doc => {
+      batch.update(doc.ref, { status: "invalidated" });
+    });
+    
+    const codeRef = db.collection("verification_codes").doc();
+    batch.set(codeRef, {
+      email: email.trim().toLowerCase(),
+      code: code,
+      createdAt: now,
+      expiresAt: expiresAt,
+      status: "active",
+      attempts: 0,
+      maxAttempts: 5
+    });
+    
+    await batch.commit();
+    return codeRef.id;
+  } catch (error) {
+    console.error("[saveVerificationCode] Erro ao salvar código:", error);
+    throw error;
+  }
+}
+
+async function validateVerificationCode(email, code) {
+  const db = getFirestore();
+  const now = admin.firestore.Timestamp.now();
+  
+  const codesSnapshot = await db.collection("verification_codes")
+    .where("email", "==", email.trim().toLowerCase())
+    .where("status", "==", "active")
+    .get();
+  
+  if (codesSnapshot.empty) {
+    return { valid: false, error: "Código inválido" };
+  }
+  
+  const codes = codesSnapshot.docs
+    .map(doc => ({ id: doc.id, ...doc.data() }))
+    .sort((a, b) => {
+      const dateA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0);
+      const dateB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0);
+      return dateB - dateA;
+    });
+  
+  const codeData = codes[0];
+  const codeRef = db.collection("verification_codes").doc(codeData.id);
+  
+  let expiresAt;
+  if (codeData.expiresAt?.toMillis) {
+    expiresAt = codeData.expiresAt.toMillis();
+  } else if (codeData.expiresAt?.toDate) {
+    expiresAt = codeData.expiresAt.toDate().getTime();
+  } else {
+    expiresAt = new Date(codeData.expiresAt).getTime();
+  }
+  
+  if (expiresAt < now.toMillis()) {
+    await codeRef.update({ status: "expired" });
+    return { valid: false, error: "Código expirado" };
+  }
+  
+  if ((codeData.attempts || 0) >= (codeData.maxAttempts || 5)) {
+    await codeRef.update({ status: "blocked" });
+    return { valid: false, error: "Código bloqueado por muitas tentativas" };
+  }
+  
+  if (codeData.code !== code) {
+    await codeRef.update({ 
+      attempts: (codeData.attempts || 0) + 1
+    });
+    return { valid: false, error: "Código inválido" };
+  }
+  
+  await codeRef.update({ 
+    status: "consumed",
+    consumedAt: now
+  });
+  
+  return { valid: true, codeId: codeData.id };
+}
+
+async function sendVerificationCodeEmail(email, name, code) {
+  const transporter = getEmailTransporter();
+  if (!transporter) {
+    const errorMsg = "SMTP não configurado. Configure as variáveis SMTP_USER e SMTP_PASS no arquivo .env";
+    console.error("[SMTP] ❌", errorMsg);
+    console.error("[SMTP] 📖 Consulte: api/ENV_EXAMPLE.md para ver como configurar");
+    throw new Error(errorMsg);
+  }
+  
+  try {
+    await transporter.sendMail({
+      from: `"VETRA" <${process.env.SMTP_USER}>`,
+      to: email.trim().toLowerCase(),
+      subject: "Seu código de verificação – VETRA",
+      html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(90deg, #22D3EE, #8B5CF6, #A3E635); padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .header h1 { color: white; margin: 0; font-size: 28px; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+          .code-box { background: #fff; border: 3px solid #22D3EE; border-radius: 10px; padding: 20px; text-align: center; margin: 20px 0; }
+          .code { font-size: 36px; font-weight: bold; color: #22D3EE; letter-spacing: 8px; font-family: monospace; }
+          .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>VETRA</h1>
+          </div>
+          <div class="content">
+            <p>Olá, ${name || "Usuário"}! 👋</p>
+            <p>Aqui está o seu código para ativar sua conta no VETRA:</p>
+            <div class="code-box">
+              <div class="code">${code}</div>
+            </div>
+            <p>O código vale por até 15 minutos.</p>
+            <p>Se você não fez este cadastro, pode ignorar esta mensagem.</p>
+          </div>
+          <div class="footer">
+            <p>VETRA - Organize seus filmes e séries</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `,
+    });
+    console.log("[SMTP] ✅ E-mail de verificação enviado com sucesso para:", email);
+  } catch (sendError) {
+    console.error("[SMTP] ❌ Erro ao enviar e-mail:", sendError.message);
+    console.error("[SMTP] Detalhes:", sendError);
+    throw sendError;
+  }
+}
 
 function getEmailTransporter() {
   const emailConfig = {
@@ -100,7 +258,7 @@ async function sendWelcomeEmail(email, name) {
 
 // POST /api/auth/signup
 router.post("/signup", 
-  rateLimitMiddleware("signup", (req) => getClientIP(req), 5, 15 * 60 * 1000),
+  rateLimitMiddleware("signup", (req) => getClientIP(req), 10, 15 * 60 * 1000), // 10 tentativas a cada 15 minutos
   async (req, res) => {
   try {
     const { name, email, password } = req.body || {};
@@ -130,10 +288,76 @@ router.post("/signup",
 
     const auth = getAuth();
     const db = getFirestore();
+    const normalizedEmail = email.trim().toLowerCase();
 
+    let existingUser = null;
     try {
-      await auth.getUserByEmail(email);
-      return res.status(409).json({ ok: false, error: "email_ja_cadastrado" });
+      existingUser = await auth.getUserByEmail(normalizedEmail);
+      
+      if (existingUser.emailVerified) {
+        return res.status(409).json({ ok: false, error: "email_ja_cadastrado" });
+      }
+      
+      // Usuário não verificado: atualizar senha e gerar novo código
+      console.log("[signup] Usuário existe mas não está verificado. Atualizando senha e gerando novo código...");
+      
+      // Não dar trim na senha
+      try {
+        await auth.updateUser(existingUser.uid, {
+          password: password
+        });
+        console.log("[signup] ✅ Senha atualizada no Firebase Auth");
+      } catch (updateError) {
+        console.error("[signup] ⚠️ Erro ao atualizar senha:", updateError.message);
+      }
+      
+      let verificationCode;
+      try {
+        verificationCode = generateVerificationCode();
+        await saveVerificationCode(normalizedEmail, verificationCode);
+        
+        try {
+          await sendVerificationCodeEmail(
+            normalizedEmail,
+            name?.trim() || "Usuário",
+            verificationCode
+          );
+          console.log("[signup] ✅ Novo código de verificação enviado com sucesso para:", normalizedEmail);
+          
+          return res.json({
+            ok: true,
+            requiresVerification: true,
+            email: normalizedEmail,
+            message: process.env.NODE_ENV !== "production" 
+              ? "Novo código de verificação gerado. Verifique o console do servidor." 
+              : "Novo código de verificação enviado para o seu e-mail."
+          });
+        } catch (emailError) {
+          console.error("[signup] ❌ Erro ao enviar e-mail com código:", emailError.message);
+          
+          if (process.env.NODE_ENV === "production") {
+            return res.status(500).json({
+              ok: false,
+              error: "erro_envio_email",
+              message: "Não foi possível enviar o e-mail de verificação. Verifique a configuração do SMTP."
+            });
+          } else {
+            return res.json({
+              ok: true,
+              requiresVerification: true,
+              email: normalizedEmail,
+              message: "Novo código de verificação gerado. Verifique o console do servidor."
+            });
+          }
+        }
+      } catch (codeError) {
+        console.error("[signup] ❌ Erro ao gerar código de verificação:", codeError);
+        return res.status(500).json({
+          ok: false,
+          error: "erro_gerar_codigo",
+          message: "Não foi possível gerar o código de verificação. Tente novamente."
+        });
+      }
     } catch (e) {
       if (e.code !== "auth/user-not-found") {
         if (e.code === "auth/internal-error" && e.message?.includes("PERMISSION_DENIED")) {
@@ -149,20 +373,44 @@ router.post("/signup",
         }
         throw e;
       }
+      // Se não encontrou o usuário, continuar com a criação
     }
 
+    // Criar novo usuário
     const passwordHash = await bcrypt.hash(password, 10);
+    
+    console.log("[signup] 🔐 Criando usuário com senha");
+    console.log("[signup] Tamanho da senha:", password?.length);
+    console.log("[signup] Primeiros 3 caracteres (debug):", password?.substring(0, 3) + "***");
+    console.log("[signup] Últimos 3 caracteres (debug):", "***" + password?.substring(password.length - 3));
 
     let userRecord;
     try {
       userRecord = await auth.createUser({
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         password: password,
         displayName: name?.trim() || "Usuário",
         emailVerified: false,
       });
+      console.log("[signup] ✅ Usuário criado no Firebase Auth com sucesso");
     } catch (createError) {
-      // Tratar erro de permissão ao criar usuário
+      // Race condition: email já existe
+      if (createError.code === "auth/email-already-exists") {
+        try {
+          existingUser = await auth.getUserByEmail(normalizedEmail);
+          if (existingUser.emailVerified) {
+            return res.status(409).json({ ok: false, error: "email_ja_cadastrado" });
+          }
+          return res.status(409).json({ 
+            ok: false, 
+            error: "email_ja_cadastrado",
+            message: "Este e-mail já está cadastrado. Use a opção 'Reenviar código' na página de verificação."
+          });
+        } catch (checkError) {
+          throw createError;
+        }
+      }
+      
       if (createError.code === "auth/internal-error" && createError.message?.includes("PERMISSION_DENIED")) {
         console.error("[signup] ❌ Erro de permissão ao criar usuário!");
         console.error("[signup] A Service Account não tem permissões para criar usuários.");
@@ -179,7 +427,7 @@ router.post("/signup",
 
     const profileData = {
       name: name?.trim() || "Usuário",
-      email: email.trim().toLowerCase(),
+      email: normalizedEmail,
       avatar_url: null,
       passwordHash,
       createdAt: new Date().toISOString(),
@@ -188,108 +436,65 @@ router.post("/signup",
 
     await db.collection("profiles").doc(userRecord.uid).set(profileData);
 
-    sendWelcomeEmail(email.trim().toLowerCase(), name?.trim() || "Usuário").catch(() => {});
+    sendWelcomeEmail(normalizedEmail, name?.trim() || "Usuário").catch(() => {});
 
-    // Enviar e-mail de verificação
+    let verificationCode;
+    let userCreated = true;
+    
     try {
-      const actionCodeSettings = {
-        url: `${process.env.FRONTEND_URL || "http://localhost:5173"}/?emailVerified=true`,
-        handleCodeInApp: false,
-      };
-      const verificationLink = await auth.generateEmailVerificationLink(
-        email.trim().toLowerCase(),
-        actionCodeSettings
-      );
+      verificationCode = generateVerificationCode();
+      await saveVerificationCode(normalizedEmail, verificationCode);
       
-      const transporter = getEmailTransporter();
-      if (transporter) {
-        await transporter.sendMail({
-          from: `"VETRA" <${process.env.SMTP_USER}>`,
-          to: email.trim().toLowerCase(),
-          subject: "Confirme seu e-mail para usar o VETRA com segurança",
-          html: `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <meta charset="utf-8">
-              <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background: linear-gradient(90deg, #22D3EE, #8B5CF6, #A3E635); padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-                .header h1 { color: white; margin: 0; font-size: 28px; }
-                .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-                .button { display: inline-block; padding: 12px 30px; background: linear-gradient(90deg, #22D3EE, #8B5CF6); color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
-                .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <div class="header">
-                  <h1>VETRA</h1>
-                </div>
-                <div class="content">
-                  <p>Olá! 👋</p>
-                  <p>Você se cadastrou no VETRA, sua plataforma para organizar, descobrir e compartilhar filmes e séries.</p>
-                  <p>Para confirmar que este e-mail é seu, clique no botão abaixo:</p>
-                  <div style="text-align: center;">
-                    <a href="${verificationLink}" class="button">Confirmar meu e-mail</a>
-                  </div>
-                  <p>Se você não fez este cadastro, pode ignorar esta mensagem.</p>
-                </div>
-                <div class="footer">
-                  <p>VETRA - Organize seus filmes e séries</p>
-                </div>
-              </div>
-            </body>
-            </html>
-          `,
+      try {
+        await sendVerificationCodeEmail(
+          normalizedEmail,
+          name?.trim() || "Usuário",
+          verificationCode
+        );
+        console.log("[signup] ✅ Código de verificação enviado com sucesso para:", normalizedEmail);
+      } catch (emailError) {
+        console.error("[signup] ❌ Erro ao enviar e-mail com código:", emailError.message);
+        
+        // Rollback: deletar usuário e perfil se falhar
+        try {
+          await auth.deleteUser(userRecord.uid);
+          await db.collection("profiles").doc(userRecord.uid).delete();
+          console.log("[signup] ✅ Rollback realizado: usuário e perfil deletados após falha no envio de e-mail");
+        } catch (rollbackError) {
+          console.error("[signup] ⚠️ Erro ao fazer rollback:", rollbackError);
+        }
+        
+        return res.status(500).json({
+          ok: false,
+          error: "erro_envio_email",
+          message: "Não foi possível enviar o e-mail de verificação. Verifique a configuração do SMTP no arquivo .env. Consulte api/ENV_EXAMPLE.md para mais informações."
         });
-        console.log("[signup] E-mail de verificação enviado para:", email.trim().toLowerCase());
-      } else {
-        console.warn("[signup] SMTP não configurado - e-mail de verificação não enviado");
       }
-    } catch (verificationError) {
-      console.error("[signup] Erro ao enviar e-mail de verificação:", verificationError);
-      // Não falhar o signup se o e-mail de verificação falhar
-    }
-
-    // Para signup, precisamos fazer login para obter idToken
-    // (não podemos usar customToken porque o frontend precisa de idToken)
-    let idToken, refreshToken, expiresIn;
-    try {
-      const tokens = await loginWithPassword(email.trim().toLowerCase(), password);
-      idToken = tokens.idToken;
-      refreshToken = tokens.refreshToken;
-      expiresIn = tokens.expiresIn;
-      console.log("[signup] idToken obtido após criação do usuário");
-    } catch (tokenError) {
-      console.error("[signup] Erro ao obter idToken após signup:", tokenError);
-      // Se falhar, criar customToken como fallback (mas não é ideal)
-      const customToken = await auth.createCustomToken(userRecord.uid);
-      return res.json({
-        ok: true,
-        user: {
-          uid: userRecord.uid,
-          email: userRecord.email,
-          name: profileData.name,
-          avatar_url: null,
-        },
-        customToken,
-        warning: "idToken não disponível, usando customToken"
+      } catch (codeError) {
+        console.error("[signup] ❌ Erro ao gerar código de verificação:", codeError);
+        
+        // Rollback: deletar usuário e perfil se falhar
+        try {
+        await auth.deleteUser(userRecord.uid);
+        await db.collection("profiles").doc(userRecord.uid).delete();
+        console.log("[signup] ✅ Rollback realizado: usuário e perfil deletados após falha ao gerar código");
+      } catch (rollbackError) {
+        console.error("[signup] ⚠️ Erro ao fazer rollback:", rollbackError);
+      }
+      
+      return res.status(500).json({
+        ok: false,
+        error: "erro_gerar_codigo",
+        message: "Não foi possível gerar o código de verificação. Tente novamente."
       });
     }
 
+    // Não fazer login automático - requer verificação de código
     res.json({
       ok: true,
-      user: {
-        uid: userRecord.uid,
-        email: userRecord.email,
-        name: profileData.name,
-        avatar_url: null,
-      },
-      idToken,
-      refreshToken,
-      expiresIn,
+      requiresVerification: true,
+      email: normalizedEmail,
+      message: "Conta criada com sucesso. Verifique seu e-mail para ativar sua conta."
     });
   } catch (error) {
     console.error("Erro no signup:", error);
@@ -337,14 +542,27 @@ async function loginWithPassword(email, password) {
   const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`;
   
   console.log("[loginWithPassword] Fazendo requisição para Identity Toolkit...");
+  console.log("[loginWithPassword] Email:", email.trim().toLowerCase());
+  console.log("[loginWithPassword] Senha (tamanho):", password?.length || 0);
+  console.log("[loginWithPassword] Primeiros 3 caracteres (debug):", password?.substring(0, 3) + "***");
+  console.log("[loginWithPassword] Últimos 3 caracteres (debug):", "***" + password?.substring(password.length - 3));
+  
+  const requestBody = { 
+    email: email.trim().toLowerCase(), 
+    password: password, // Não fazer trim - pode remover espaços intencionais da senha
+    returnSecureToken: true 
+  };
+  
+  console.log("[loginWithPassword] Corpo da requisição (sem senha completa):", {
+    email: requestBody.email,
+    passwordLength: requestBody.password?.length,
+    returnSecureToken: requestBody.returnSecureToken
+  });
+  
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ 
-      email: email.trim().toLowerCase(), 
-      password: password.trim(), 
-      returnSecureToken: true 
-    }),
+    body: JSON.stringify(requestBody),
   });
   
   console.log("[loginWithPassword] Resposta do Firebase, status:", response.status);
@@ -650,6 +868,20 @@ router.post("/verify", async (req, res) => {
 
     // Buscar perfil
     const profileDoc = await db.collection("profiles").doc(decoded.uid).get();
+    
+    // Verificar se a conta está marcada para exclusão
+    if (profileDoc.exists) {
+      const profile = profileDoc.data();
+      if (profile.status === "pending_deletion" || profile.deletedAt) {
+        console.log("[verify] Conta marcada para exclusão, rejeitando token");
+        return res.status(401).json({ 
+          ok: false, 
+          error: "conta_marcada_exclusao",
+          message: "Esta conta está marcada para exclusão"
+        });
+      }
+    }
+    
     const profile = profileDoc.exists ? profileDoc.data() : {
       name: decoded.name || "Usuário",
       email: decoded.email,
@@ -663,6 +895,9 @@ router.post("/verify", async (req, res) => {
         email: decoded.email,
         name: profile.name || decoded.name || "Usuário",
         avatar_url: profile.avatar_url || null,
+        status: profile.status || "active",
+        deletedAt: profile.deletedAt || null,
+        deletionScheduledFor: profile.deletionScheduledFor || null,
       },
     });
   } catch (error) {
@@ -1551,6 +1786,291 @@ router.post("/re-enable-account",
         ok: false,
         error: "erro_interno",
         message: error.message || "Erro ao reabilitar conta. Tente novamente."
+      });
+    }
+  }
+);
+
+// POST /api/auth/verify-code - Validar código de verificação e ativar conta
+router.post("/verify-code",
+  rateLimitMiddleware("verify_code", (req) => {
+    const email = req.body?.email?.trim().toLowerCase() || "";
+    const ip = getClientIP(req);
+    return email || ip;
+  }, 10, 15 * 60 * 1000), // 10 tentativas por 15 minutos
+  async (req, res) => {
+    try {
+      const { email, code, password } = req.body || {};
+      
+      console.log("[verify-code] 📧 Recebida requisição de verificação");
+      console.log("[verify-code] Email:", email);
+      console.log("[verify-code] Código recebido:", code);
+      console.log("[verify-code] Senha recebida (tamanho):", password?.length || 0);
+      
+      if (!email || !code) {
+        return res.status(400).json({ 
+          ok: false, 
+          error: "email_e_codigo_obrigatorios",
+          message: "Email e código são obrigatórios" 
+        });
+      }
+      
+      if (!password) {
+        return res.status(400).json({ 
+          ok: false, 
+          error: "senha_obrigatoria",
+          message: "Senha é obrigatória para validar o código" 
+        });
+      }
+      
+      const normalizedEmail = email.trim().toLowerCase();
+      const normalizedCode = code.trim();
+      // Manter senha como está (sem trim) para não remover espaços intencionais
+      
+      // Validar código
+      const validation = await validateVerificationCode(normalizedEmail, normalizedCode);
+      
+      if (!validation.valid) {
+        return res.status(400).json({
+          ok: false,
+          error: validation.error === "Código expirado" ? "codigo_expirado" : "codigo_invalido",
+          message: validation.error
+        });
+      }
+      
+      // Código válido - ativar conta e fazer login
+      const auth = getAuth();
+      const db = getFirestore();
+      
+      // Buscar usuário pelo email
+      let userRecord;
+      try {
+        userRecord = await auth.getUserByEmail(normalizedEmail);
+      } catch (error) {
+        if (error.code === "auth/user-not-found") {
+          return res.status(404).json({
+            ok: false,
+            error: "usuario_nao_encontrado",
+            message: "Usuário não encontrado"
+          });
+        }
+        throw error;
+      }
+      
+      // Verificar senha
+      try {
+        console.log("[verify-code] 🔐 Verificando senha para:", normalizedEmail);
+        console.log("[verify-code] Tamanho da senha recebida:", password?.length);
+        console.log("[verify-code] Primeiros 3 caracteres da senha (para debug):", password?.substring(0, 3) + "***");
+        console.log("[verify-code] Últimos 3 caracteres da senha (para debug):", "***" + password?.substring(password.length - 3));
+        
+        // Tentar fazer login com a senha exatamente como recebida
+        try {
+          await loginWithPassword(normalizedEmail, password);
+          console.log("[verify-code] ✅ Senha válida - login bem-sucedido");
+        } catch (firstAttemptError) {
+          // Se falhar, pode ser que a conta foi criada antes da correção (com trim)
+          // Tentar novamente com a senha com trim() para compatibilidade com contas antigas
+          console.log("[verify-code] ⚠️ Primeira tentativa falhou, tentando com senha com trim() para compatibilidade...");
+          const trimmedPassword = password?.trim() || "";
+          
+          if (trimmedPassword !== password && trimmedPassword.length > 0) {
+            try {
+              await loginWithPassword(normalizedEmail, trimmedPassword);
+              console.log("[verify-code] ✅ Senha válida com trim() - login bem-sucedido (conta antiga)");
+            } catch (secondAttemptError) {
+              // Se ambas falharem, retornar o erro original
+              throw firstAttemptError;
+            }
+          } else {
+            // Se não há diferença ou senha vazia, retornar erro original
+            throw firstAttemptError;
+          }
+        }
+      } catch (loginError) {
+        console.error("[verify-code] ❌ Erro ao validar senha");
+        console.error("[verify-code] Mensagem do erro:", loginError.message);
+        console.error("[verify-code] Código do erro:", loginError.code);
+        console.error("[verify-code] Status do erro:", loginError.status);
+        console.error("[verify-code] Detalhes completos:", JSON.stringify(loginError, null, 2));
+        
+        // Se for erro de credenciais inválidas, pode ser que a senha foi salva diferente
+        if (loginError.code === "credenciais_invalidas" || loginError.message?.includes("INVALID_PASSWORD") || loginError.message?.includes("INVALID_LOGIN_CREDENTIALS")) {
+          console.error("[verify-code] ⚠️ POSSÍVEL CAUSA: A senha pode ter sido salva com espaços removidos durante o cadastro");
+          console.error("[verify-code] 💡 SUGESTÃO: Tente criar uma nova conta ou verifique se há espaços no início/fim da senha");
+        }
+        
+        return res.status(401).json({
+          ok: false,
+          error: "senha_incorreta",
+          message: loginError.message || "Senha incorreta. Verifique e tente novamente."
+        });
+      }
+      
+      // Marcar e-mail como verificado no Firebase Auth
+      await auth.updateUser(userRecord.uid, {
+        emailVerified: true
+      });
+      
+      // Atualizar perfil no Firestore
+      const profileRef = db.collection("profiles").doc(userRecord.uid);
+      // Limpar status de exclusão se existir (reativação da conta)
+      await profileRef.update({
+        emailVerified: true,
+        status: "active", // Limpar pending_deletion
+        deletedAt: null, // Limpar deletedAt
+        deletionScheduledFor: null, // Limpar deletionScheduledFor
+        updatedAt: new Date().toISOString()
+      });
+      
+      // Fazer login para obter tokens
+      const tokens = await loginWithPassword(normalizedEmail, password);
+      
+      // Buscar dados do perfil
+      const profileDoc = await profileRef.get();
+      const profileData = profileDoc.data();
+      
+      await logAuditEvent({
+        type: "email_verified",
+        email: normalizedEmail,
+        uid: userRecord.uid,
+        ip: getClientIP(req),
+        userAgent: getUserAgent(req),
+        status: "success"
+      });
+      
+      res.json({
+        ok: true,
+        user: {
+          uid: userRecord.uid,
+          email: userRecord.email,
+          name: profileData?.name || userRecord.displayName || "Usuário",
+          avatar_url: profileData?.avatar_url || null,
+          emailVerified: true
+        },
+        idToken: tokens.idToken,
+        refreshToken: tokens.refreshToken,
+        expiresIn: tokens.expiresIn,
+        message: "Conta verificada com sucesso!"
+      });
+    } catch (error) {
+      console.error("[verify-code] Erro:", error);
+      await logAuditEvent({
+        type: "email_verification_error",
+        email: req.body?.email || "",
+        ip: getClientIP(req),
+        userAgent: getUserAgent(req),
+        status: "error",
+        details: error.message
+      });
+      
+      res.status(500).json({
+        ok: false,
+        error: "erro_interno",
+        message: error.message || "Erro ao verificar código. Tente novamente."
+      });
+    }
+  }
+);
+
+// POST /api/auth/resend-verification-code - Reenviar código de verificação
+router.post("/resend-verification-code",
+  rateLimitMiddleware("resend_code", (req) => {
+    const email = req.body?.email?.trim().toLowerCase() || "";
+    const ip = getClientIP(req);
+    return email || ip;
+  }, 3, 60 * 1000), // 3 tentativas por minuto (cooldown de 30-60 segundos)
+  async (req, res) => {
+    try {
+      const { email } = req.body || {};
+      
+      if (!email) {
+        return res.status(400).json({ 
+          ok: false, 
+          error: "email_obrigatorio",
+          message: "Email é obrigatório" 
+        });
+      }
+      
+      const normalizedEmail = email.trim().toLowerCase();
+      
+      // Verificar se o usuário existe e não está verificado
+      const auth = getAuth();
+      const db = getFirestore();
+      
+      let userRecord;
+      try {
+        userRecord = await auth.getUserByEmail(normalizedEmail);
+      } catch (error) {
+        if (error.code === "auth/user-not-found") {
+          return res.status(404).json({
+            ok: false,
+            error: "usuario_nao_encontrado",
+            message: "Usuário não encontrado"
+          });
+        }
+        throw error;
+      }
+      
+      // Se já estiver verificado, não permitir reenvio
+      if (userRecord.emailVerified) {
+        return res.status(400).json({
+          ok: false,
+          error: "email_ja_verificado",
+          message: "Este e-mail já foi verificado"
+        });
+      }
+      
+      // Buscar nome do perfil
+      const profileDoc = await db.collection("profiles").doc(userRecord.uid).get();
+      const profileData = profileDoc.data();
+      const userName = profileData?.name || userRecord.displayName || "Usuário";
+      
+      // Gerar novo código
+      const verificationCode = generateVerificationCode();
+      await saveVerificationCode(normalizedEmail, verificationCode);
+      
+      // Enviar e-mail
+      try {
+        await sendVerificationCodeEmail(normalizedEmail, userName, verificationCode);
+        console.log("[resend-verification-code] ✅ Novo código enviado para:", normalizedEmail);
+        
+        await logAuditEvent({
+          type: "verification_code_resent",
+          email: normalizedEmail,
+          uid: userRecord.uid,
+          ip: getClientIP(req),
+          userAgent: getUserAgent(req),
+          status: "success"
+        });
+        
+        res.json({
+          ok: true,
+          message: "Novo código de verificação enviado para o seu e-mail."
+        });
+      } catch (emailError) {
+        console.error("[resend-verification-code] ❌ Erro ao enviar e-mail:", emailError.message);
+        return res.status(500).json({
+          ok: false,
+          error: "erro_envio_email",
+          message: "Não foi possível enviar o e-mail. Verifique a configuração do SMTP no arquivo .env. Consulte api/ENV_EXAMPLE.md para mais informações."
+        });
+      }
+    } catch (error) {
+      console.error("[resend-verification-code] Erro:", error);
+      await logAuditEvent({
+        type: "resend_code_error",
+        email: req.body?.email || "",
+        ip: getClientIP(req),
+        userAgent: getUserAgent(req),
+        status: "error",
+        details: error.message
+      });
+      
+      res.status(500).json({
+        ok: false,
+        error: "erro_interno",
+        message: error.message || "Erro ao reenviar código. Tente novamente."
       });
     }
   }

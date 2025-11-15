@@ -13,6 +13,7 @@ export interface LoginModalProps {
   };
   loginType: "signin" | "signup";
   showPassword: boolean;
+  firstNameError: string;
   emailError: string;
   passwordError: string;
   loginError: string;
@@ -39,6 +40,7 @@ export interface LoginModalProps {
   setShowLogin: (show: boolean) => void;
   setLoginType: (type: "signin" | "signup") => void;
   setLoginError: (error: string) => void;
+  setFirstNameError: (error: string) => void;
   setEmailError: (error: string) => void;
   setPasswordError: (error: string) => void;
   setShowPassword: (show: boolean | ((prev: boolean) => boolean)) => void;
@@ -70,6 +72,7 @@ export const LoginModal: React.FC<LoginModalProps> = React.memo(({
   formData,
   loginType,
   showPassword,
+  firstNameError,
   emailError,
   passwordError,
   loginError,
@@ -96,6 +99,7 @@ export const LoginModal: React.FC<LoginModalProps> = React.memo(({
   setShowLogin,
   setLoginType,
   setLoginError,
+  setFirstNameError,
   setEmailError,
   setPasswordError,
   setShowPassword,
@@ -278,7 +282,9 @@ export const LoginModal: React.FC<LoginModalProps> = React.memo(({
         {loginType === "signup" && (
           <>
           <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nome</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Nome <span className="text-red-500">*</span>
+              </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                 <input 
@@ -288,11 +294,18 @@ export const LoginModal: React.FC<LoginModalProps> = React.memo(({
                   onChange={handleInputChange}
                   onBlur={handleInputBlur}
                   autoComplete="given-name"
-                  className="w-full bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white pl-10 pr-4 py-2.5 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 border border-gray-300 dark:border-slate-700 text-sm"
+                  className={`w-full bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white pl-10 pr-4 py-2.5 rounded-md focus:outline-none focus:ring-1 ${
+                    firstNameError 
+                      ? "border-red-500 focus:ring-red-500" 
+                      : "border-gray-300 dark:border-slate-700 focus:ring-blue-500"
+                  } text-sm`}
                   placeholder="Seu nome" 
                   required
                 />
             </div>
+            {firstNameError && (
+              <p className="mt-1 text-xs text-red-600 dark:text-red-400">{firstNameError}</p>
+            )}
           </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Sobrenome</label>

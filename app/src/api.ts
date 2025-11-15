@@ -680,7 +680,6 @@ function localShareKey(slug: string) {
   return `vetra:share:${slug}`;
 }
 
-// Base58 sem caracteres ambíguos (0, O, l, I)
 const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 function randomSlug(len = 10) {
@@ -701,7 +700,6 @@ export function generateShareCode(): string {
     randomPart.slice(6, 9)
   ];
   
-  // Checksum: soma dos índices dos caracteres mod 58
   let checksum = 0;
   for (const char of randomPart) {
     checksum = (checksum + BASE58_ALPHABET.indexOf(char)) % 58;
@@ -722,7 +720,6 @@ export function validateAndExtractSlug(input: string): string | null {
   code = code.replace(/-/g, "");
   
   if (code.length !== 10) {
-    // Tenta extrair de URL ou path
     const urlMatch = input.match(/[?&#]share=([^&?#]+)/i);
     if (urlMatch) {
       return urlMatch[1];
@@ -763,7 +760,6 @@ export async function shareCreate(items: any[], type: 'favorites' | 'list' | 'co
       },
       12000
     );
-    // Normaliza resposta do backend para sempre ter code
     if (resp.slug) {
       const code = resp.slug.length === 10 && resp.slug.match(/^[A-Za-z0-9]+$/) 
         ? `V9-${resp.slug.slice(0, 3)}-${resp.slug.slice(3, 6)}-${resp.slug.slice(6, 9)}${resp.slug.slice(9)}`
@@ -790,12 +786,13 @@ export async function shareGet(slugOrCode: string) {
   return JSON.parse(txt);
 }
 
-export async function authSignup(name: string, email: string, password: string): Promise<{ ok: boolean; user?: any; customToken?: string; error?: string }> {
+export async function authSignup(name: string, email: string, password: string): Promise<{ ok: boolean; user?: any; customToken?: string; error?: string; requiresVerification?: boolean; email?: string; message?: string }> {
   const normalizedEmail = email?.trim().toLowerCase() || "";
   const normalizedName = name?.trim() || "Usuário";
-  const trimmedPassword = password?.trim() || "";
+  // Não dar trim na senha
+  const passwordValue = password || "";
   
-  if (!normalizedEmail || !trimmedPassword) {
+  if (!normalizedEmail || !passwordValue) {
     return { ok: false, error: "Email e senha são obrigatórios" };
   }
   
@@ -809,7 +806,7 @@ export async function authSignup(name: string, email: string, password: string):
           body: JSON.stringify({ 
             name: normalizedName, 
             email: normalizedEmail, 
-            password: trimmedPassword 
+            password: passwordValue // Enviar senha sem trim
           }),
         },
         15000
@@ -821,6 +818,73 @@ export async function authSignup(name: string, email: string, password: string):
   }
   // Fallback local quando backend não disponível
   return { ok: true, user: { name: normalizedName, email: normalizedEmail, uid: `local_${Date.now()}` } };
+}
+
+export async function verifyCode(email: string, code: string, password: string): Promise<{ ok: boolean; user?: any; idToken?: string; refreshToken?: string; expiresIn?: string; error?: string; message?: string }> {
+  const normalizedEmail = email?.trim().toLowerCase() || "";
+  const normalizedCode = code?.trim() || "";
+  // Não dar trim na senha
+  const passwordValue = password || "";
+  
+  if (!normalizedEmail || !normalizedCode || !passwordValue) {
+    return { ok: false, error: "Email, código e senha são obrigatórios" };
+  }
+  
+  const API_BASE = (import.meta.env.VITE_API_BASE || "").trim() || "http://localhost:4001";
+  const backendHealthy = await ensureBackendHealth();
+  
+  if (!backendHealthy) {
+    return { ok: false, error: "Backend não disponível" };
+  }
+  
+  try {
+    return await fetchJSON(
+      `${API_BASE}/api/auth/verify-code`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          email: normalizedEmail,
+          code: normalizedCode,
+          password: passwordValue // Enviar senha sem trim
+        }),
+      },
+      15000
+    );
+  } catch (e: any) {
+    console.error("[verifyCode] Erro:", e);
+    return { ok: false, error: e?.message || "Erro ao verificar código" };
+  }
+}
+
+export async function resendVerificationCode(email: string): Promise<{ ok: boolean; error?: string; message?: string }> {
+  const normalizedEmail = email?.trim().toLowerCase() || "";
+  
+  if (!normalizedEmail) {
+    return { ok: false, error: "E-mail é obrigatório" };
+  }
+  
+  const API_BASE = (import.meta.env.VITE_API_BASE || "").trim() || "http://localhost:4001";
+  const backendHealthy = await ensureBackendHealth();
+  
+  if (!backendHealthy) {
+    return { ok: false, error: "Backend não disponível" };
+  }
+  
+  try {
+    return await fetchJSON(
+      `${API_BASE}/api/auth/resend-verification-code`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail }),
+      },
+      15000
+    );
+  } catch (e: any) {
+    console.error("[resendVerificationCode] Erro:", e);
+    return { ok: false, error: e?.message || "Erro ao reenviar código de verificação" };
+  }
 }
 
 export async function resendVerificationEmail(email: string): Promise<{ ok: boolean; error?: string }> {
@@ -872,7 +936,6 @@ export async function authSignin(email: string, password: string): Promise<{ ok:
   console.log("[authSignin] Tentando fazer login para:", normalizedEmail.substring(0, 3) + "***");
   console.log("[authSignin] API_BASE:", API_BASE);
   
-  // Força verificação do backend ignorando cache
   const backendHealthy = await ensureBackendHealth(true);
   console.log("[authSignin] Backend health check:", backendHealthy);
   
@@ -904,7 +967,6 @@ export async function authSignin(email: string, password: string): Promise<{ ok:
     } catch (e: any) {
     console.error("[authSignin] Erro na requisição:", e);
     const errorMessage = e?.message || "Erro ao fazer login. Verifique se o backend está rodando.";
-    // Tenta extrair JSON do erro se possível
     if (typeof errorMessage === "string" && errorMessage.includes("{")) {
       try {
         const jsonMatch = errorMessage.match(/\{.*\}/);
@@ -912,9 +974,7 @@ export async function authSignin(email: string, password: string): Promise<{ ok:
           const parsedError = JSON.parse(jsonMatch[0]);
           return { ok: false, ...parsedError };
         }
-      } catch {
-        // Ignora erro de parsing e usa mensagem original
-      }
+      } catch {}
     }
     return { ok: false, error: errorMessage };
     }
@@ -1124,21 +1184,16 @@ export async function profileGet(email: string): Promise<UserProfile> {
       if (raw) {
         try {
           return JSON.parse(raw);
-        } catch {
-          // Ignora erro de parse
-        }
+        } catch {}
       }
       return { name: "Usuário", email: normalizedEmail, avatar_url: null, updatedAt: null };
     }
   }
-  // Fallback para localStorage quando backend não disponível
   const raw = localStorage.getItem(`vetra:profile:${normalizedEmail}`);
   if (raw) {
     try {
       return JSON.parse(raw);
-    } catch {
-      // Ignora erro de parse
-    }
+    } catch {}
   }
   return { name: "Usuário", email: normalizedEmail, avatar_url: null, updatedAt: null };
 }
@@ -1171,7 +1226,6 @@ export async function profileUpdate(p: UserProfile): Promise<UserProfile> {
       return updated;
     }
   }
-  // Usa localStorage quando backend não disponível
   const updated = { ...p, updatedAt: new Date().toISOString() };
   localStorage.setItem(`vetra:profile:${p.email}`, JSON.stringify(updated));
   return updated;
@@ -1282,7 +1336,6 @@ export async function reactivateAccount(): Promise<{ ok: boolean; message?: stri
 }
 
 export async function changePassword(newPassword: string, idToken?: string): Promise<{ ok: boolean; message?: string; error?: string }> {
-  // Usa idToken do localStorage se não fornecido
   const token = idToken || localStorage.getItem('vetra:idToken') || '';
   
   if (!token) {
@@ -1350,14 +1403,12 @@ export async function changePassword(newPassword: string, idToken?: string): Pro
     }
     
     if (!response.ok) {
-      // Retorna erro com mensagem do backend
       return { 
         ok: false, 
         error: data.message || data.error || `Erro ${response.status}: ${response.statusText}` 
       };
     }
     
-    // Limpa tokens após mudança de senha (logout global)
     if (data.ok) {
       localStorage.removeItem('vetra:idToken');
       localStorage.removeItem('vetra:refreshToken');
@@ -1435,7 +1486,6 @@ export async function createComment(media: "movie" | "tv", id: number, text: str
     if (!res.ok) {
       return { ok: false, error: data.error || data.message || "Erro ao criar comentário" };
     }
-    // Valida estrutura do comentário retornado
     if (!data.comment || !data.comment.id) {
       console.error("[createComment] Comentário retornado sem ID:", data.comment);
       return { ok: false, error: "Comentário criado mas estrutura inválida" };
@@ -1558,11 +1608,42 @@ export async function removeListItem(userId: string, listId: string, itemId: str
       
       return { ok: true };
     }
-    // Retorna ok sem sincronização quando backend não disponível
     return { ok: true };
   } catch (error: any) {
     return { ok: false, error: error.message || "Erro ao remover item da lista" };
   }
+}
+
+export async function favoritesGet(uid: string): Promise<{ items: any[] }> {
+  if (await ensureBackendHealth()) {
+    try {
+      return await fetchJSON(`${API_BASE}/api/favorites/${encodeURIComponent(uid)}`, {}, 8000);
+    } catch (e: any) {
+      console.error("[favoritesGet] Erro ao buscar favoritos:", e);
+      return { items: [] };
+    }
+  }
+  return { items: [] };
+}
+
+export async function favoritesSave(uid: string, items: any[]): Promise<{ ok: boolean; error?: string }> {
+  if (await ensureBackendHealth()) {
+    try {
+      return await fetchJSON(
+        `${API_BASE}/api/favorites`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ uid, items }),
+        },
+        8000
+      );
+    } catch (e: any) {
+      console.error("[favoritesSave] Erro ao salvar favoritos:", e);
+      return { ok: false, error: e?.message || "Erro ao salvar favoritos" };
+    }
+  }
+  return { ok: true };
 }
 
 /**
@@ -1782,6 +1863,8 @@ const api = {
   authVerify,
   reactivateAccount,
   reEnableAccount,
+  verifyCode,
+  resendVerificationCode,
   resendVerificationEmail,
 
   getDetails,
@@ -1801,6 +1884,8 @@ const api = {
   deleteComment,
   addListItem,
   removeListItem,
+  favoritesGet,
+  favoritesSave,
   
   forgotPassword,
   checkEmailExists,

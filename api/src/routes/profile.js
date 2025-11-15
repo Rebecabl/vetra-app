@@ -48,7 +48,6 @@ router.get("/:email", async (req, res) => {
     const data = doc.data();
     const uid = doc.id;
 
-    // Buscar status de verificação de e-mail do Firebase Auth
     let emailVerified = false;
     try {
       const auth = getAuth();
@@ -56,12 +55,10 @@ router.get("/:email", async (req, res) => {
       emailVerified = userRecord.emailVerified || false;
     } catch (authError) {
       console.warn("[profile GET] Erro ao buscar emailVerified do Firebase Auth:", authError.message);
-      // Continua com emailVerified = false
     }
 
     const { passwordHash, ...profile } = data;
 
-    // Garantir que status, deletedAt e deletionScheduledFor sejam retornados
     const response = {
       uid: doc.id,
       ...profile,
@@ -118,14 +115,11 @@ router.get("/uid/:uid", async (req, res) => {
       const userRecord = await auth.getUser(uid);
       emailVerified = userRecord.emailVerified || false;
     } catch (authError) {
-      console.warn("[profile GET uid] Erro ao buscar emailVerified do Firebase Auth:", authError.message);
-      // Continua com emailVerified = false
+      console.warn("[profile GET uid] Erro ao buscar emailVerified:", authError.message);
     }
 
-    // Remove informações sensíveis
     const { passwordHash, ...safeProfile } = profile;
 
-    // Garantir que status, deletedAt e deletionScheduledFor sejam retornados
     const response = {
       ...safeProfile,
       status: profile.status || null,
@@ -257,7 +251,6 @@ router.post("/change-password", async (req, res) => {
     const ip = getClientIP(req);
     const userAgent = getUserAgent(req);
 
-    // 2) Verifica token (sem checkRevoked por enquanto para permitir reauth)
     let decoded;
     try {
       decoded = await authInstance.verifyIdToken(idToken, false);
@@ -286,7 +279,7 @@ router.post("/change-password", async (req, res) => {
     const uid = decoded.uid;
     const email = decoded.email || "";
 
-    // 3) Exigir reautenticação recente (auth_time <= 10 min)
+    // Token deve ter sido emitido há menos de 10 minutos
     const authAgeSec = Math.floor(Date.now() / 1000) - decoded.auth_time;
     if (authAgeSec > 600) {
       console.log("[change-password] Token muito antigo, requer reautenticação");
@@ -307,7 +300,6 @@ router.post("/change-password", async (req, res) => {
       });
     }
 
-    // 4) Buscar perfil para validação adicional
     let profile = null;
     try {
       const profileDoc = await db.collection("profiles").doc(uid).get();
@@ -318,7 +310,6 @@ router.post("/change-password", async (req, res) => {
       console.warn("[change-password] Erro ao buscar perfil:", profileError.message);
     }
 
-    // Validar força da nova senha
     const passwordValidation = validatePassword(newPassword.trim(), email, profile?.name || "");
     if (!passwordValidation.valid) {
       await logAuditEvent({
@@ -339,7 +330,6 @@ router.post("/change-password", async (req, res) => {
       });
     }
 
-    // 5) Troca a senha pelo Admin SDK
     try {
       console.log("[change-password] Atualizando senha no Firebase Auth para UID:", uid);
       await authInstance.updateUser(uid, { 
@@ -360,7 +350,6 @@ router.post("/change-password", async (req, res) => {
         details: `Erro ao atualizar: ${code} - ${e?.message}`
       });
 
-      // Mapeamento de erros do Firebase
       if (code === "auth/user-not-found") {
         return res.status(404).json({ 
           ok: false,
@@ -392,16 +381,15 @@ router.post("/change-password", async (req, res) => {
       });
     }
 
-    // 6) Revoga todos refresh tokens (logout global)
+    // Revoga todos os refresh tokens (logout global)
     try {
       await authInstance.revokeRefreshTokens(uid);
       console.log("[change-password] Refresh tokens revogados com sucesso");
     } catch (revokeError) {
       console.error("[change-password] Erro ao revogar tokens:", revokeError);
-      // Não falhar a operação se revogação falhar, mas logar
     }
 
-    // 7) Atualizar hash no Firestore (opcional, para compatibilidade)
+    // Atualizar hash no Firestore (backup)
     try {
       const newPasswordHash = await bcrypt.hash(newPassword.trim(), 10);
       await db.collection("profiles").doc(uid).update({
@@ -411,10 +399,8 @@ router.post("/change-password", async (req, res) => {
       console.log("[change-password] Hash atualizado no Firestore");
     } catch (firestoreError) {
       console.warn("[change-password] Erro ao atualizar hash no Firestore:", firestoreError.message);
-      // Não falhar se Firestore falhar, a senha já foi atualizada no Auth
     }
 
-    // 8) Log de auditoria de sucesso
     await logAuditEvent({
       type: "password_change",
       uid,

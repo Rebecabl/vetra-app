@@ -9,6 +9,7 @@ import { ThemeButton } from "../../theme";
 import type { UserProfile } from "../../api";
 import type { TabKey } from "../../types/movies";
 import type { Lang } from "../../i18n";
+import { clearUserData } from "../../constants/storage";
 
 export interface HeaderProps {
   isLoggedIn: boolean;
@@ -41,6 +42,7 @@ export interface HeaderProps {
   darkEnabled: boolean;
   toggleDark: () => void;
   t: (key: string) => string;
+  clearSearchState?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -74,6 +76,7 @@ export const Header: React.FC<HeaderProps> = ({
   darkEnabled,
   toggleDark,
   t,
+  clearSearchState,
 }) => {
   const navigate = useNavigate();
 
@@ -214,6 +217,7 @@ export const Header: React.FC<HeaderProps> = ({
                       </button>
                       <button
                         onClick={() => {
+                          const currentUserId = user?.uid;
                           setIsLoggedIn(false);
                           setUser(null);
                           setShowProfileMenu(false);
@@ -222,13 +226,20 @@ export const Header: React.FC<HeaderProps> = ({
                           localStorage.removeItem('vetra:last_email');
                           localStorage.removeItem('vetra:activeTab');
                           localStorage.removeItem('vetra:activeCategory');
+                          if (currentUserId) {
+                            clearUserData(currentUserId);
+                          }
                           sessionStorage.setItem('vetra:justLoggedOut', 'true');
+                          if (clearSearchState) {
+                            clearSearchState();
+                          }
+                          navigate("/", { replace: true });
+                          window.scrollTo({ top: 0, left: 0, behavior: "auto" });
                           if (pushBanner) {
                             pushBanner({ message: "Você saiu da sua conta. Até a próxima!", tone: "success" });
                           } else {
                             pushToast({ message: "Você saiu da sua conta. Até a próxima!", tone: "ok" });
                           }
-                          navigate("/");
                         }}
                         className="w-full px-4 py-2 text-left text-red-600 dark:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors"
                       >

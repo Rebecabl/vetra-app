@@ -64,6 +64,7 @@ import { PeoplePage } from "./pages/PeoplePage";
 import { FavoritesPage } from "./pages/FavoritesPage";
 import { ListsPage } from "./pages/ListsPage";
 import { WatchlistPage } from "./pages/WatchlistPage";
+import { VerificationCodePage } from "./pages/VerificationCodePage";
 import { LoginModal } from "./components/LoginModal";
 import type { LoginModalProps } from "./components/LoginModal";
 import { VerificationEmailModal } from "./components/VerificationEmailModal";
@@ -78,9 +79,7 @@ import { MovieCardInline } from "./components/MovieCardInline";
 import { ListDetail } from "./components/ListDetail";
 import type { MediaT, MovieT, UserState, UserStateMap, CatState, UserList, ApiStatus, TabKey } from "./types/movies";
 
-const TMDB_BLACKLIST_IDS = new Set<number>([
-  // "자매의 스와핑" (Sisters' Swapping)
-]);
+const TMDB_BLACKLIST_IDS = new Set<number>([]);
 
 const isBlacklisted = (movie: { id: number; title?: string; name?: string }): boolean => {
   if (TMDB_BLACKLIST_IDS.has(movie.id)) {
@@ -98,7 +97,7 @@ const isBlacklisted = (movie: { id: number; title?: string; name?: string }): bo
 const filterBlacklisted = <T extends { id: number; title?: string; name?: string }>(movies: T[]): T[] => {
   return movies.filter(m => !isBlacklisted(m));
 };
-import { KEY_FAVS, KEY_LISTS, KEY_STATES, KEY_HISTORY, KEY_STATS } from "./constants/storage";
+import { KEY_FAVS, KEY_LISTS, KEY_STATES, KEY_HISTORY, KEY_STATS, getStorageKey, clearUserData } from "./constants/storage";
 import { mediaKey } from "./types/movies";
 import { addHistoryEntry } from "./utils/history.utils";
 import { poster, toPosterPath, CAT_META, type CatKey } from "./lib/media.utils";
@@ -134,6 +133,8 @@ const AppShell = (): JSX.Element => {
     setLoginType,
     showPassword,
     setShowPassword,
+    firstNameError,
+    setFirstNameError,
     emailError,
     setEmailError,
     passwordError,
@@ -239,25 +240,17 @@ const AppShell = (): JSX.Element => {
   const [searchedPeople, setSearchedPeople] = useState<any[]>([]); // resultados da busca de pessoas
   const [peopleSearchLoading, setPeopleSearchLoading] = useState(false);
 
-  const [favorites, setFavorites] = useState<MovieT[]>(() => {
-    try { return JSON.parse(localStorage.getItem(KEY_FAVS) || "[]"); } catch { return []; }
-  });
-  const [lists, setLists] = useState<UserList[]>(() => {
-    try { return JSON.parse(localStorage.getItem(KEY_LISTS) || "[]"); } catch { return []; }
-  });
-  const [userStates, setUserStates] = useState<UserStateMap>(() => {
-    try { return JSON.parse(localStorage.getItem(KEY_STATES) || "{}"); } catch { return {}; }
-  });
-  
- 
-  const [watchHistory, setWatchHistory] = useState<Array<{ movie: MovieT; watchedAt: string }>>(() => {
-    try { return JSON.parse(localStorage.getItem(KEY_HISTORY) || "[]"); } catch { return []; }
-  });
-  
- 
-  const [userStats, setUserStats] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(KEY_STATS) || "{}"); } catch { return {}; }
-  });
+  const [favorites, setFavorites] = useState<MovieT[]>([]);
+  const [lists, setLists] = useState<UserList[]>([]);
+  const [userStates, setUserStates] = useState<UserStateMap>({});
+  const [watchHistory, setWatchHistory] = useState<Array<{ movie: MovieT; watchedAt: string }>>([]);
+  const [userStats, setUserStats] = useState<{
+    totalWatched?: number;
+    totalFavorites?: number;
+    totalLists?: number;
+    watchedThisMonth?: number;
+    lastWatched?: { movie: MovieT; watchedAt: string } | null;
+  }>({});
 
   const [activeListId, setActiveListId] = useState<string | null>(null);
   const [showListPickerFor, setShowListPickerFor] = useState<MovieT | null>(null);
@@ -266,6 +259,23 @@ const AppShell = (): JSX.Element => {
   const [listSortOrder, setListSortOrder] = useState<"recent" | "az" | "items" | "updated">("recent");
 
   const { setListCover: setListCoverWithApi, isUpdating } = useListCover(lists, setLists);
+  
+  const clearSearchState = useCallback(() => {
+    setSearchTerm("");
+    setAppliedSearchFilters(getDefaultFilters());
+    setSearchPage(1);
+    setMovies([]);
+    setPeople([]);
+    setSearchTotalResults(0);
+    setHasActiveFilters(false);
+    setPeopleSearchTerm("");
+    setSearchedPeople([]);
+    if (window.location.search) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Função estável que não depende de nenhum estado externo
   
   const setListCover = async (listId: string, type: "item" | "upload" | "auto", itemId?: string, url?: string, focalPoint?: { x: number; y: number }) => {
     if (type === "item" && itemId) {
@@ -551,25 +561,37 @@ const AppShell = (): JSX.Element => {
         return;
       }
 
-      pushBanner({ 
-        message: "Sua conta foi excluída. Obrigado por usar o VETRA.", 
-        tone: "success" 
-      });
-
-      if (user?.email) {
-        try {
-          await loadProfile(user.email);
-          console.log("[handleDeleteAccount] Perfil recarregado após exclusão");
-        } catch (error) {
-          console.error("[handleDeleteAccount] Erro ao recarregar perfil:", error);
-        }
+      const currentUserId = user?.uid;
+      setIsLoggedIn(false);
+      setUser(null);
+      
+      localStorage.removeItem('vetra:idToken');
+      localStorage.removeItem('vetra:refreshToken');
+      localStorage.removeItem('vetra:last_email');
+      localStorage.removeItem('vetra:activeTab');
+      localStorage.removeItem('vetra:activeCategory');
+      
+      if (currentUserId) {
+        clearUserData(currentUserId);
       }
-
+      
+      sessionStorage.removeItem('vetra:justLoggedOut');
+      sessionStorage.clear();
+      clearSearchState();
+      
       setShowDeleteAccountModal(false);
       setDeleteAccountPassword("");
       setDeleteAccountError("");
       setDeleteAccountConfirmCheckbox(false);
       setDeleteAccountLoading(false);
+      
+      navigate("/", { replace: true });
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      
+      pushBanner({ 
+        message: "Sua conta foi excluída. Obrigado por usar o VETRA.", 
+        tone: "success" 
+      });
     } catch (e: any) {
       console.error("[handleDeleteAccount] Erro inesperado:", e);
       if (e.message?.includes("fetch") || e.message?.includes("network") || e.message?.includes("Failed to fetch")) {
@@ -881,7 +903,6 @@ const AppShell = (): JSX.Element => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search, location.pathname, isLoggedIn]);
   
-  // Redireciona usuários não logados que tentam acessar rotas privadas
   useEffect(() => {
     const privateRoutes = ["/history", "/profile", "/favorites", "/lists", "/watchlist", "/people"];
     const isPrivateRoute = privateRoutes.some(route => location.pathname === route || location.pathname.startsWith(route + "/"));
@@ -891,7 +912,6 @@ const AppShell = (): JSX.Element => {
     }
   }, [location.pathname, isLoggedIn, viewingShared, resolvingShare, navigate]);
   
-  // Reseta navegação quando fizer logout
   useEffect(() => {
     if (!isLoggedIn) {
       setActiveTab("home");
@@ -899,23 +919,43 @@ const AppShell = (): JSX.Element => {
     }
   }, [isLoggedIn, setActiveTab, setActiveCategory]);
   
-  // Reseta scroll para o topo quando entrar na home ou recarregar
   useEffect(() => {
     if (location.pathname === "/") {
-      // Reseta imediatamente
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
       
-      // Usa requestAnimationFrame para garantir que o scroll seja resetado após o conteúdo ser renderizado
       requestAnimationFrame(() => {
         window.scrollTo({ top: 0, left: 0, behavior: "auto" });
       });
       
-      // Reseta novamente após um pequeno delay para garantir que funcione mesmo se o navegador tentar restaurar a posição
       setTimeout(() => {
         window.scrollTo({ top: 0, left: 0, behavior: "auto" });
       }, 0);
     }
-  }, [location.pathname, location.search, activeTab, activeCategory]); // Reseta sempre que entrar na home
+  }, [location.pathname, location.search, activeTab, activeCategory]);
+
+  useEffect(() => {
+    if (isLoggedIn && user && location.pathname === "/") {
+      const params = new URLSearchParams(window.location.search);
+      const hasSearchParams = params.has("q") || params.has("type") || params.has("sort") || 
+                             params.has("year_gte") || params.has("year_lte") || 
+                             params.has("vote_avg_gte") || params.has("vote_cnt_gte") || 
+                             params.has("with_poster") || params.has("page");
+      
+      if (!hasSearchParams) {
+        if (searchTerm.trim() && searchTerm.includes("@") && searchTerm.includes(".")) {
+          clearSearchState();
+        } else if (searchTerm.trim() && !hasActiveFilters && !hasSearchParams) {
+          const timer = setTimeout(() => {
+            if (!params.has("q") && !params.has("type") && !params.has("sort")) {
+              clearSearchState();
+            }
+          }, 500);
+          return () => clearTimeout(timer);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoggedIn, user, location.pathname]);
 
  
   const loadTrending = async (window: "day" | "week", page: number = 1) => {
@@ -1176,7 +1216,6 @@ const AppShell = (): JSX.Element => {
           const results = (data as any).results || [];
           console.log("[PeopleContent] Total de resultados:", results.length);
           
-          // Garantir que profile_path está presente
           const resultsWithImages = results.map((person: any) => ({
             ...person,
             profile_path: person.profile_path || null,
@@ -1225,7 +1264,6 @@ const AppShell = (): JSX.Element => {
         .then((data) => {
           const results = (data as any).results || [];
           
-          // Garantir que profile_path está presente
           const resultsWithImages = results.map((person: any) => ({
             ...person,
             profile_path: person.profile_path || null,
@@ -1759,7 +1797,6 @@ const AppShell = (): JSX.Element => {
       
       const deduplicated = filtered.filter(m => !skipIds.has(`${m.media || "movie"}:${m.id}`));
       
-      // Tenta próxima página se não tiver itens suficientes (máx 3 tentativas)
       let finalItems = deduplicated;
       if (deduplicated.length < 10 && page < 3) {
         const nextPageItems = await loadPopularSection(page + 1, skipIds, false);
@@ -2036,7 +2073,6 @@ const AppShell = (): JSX.Element => {
             });
           }
           
-          // Apply vote filters
           if (minVotes > 0) {
             moviesPart = moviesPart.filter((x: any) => (x.vote_count || 0) >= minVotes);
           }
@@ -2045,7 +2081,6 @@ const AppShell = (): JSX.Element => {
             moviesPart = moviesPart.filter((x: any) => (x.vote_average || 0) >= minRating);
           }
           
-          // Apply sorting
           if (uiSort === "rating") {
             moviesPart.sort((a: any, b: any) => {
               const ratingA = a.vote_average || 0;
@@ -2085,7 +2120,6 @@ const AppShell = (): JSX.Element => {
         setMovies(mapped);
         setPeople(peoplePart);
         setSearchTotalResults((data as any).total_results || (mapped.length + peoplePart.length));
-        // Check if we have active filters (non-default)
         const defaults = getDefaultFilters();
         const hasNonDefaultFilters = 
           activeFilters.type !== defaults.type ||
@@ -2104,10 +2138,15 @@ const AppShell = (): JSX.Element => {
       pushToast({ message: t("search_fail") || "Erro ao buscar. Tente novamente.", tone: "err" });
     } finally { setLoading(false); }
   };
-
-
-  // Carrega busca inicial a partir dos parâmetros da URL
+  
   useEffect(() => {
+    const justLoggedOut = sessionStorage.getItem('vetra:justLoggedOut');
+    if (justLoggedOut === 'true') {
+      sessionStorage.removeItem('vetra:justLoggedOut');
+      clearSearchState();
+      return;
+    }
+
     const params = new URLSearchParams(window.location.search);
     const hasSearchTerm = params.has("q") && params.get("q")?.trim().length > 0;
     const hasFilterParams = params.has("type") || params.has("sort") || 
@@ -2117,6 +2156,12 @@ const AppShell = (): JSX.Element => {
     const hasPageParam = params.has("page");
     
     if (hasSearchTerm || hasFilterParams || hasPageParam) {
+      const searchQuery = params.get("q") || "";
+      if (searchQuery.includes("@") && searchQuery.includes(".")) {
+        clearSearchState();
+        return;
+      }
+
       const defaults = getDefaultFilters();
       const hasNonDefaultFilters = 
         appliedSearchFilters.type !== defaults.type ||
@@ -2133,11 +2178,14 @@ const AppShell = (): JSX.Element => {
         runSearch(searchTerm, appliedSearchFilters, searchPage);
         setHasActiveFilters(hasNonDefaultFilters || hasSearchTerm);
       }
+    } else {
+      if (searchTerm.trim() || hasActiveFilters) {
+        clearSearchState();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run on mount - state is initialized from URL synchronously
+  }, []);
 
-  // Busca com debounce apenas para texto (filtros são aplicados manualmente)
   useEffect(() => {
     if (searchTerm.trim().length === 0 && !hasActiveFilters) {
       const defaults = getDefaultFilters();
@@ -2188,16 +2236,13 @@ const AppShell = (): JSX.Element => {
     const newFilters = { ...appliedSearchFilters };
     const defaults = getDefaultFilters();
     
-    // Reset the specific filter to default
     if (key === "yearGte" || key === "yearLte") {
-      // Handle year range specially - reset both if removing one
       newFilters.yearGte = defaults.yearGte;
       newFilters.yearLte = defaults.yearLte;
     } else {
       (newFilters as any)[key] = (defaults as any)[key];
     }
     
-    // Adjust sort if needed
     if (key === "sort" && !searchTerm.trim() && newFilters.sort === "relevance") {
       newFilters.sort = "popularity.desc";
     }
@@ -2207,12 +2252,97 @@ const AppShell = (): JSX.Element => {
     runSearch(searchTerm, newFilters, 1);
   }, [appliedSearchFilters, searchTerm]);
   
-  // Filtros são aplicados manualmente via botão "Aplicar"
-  useEffect(() => { try { localStorage.setItem(KEY_FAVS, JSON.stringify(favorites)); } catch {} }, [favorites]);
-  useEffect(() => { try { localStorage.setItem(KEY_LISTS, JSON.stringify(lists)); } catch {} }, [lists]);
-  useEffect(() => { try { localStorage.setItem(KEY_STATES, JSON.stringify(userStates)); } catch {} }, [userStates]);
-  useEffect(() => { try { localStorage.setItem(KEY_HISTORY, JSON.stringify(watchHistory)); } catch {} }, [watchHistory]);
-  useEffect(() => { try { localStorage.setItem(KEY_STATS, JSON.stringify(userStats)); } catch {} }, [userStats]);
+  useEffect(() => {
+    if (!isLoggedIn || !user?.uid) return;
+    try {
+      localStorage.setItem(getStorageKey(KEY_FAVS, user.uid), JSON.stringify(favorites));
+    } catch {}
+  }, [favorites, isLoggedIn, user?.uid]);
+  
+  useEffect(() => {
+    if (!isLoggedIn || !user?.uid) return;
+    try {
+      localStorage.setItem(getStorageKey(KEY_LISTS, user.uid), JSON.stringify(lists));
+    } catch {}
+  }, [lists, isLoggedIn, user?.uid]);
+  
+  useEffect(() => {
+    if (!isLoggedIn || !user?.uid) return;
+    try {
+      localStorage.setItem(getStorageKey(KEY_STATES, user.uid), JSON.stringify(userStates));
+    } catch {}
+  }, [userStates, isLoggedIn, user?.uid]);
+  
+  useEffect(() => {
+    if (!isLoggedIn || !user?.uid) return;
+    try {
+      localStorage.setItem(getStorageKey(KEY_HISTORY, user.uid), JSON.stringify(watchHistory));
+    } catch {}
+  }, [watchHistory, isLoggedIn, user?.uid]);
+  
+  useEffect(() => {
+    if (!isLoggedIn || !user?.uid) return;
+    try {
+      localStorage.setItem(getStorageKey(KEY_STATS, user.uid), JSON.stringify(userStats));
+    } catch {}
+  }, [userStats, isLoggedIn, user?.uid]);
+  
+  useEffect(() => {
+    if (!isLoggedIn || !user?.uid) {
+      setFavorites([]);
+      setLists([]);
+      setUserStates({});
+      setWatchHistory([]);
+      setUserStats({});
+      return;
+    }
+    
+    const loadUserData = async () => {
+      try {
+        const cachedFavs = localStorage.getItem(getStorageKey(KEY_FAVS, user.uid));
+        const cachedLists = localStorage.getItem(getStorageKey(KEY_LISTS, user.uid));
+        const cachedStates = localStorage.getItem(getStorageKey(KEY_STATES, user.uid));
+        const cachedHistory = localStorage.getItem(getStorageKey(KEY_HISTORY, user.uid));
+        const cachedStats = localStorage.getItem(getStorageKey(KEY_STATS, user.uid));
+        
+        if (cachedFavs) {
+          try {
+            setFavorites(JSON.parse(cachedFavs));
+          } catch {}
+        }
+        if (cachedLists) {
+          try {
+            setLists(JSON.parse(cachedLists));
+          } catch {}
+        }
+        if (cachedStates) {
+          try {
+            setUserStates(JSON.parse(cachedStates));
+          } catch {}
+        }
+        if (cachedHistory) {
+          try {
+            setWatchHistory(JSON.parse(cachedHistory));
+          } catch {}
+        }
+        if (cachedStats) {
+          try {
+            setUserStats(JSON.parse(cachedStats));
+          } catch {}
+        }
+        
+        // Sincronizar favoritos com backend
+        const favsResult = await api.favoritesGet(user.uid);
+        if (favsResult.items && favsResult.items.length > 0) {
+          setFavorites(favsResult.items);
+        }
+      } catch (error) {
+        console.error("[loadUserData] Erro ao carregar dados do usuário:", error);
+      }
+    };
+    
+    loadUserData();
+  }, [isLoggedIn, user?.uid]);
   
   // Função wrapper para setActiveTab que intercepta quando está na página de edição
 
@@ -2563,7 +2693,6 @@ const AppShell = (): JSX.Element => {
               )
                 ? l.items
                 : [...l.items, movie],
-              // Se não tem capa e está adicionando o primeiro item, definir como capa
               cover: (!l.cover && l.items.length === 0) 
                 ? { type: "item", itemId: mediaKey(movie) }
                 : l.cover,
@@ -2588,7 +2717,6 @@ const AppShell = (): JSX.Element => {
       });
     }
     
-    // Sincronizar com a API se o usuário estiver logado
     if (isLoggedIn && user?.email) {
       try {
         await api.addListItem(user.email, listId, {
@@ -2601,16 +2729,12 @@ const AppShell = (): JSX.Element => {
         });
       } catch (error) {
         console.error("[addToList] Erro ao sincronizar com API:", error);
-        // Continua mesmo se falhar
       }
     }
     
-    // Se a lista não tinha capa e agora tem o primeiro item, atualizar via API
     const updatedList = lists.find(l => l.id === listId);
     if (updatedList && !updatedList.cover && updatedList.items.length === 0) {
-      setListCover(listId, "item", mediaKey(movie)).catch(() => {
-        // Se falhar, apenas atualiza localmente
-      });
+      setListCover(listId, "item", mediaKey(movie)).catch(() => {});
     }
     pushToast({ message: "Título adicionado à lista.", tone: "ok" });
   };
@@ -2627,23 +2751,15 @@ const AppShell = (): JSX.Element => {
         
         const newItems = l.items.filter((m) => !(m.id === movieId && (m.media || "movie") === (media || "movie")));
         
-        // Se o item removido era a capa, definir fallback (primeiro item ou undefined)
         let newCover = l.cover;
         if (wasCover) {
           if (newItems.length > 0) {
-            // Usar o primeiro item como capa
             const firstItemKey = mediaKey(newItems[0]);
             newCover = { type: "item", itemId: firstItemKey };
-            // Atualizar a capa via API também
-            setListCover(listId, "item", firstItemKey).catch(() => {
-              // Se falhar, apenas atualiza localmente
-            });
+            setListCover(listId, "item", firstItemKey).catch(() => {});
           } else {
-            // Lista vazia, remover capa
             newCover = undefined;
-            setListCover(listId, "auto").catch(() => {
-              // Se falhar, apenas atualiza localmente
-            });
+            setListCover(listId, "auto").catch(() => {});
           }
         }
         
@@ -2979,11 +3095,9 @@ const AppShell = (): JSX.Element => {
       const movieId = parseInt(id);
       if (isNaN(movieId)) return;
 
-      // Capturar posição de scroll ANTES de qualquer ação para evitar scroll automático
       const savedScrollY = window.scrollY;
       const savedScrollX = window.scrollX;
       
-      // Prevenir scroll IMEDIATAMENTE antes de qualquer setState
       let scrollLocked = true;
       const scrollHandler = (e: Event) => {
         if (scrollLocked) {
@@ -2994,12 +3108,10 @@ const AppShell = (): JSX.Element => {
         }
       };
       
-      // Adicionar listener ANTES de qualquer setState
       window.addEventListener("scroll", scrollHandler, { passive: false, capture: true });
       window.addEventListener("wheel", scrollHandler, { passive: false, capture: true });
       window.addEventListener("touchmove", scrollHandler, { passive: false, capture: true });
       
-      // Forçar posição imediatamente
       window.scrollTo({ top: savedScrollY, left: savedScrollX, behavior: "auto" });
       
       setSubmittingComment(true);
@@ -3008,7 +3120,6 @@ const AppShell = (): JSX.Element => {
       try {
         const result = await createComment(mediaType, movieId, newCommentText.trim(), newCommentRating);
         
-        // Manter scroll bloqueado durante atualização de estado
         window.scrollTo({ top: savedScrollY, left: savedScrollX, behavior: "auto" });
         
         if (result.ok && result.comment) {
@@ -3045,7 +3156,6 @@ const AppShell = (): JSX.Element => {
       } finally {
         setSubmittingComment(false);
         
-        // Manter scroll bloqueado por mais tempo para garantir que não role
         setTimeout(() => {
           window.scrollTo({ top: savedScrollY, left: savedScrollX, behavior: "auto" });
         }, 0);
@@ -5678,6 +5788,7 @@ const AppShell = (): JSX.Element => {
           formData={formData}
           loginType={loginType}
           showPassword={showPassword}
+          firstNameError={firstNameError}
           emailError={emailError}
           passwordError={passwordError}
           loginError={loginError}
@@ -5699,6 +5810,7 @@ const AppShell = (): JSX.Element => {
           setShowLogin={setShowLogin}
           setLoginType={setLoginType}
           setLoginError={setLoginError}
+          setFirstNameError={setFirstNameError}
           setEmailError={setEmailError}
           setPasswordError={setPasswordError}
           setShowPassword={setShowPassword}
@@ -5763,6 +5875,7 @@ const AppShell = (): JSX.Element => {
         darkEnabled={darkEnabled}
         toggleDark={toggleDark}
         t={t}
+        clearSearchState={clearSearchState}
       />
 
       {/* Banner de aviso para conta marcada para exclusão */}
@@ -6335,7 +6448,6 @@ const AppShell = (): JSX.Element => {
                     type="text"
                     value={(() => {
                       const fullUrl = `${window.location.origin}${window.location.pathname}?share=${shareSlug}`;
-                      // Se for localhost, substituir por um texto genérico para exibição
                       if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
                         return fullUrl.replace(/https?:\/\/localhost:\d+/, 'vetra.app').replace(/https?:\/\/127\.0\.0\.1:\d+/, 'vetra.app');
                       }
@@ -6350,8 +6462,6 @@ const AppShell = (): JSX.Element => {
                         const shareUrl = `${window.location.origin}${window.location.pathname}?share=${shareSlug}`;
                         await navigator.clipboard.writeText(shareUrl);
                         pushToast({ message: "Link copiado para a área de transferência.", tone: "ok" });
-                        // Não navegar para o link compartilhado se o usuário estiver logado
-                        // O link compartilhado só deve ser acessado quando o usuário não está logado
                         if (!isLoggedIn) {
                           navigate(`?share=${shareSlug}`, { replace: true });
                         }
@@ -6523,12 +6633,20 @@ const AppShell = (): JSX.Element => {
         onConfirm={handleDeleteAccount}
       />
 
+      <VerificationEmailModal
+        show={showVerificationEmailModal}
+        email={verificationEmail}
+        onClose={() => setShowVerificationEmailModal(false)}
+        pushToast={pushToast}
+      />
+
       <BannerHost banners={banners} onClose={removeBanner} />
       <ToastHost toasts={toasts} onClose={removeToast} />
       {showLogin && <LoginModal
         formData={formData}
         loginType={loginType}
         showPassword={showPassword}
+        firstNameError={firstNameError}
         emailError={emailError}
         passwordError={passwordError}
         loginError={loginError}
@@ -6550,6 +6668,7 @@ const AppShell = (): JSX.Element => {
         setShowLogin={setShowLogin}
         setLoginType={setLoginType}
         setLoginError={setLoginError}
+        setFirstNameError={setFirstNameError}
         setEmailError={setEmailError}
         setPasswordError={setPasswordError}
         setShowPassword={setShowPassword}
@@ -6599,14 +6718,23 @@ const AppShell = (): JSX.Element => {
 
 export default function App(): JSX.Element {
   const location = useLocation();
+  const { toasts, pushToast, removeToast } = useToast();
+  const { banners, pushBanner, removeBanner } = useBanner();
   
-  // Rotas estáticas que devem ser renderizadas fora do AppShell
   if (location.pathname === "/privacy") return <PrivacyPage />;
   if (location.pathname === "/terms") return <TermsPage />;
   if (location.pathname === "/about") return <AboutPage />;
   if (location.pathname === "/help") return <HelpPage />;
+  if (location.pathname === "/verify-code") {
+    return (
+      <>
+        <VerificationCodePage pushToast={pushToast} pushBanner={pushBanner} />
+        <BannerHost banners={banners} onClose={removeBanner} />
+        <ToastHost toasts={toasts} onClose={removeToast} />
+      </>
+    );
+  }
   
-  // Todas as outras rotas são tratadas dentro do AppShell
   return <AppShell />;
 }
 

@@ -89,7 +89,6 @@ router.post("/lists/:userId", async (req, res) => {
     const userLists = await readUserLists(userId);
     const lists = userLists.lists || [];
     
-    // Encontra ou cria a lista
     let targetList = lists.find(l => l.id === listId);
     
     if (!targetList) {
@@ -190,7 +189,6 @@ router.patch("/lists/:listId/cover", requireAuth, async (req, res) => {
       });
     }
 
-    // Verificar se o item existe na lista
     const itemExists = targetList.items.some(item => {
       const itemMediaKey = `${item.media || "movie"}:${item.id}`;
       const requestedKey = `${itemType}:${itemId}`;
@@ -204,14 +202,12 @@ router.patch("/lists/:listId/cover", requireAuth, async (req, res) => {
       });
     }
 
-    // Atualizar a capa da lista
     targetList.cover = {
       type: "item",
       itemId: `${itemType}:${itemId}`,
     };
     targetList.updatedAt = new Date().toISOString();
 
-    // Atualizar no banco
     await getListsCollection().doc(userId).set({
       lists,
       updatedAt: FieldValue.serverTimestamp(),
@@ -292,27 +288,23 @@ router.delete("/lists/:userId/:listId/:itemId", async (req, res) => {
       });
     }
 
-    // Parse do itemId (pode ser "movie:123", "tv:456" ou apenas "123")
+    // Parse itemId (formato: "movie:123", "tv:456" ou apenas "123")
     let itemId, itemMedia;
     if (itemIdParam.includes(":")) {
       const parts = itemIdParam.split(":");
       itemMedia = parts[0];
       itemId = parts[1];
     } else {
-      // Se não tem ":", assumir que é apenas o ID numérico
-      // Tentar encontrar o item na lista para determinar o media
       const existingItem = targetList.items.find(i => String(i.id) === itemIdParam);
       if (existingItem) {
         itemId = itemIdParam;
         itemMedia = existingItem.media || "movie";
       } else {
-        // Se não encontrou, assumir movie
         itemId = itemIdParam;
         itemMedia = "movie";
       }
     }
 
-    // Remover o item da lista
     const initialLength = targetList.items.length;
     targetList.items = targetList.items.filter(item => {
       const itemMatchesId = String(item.id) === String(itemId);
@@ -320,12 +312,11 @@ router.delete("/lists/:userId/:listId/:itemId", async (req, res) => {
       return !(itemMatchesId && itemMatchesMedia);
     });
 
-    // Se o item removido era a capa, atualizar a capa
+    // Se o item removido era a capa, atualizar
     if (targetList.cover?.type === "item") {
       const itemKey = `${itemMedia}:${itemId}`;
       if (targetList.cover.itemId === itemKey || targetList.cover.itemId === String(itemId)) {
         if (targetList.items.length > 0) {
-          // Usar o primeiro item como capa
           const firstItem = targetList.items[0];
           targetList.cover = {
             type: "item",
@@ -340,7 +331,6 @@ router.delete("/lists/:userId/:listId/:itemId", async (req, res) => {
 
     targetList.updatedAt = new Date().toISOString();
 
-    // Atualizar no banco
     await getListsCollection().doc(userId).set({
       lists,
       updatedAt: FieldValue.serverTimestamp(),

@@ -32,6 +32,8 @@ interface UseAuthReturn {
   setLoginType: (type: "signin" | "signup") => void;
   showPassword: boolean;
   setShowPassword: (show: boolean | ((prev: boolean) => boolean)) => void;
+  firstNameError: string;
+  setFirstNameError: (error: string) => void;
   emailError: string;
   setEmailError: (error: string) => void;
   passwordError: string;
@@ -69,6 +71,10 @@ interface UseAuthReturn {
   setForgotPasswordShowPassword: (show: boolean) => void;
   emailVerified: boolean;
   setEmailVerified: (verified: boolean) => void;
+  showVerificationEmailModal: boolean;
+  setShowVerificationEmailModal: (show: boolean) => void;
+  verificationEmail: string;
+  setVerificationEmail: (email: string) => void;
   
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleInputBlur: (e: React.FocusEvent<HTMLInputElement>) => void;
@@ -107,6 +113,7 @@ export const useAuth = (
   });
   const [loginType, setLoginType] = useState<"signin" | "signup">("signin");
   const [showPassword, setShowPassword] = useState(false);
+  const [firstNameError, setFirstNameError] = useState<string>("");
   const [emailError, setEmailError] = useState<string>("");
   const [passwordError, setPasswordError] = useState<string>("");
   const [loginError, setLoginError] = useState<string>("");
@@ -164,37 +171,47 @@ export const useAuth = (
         deletedAt: data?.deletedAt,
         deletionScheduledFor: data?.deletionScheduledFor
       });
+      
+      // Não limpar sessão se usuário está logado (pode ser sincronização/dados antigos)
+      if (data?.status === "pending_deletion" || (data?.deletedAt && data.deletedAt !== null)) {
+        if (isLoggedIn) {
+          // Backend valida via authVerify, não o frontend
+          return;
+        }
+      }
    
+      const userEmail = data?.email ?? email;
+      const userUpdate: Omit<UserProfile, 'name'> = {
+        email: userEmail,
+        avatar_url: data?.avatar_url ?? null,
+        updatedAt: data?.updatedAt ?? null,
+      };
+      
+      // Se logado, assumir ativo (backend já validou)
+      if (!isLoggedIn) {
+        userUpdate.status = data?.status;
+        userUpdate.deletedAt = data?.deletedAt;
+        userUpdate.deletionScheduledFor = data?.deletionScheduledFor;
+      } else {
+        userUpdate.status = "active";
+        userUpdate.deletedAt = null;
+        userUpdate.deletionScheduledFor = null;
+      }
+      
       if (data?.name && data.name.trim() && data.name !== "Usuário") {
         setUser({ 
           name: data.name.trim(), 
-          email: data?.email ?? email, 
-          avatar_url: data?.avatar_url ?? null, 
-          updatedAt: data?.updatedAt ?? null,
-          status: data?.status,
-          deletedAt: data?.deletedAt,
-          deletionScheduledFor: data?.deletionScheduledFor
+          ...userUpdate
         });
       } else if (data?.name) {
         setUser({ 
           name: data.name, 
-          email: data?.email ?? email, 
-          avatar_url: data?.avatar_url ?? null, 
-          updatedAt: data?.updatedAt ?? null,
-          status: data?.status,
-          deletedAt: data?.deletedAt,
-          deletionScheduledFor: data?.deletionScheduledFor
+          ...userUpdate
         });
       } else {
-        // Se não tem nome, ainda armazenar o status
         setUser({
           name: "Usuário",
-          email: data?.email ?? email,
-          avatar_url: data?.avatar_url ?? null,
-          updatedAt: data?.updatedAt ?? null,
-          status: data?.status,
-          deletedAt: data?.deletedAt,
-          deletionScheduledFor: data?.deletionScheduledFor
+          ...userUpdate
         });
       }
       
@@ -303,11 +320,13 @@ export const useAuth = (
       return updated;
     });
     
+    if (name === "firstName") {
+      if (firstNameError) setFirstNameError("");
+    }
     if (name === "email") {
       if (emailErrorRef.current) setEmailError("");
       if (loginTypeRef.current === "signin" && loginErrorRef.current) setLoginError("");
       
-      // Validação de formato de e-mail no cadastro
       if (loginTypeRef.current === "signup" && value.trim() && !validateEmailFormat(value.trim())) {
         setEmailError("Informe um e-mail válido, no formato nome@dominio.com.");
       }
@@ -386,8 +405,11 @@ export const useAuth = (
     
     if (loginType === "signup") {
       if (!formData.firstName?.trim()) {
-        pushToast({ message: "Preencha seu nome", tone: "warn" });
+        setFirstNameError("Nome é obrigatório");
+        pushToast({ message: "Nome é obrigatório", tone: "err" });
         return;
+      } else {
+        setFirstNameError("");
       }
       
       if (!formData.email?.trim()) {
@@ -446,8 +468,7 @@ export const useAuth = (
       setLoginError("");
     }
 
-    // Validação de formato de e-mail antes de submeter
-    if (loginType === "signup" && !validateEmailFormat(formData.email.trim())) {
+      if (loginType === "signup" && !validateEmailFormat(formData.email.trim())) {
       setEmailError("Informe um e-mail válido, no formato nome@dominio.com.");
       setAuthLoading(false);
       return;
@@ -557,9 +578,16 @@ export const useAuth = (
             return;
           }
 
-          if (String(actualError).includes("rate") || String(actualError).includes("limit") || String(actualError).includes("muitas tentativas")) {
-            errorMsg = "Muitas tentativas. Aguarde alguns minutos e tente novamente.";
-            pushToast({ message: errorMsg, tone: "err" });
+          if (actualError === "rate_limit_exceeded" || String(actualError).includes("rate") || String(actualError).includes("limit") || String(actualError).includes("muitas tentativas")) {
+            const resetIn = (result as any).resetIn;
+            let rateLimitMsg = actualMessage || "Muitas tentativas. Aguarde alguns minutos e tente novamente.";
+            
+            if (resetIn && typeof resetIn === "number") {
+              const minutes = Math.ceil(resetIn / 60);
+              rateLimitMsg = `Muitas tentativas. Aguarde ${minutes} minuto${minutes > 1 ? 's' : ''} e tente novamente.`;
+            }
+            
+            pushToast({ message: rateLimitMsg, tone: "err" });
             setAuthLoading(false);
             return;
           }
@@ -596,38 +624,38 @@ export const useAuth = (
         return;
       }
 
-      if (result.user) {
-        setIsLoggedIn(true);
-        const userEmail = result.user.email || formData.email.trim().toLowerCase();
-        setUser({
-          name: result.user.name || (loginType === "signup" ? (formData.lastName?.trim() ? `${formData.firstName.trim()} ${formData.lastName.trim()}` : formData.firstName.trim()) : "Usuário") || "Usuário",
-          email: userEmail,
-          avatar_url: result.user.avatar_url || null,
-          updatedAt: result.user.updatedAt || null,
-        });
-        
-        if (pendingAction) {
-          setTimeout(() => {
-            pendingAction();
-            setPendingAction(null);
-            pushToast({ message: "Ação concluída!", tone: "ok" });
-          }, 300);
-        }
-        
-        if (pendingRoute) {
-          setTimeout(() => {
-            navigate(pendingRoute);
-            setPendingRoute(null);
-          }, 100);
-        }
+      if (loginType === "signup" && result.requiresVerification) {
+        const userEmail = result.email || formData.email.trim().toLowerCase();
         setFormData({ firstName: "", lastName: "", email: "", password: "", confirmPassword: "", acceptTerms: false });
         setPasswordErrors([]);
         setEmailError("");
-        setLoginError(""); 
+        setLoginError("");
+        setAuthLoading(false);
         
+        navigate(`/verify-code?email=${encodeURIComponent(userEmail)}`, { 
+          state: { email: userEmail, password: formData.password } 
+        });
+        
+        if (pushBanner) {
+          pushBanner({ 
+            message: result.message || "Conta criada com sucesso. Verifique seu e-mail para ativar sua conta.", 
+            tone: "success" 
+          });
+        } else {
+          pushToast({ 
+            message: result.message || "Conta criada com sucesso. Verifique seu e-mail para ativar sua conta.", 
+            tone: "ok" 
+          });
+        }
+        return;
+      }
+
+      if (result.user) {
+        const userEmail = result.user.email || formData.email.trim().toLowerCase();
+        
+        // Salvar tokens antes de atualizar estado
         if (result.idToken) {
           try {
-            // Limpa navegação salva antes de salvar o token (novo login, não reload)
             localStorage.removeItem('vetra:activeTab');
             localStorage.removeItem('vetra:activeCategory');
             sessionStorage.removeItem('vetra:justLoggedOut');
@@ -651,32 +679,64 @@ export const useAuth = (
             localStorage.setItem('vetra:last_email', userEmail);
           } catch {}
         }
-  
-        if (userEmail) {
-          loadProfile(userEmail);
-        }
+        
+        // Definir user antes de isLoggedIn
+        setUser({
+          name: result.user.name || (loginType === "signup" ? (formData.lastName?.trim() ? `${formData.firstName.trim()} ${formData.lastName.trim()}` : formData.firstName.trim()) : "Usuário") || "Usuário",
+          email: userEmail,
+          avatar_url: result.user.avatar_url || null,
+          updatedAt: result.user.updatedAt || null,
+          emailVerified: result.user.emailVerified !== undefined ? result.user.emailVerified : true,
+        });
+        
+        setIsLoggedIn(true);
+        
+        console.log("[handleSubmit] ✅ Estado atualizado - isLoggedIn: true, user:", {
+          email: userEmail,
+          name: result.user.name
+        });
+        
+        // Limpar formulário
+        setFormData({ firstName: "", lastName: "", email: "", password: "", confirmPassword: "", acceptTerms: false });
+        setPasswordErrors([]);
+        setEmailError("");
+        setLoginError("");
+        setAuthLoading(false);
+        
+        // useEffect carrega perfil automaticamente (evita race conditions)
         
         if (pushBanner) {
-          const userName = result.user?.name || "Usuário";
-          const firstName = userName.split(' ')[0];
           pushBanner({ 
-            message: loginType === "signup" 
-              ? "Conta criada com sucesso. Você já pode começar a usar o VETRA." 
-              : `Login realizado com sucesso. Bem-vinda de volta, ${firstName}!`, 
+            message: "Login realizado com sucesso.", 
             tone: "success" 
           });
         } else {
           pushToast({ 
-            message: loginType === "signup" ? "Conta criada com sucesso. Você já pode começar a usar o VETRA." : "Login realizado com sucesso.", 
+            message: "Login realizado com sucesso.", 
             tone: "ok" 
           });
+        }
+        
+        if (pendingAction) {
+          setTimeout(() => {
+            pendingAction();
+            setPendingAction(null);
+            pushToast({ message: "Ação concluída!", tone: "ok" });
+          }, 300);
+        }
+        
+        if (pendingRoute) {
+          setTimeout(() => {
+            navigate(pendingRoute);
+            setPendingRoute(null);
+          }, 100);
         }
       }
     } catch (error: any) {
       console.error("Erro na autenticação:", error);
       console.error("Erro completo:", JSON.stringify(error, null, 2));
       
-      // Reabilita conta automaticamente se estiver desabilitada
+      // Reabilita conta automaticamente se desabilitada
       if (error?.error === "conta_desabilitada" || error?.message?.includes("desabilitada")) {
         const emailToReEnable = formData.email.trim().toLowerCase();
         if (emailToReEnable) {
@@ -698,7 +758,6 @@ export const useAuth = (
                   });
                   
                   try {
-                    // Limpa navegação salva antes de salvar o token (novo login, não reload)
                     localStorage.removeItem('vetra:activeTab');
                     localStorage.removeItem('vetra:activeCategory');
                     sessionStorage.removeItem('vetra:justLoggedOut');
@@ -715,15 +774,13 @@ export const useAuth = (
                   }
                   
                   if (pushBanner) {
-                    const userName = retryResult.user?.name || "Usuário";
-                    const firstName = userName.split(' ')[0];
                     pushBanner({ 
-                      message: `Login realizado com sucesso. Bem-vinda de volta, ${firstName}!`, 
+                      message: "Login realizado com sucesso.", 
                       tone: "success" 
                     });
                   } else {
                     pushToast({ 
-                      message: "Login realizado com sucesso.", 
+                      message: "Login realizado com sucesso.",
                       tone: "ok" 
                     });
                   }
@@ -779,7 +836,7 @@ export const useAuth = (
     }
   };
   
-  // Verifica sessão persistente ao carregar o app
+  // Verifica sessão persistente na inicialização
   useEffect(() => {
     const checkPersistedSession = async () => {
       try {
@@ -791,7 +848,35 @@ export const useAuth = (
           
           const verifyResult = await api.authVerify(idToken);
           
+          if (verifyResult.error === "conta_marcada_exclusao") {
+            console.log("[checkPersistedSession] Conta marcada para exclusão, limpando sessão...");
+            localStorage.removeItem('vetra:idToken');
+            localStorage.removeItem('vetra:refreshToken');
+            localStorage.removeItem('vetra:last_email');
+            localStorage.removeItem('vetra:activeTab');
+            localStorage.removeItem('vetra:activeCategory');
+            sessionStorage.clear();
+            setIsLoggedIn(false);
+            setUser(null);
+            setIsCheckingSession(false);
+            return;
+          }
+          
           if (verifyResult.ok && verifyResult.user) {
+            if (verifyResult.user.status === "pending_deletion" || verifyResult.user.deletedAt) {
+              console.log("[checkPersistedSession] Conta marcada para exclusão no perfil, limpando sessão...");
+              localStorage.removeItem('vetra:idToken');
+              localStorage.removeItem('vetra:refreshToken');
+              localStorage.removeItem('vetra:last_email');
+              localStorage.removeItem('vetra:activeTab');
+              localStorage.removeItem('vetra:activeCategory');
+              sessionStorage.clear();
+              setIsLoggedIn(false);
+              setUser(null);
+              setIsCheckingSession(false);
+              return;
+            }
+            
             console.log("[checkPersistedSession] Sessão válida, restaurando login...");
             setIsLoggedIn(true);
             setUser({
@@ -799,6 +884,9 @@ export const useAuth = (
               email: verifyResult.user.email || lastEmail,
               avatar_url: verifyResult.user.avatar_url || null,
               updatedAt: verifyResult.user.updatedAt || null,
+              status: verifyResult.user.status || "active",
+              deletedAt: verifyResult.user.deletedAt || null,
+              deletionScheduledFor: verifyResult.user.deletionScheduledFor || null,
             });
             await loadProfile(verifyResult.user.email || lastEmail);
           } else {
@@ -806,6 +894,8 @@ export const useAuth = (
             localStorage.removeItem('vetra:idToken');
             localStorage.removeItem('vetra:refreshToken');
             localStorage.removeItem('vetra:last_email');
+            localStorage.removeItem('vetra:activeTab');
+            localStorage.removeItem('vetra:activeCategory');
             setIsLoggedIn(false);
             setUser(null);
           }
@@ -817,6 +907,9 @@ export const useAuth = (
         console.error("[checkPersistedSession] Erro ao verificar sessão:", error);
         localStorage.removeItem('vetra:idToken');
         localStorage.removeItem('vetra:refreshToken');
+        localStorage.removeItem('vetra:last_email');
+        localStorage.removeItem('vetra:activeTab');
+        localStorage.removeItem('vetra:activeCategory');
         setIsLoggedIn(false);
         setUser(null);
       } finally {
@@ -827,9 +920,23 @@ export const useAuth = (
     checkPersistedSession();
   }, []);
   
+  // Delay no loadProfile para evitar race conditions após verificação/login
+  const hasLoadedProfileRef = useRef(false);
+  
   useEffect(() => {
-    if (isLoggedIn && (user?.email || "").trim()) {
-      loadProfile(user!.email!);
+    if (isLoggedIn && (user?.email || "").trim() && !hasLoadedProfileRef.current) {
+      const timeoutId = setTimeout(() => {
+        hasLoadedProfileRef.current = true;
+        loadProfile(user!.email!).catch((error) => {
+          console.error("[useAuth] Erro ao carregar perfil:", error);
+        });
+      }, 1000);
+      
+      return () => clearTimeout(timeoutId);
+    }
+    
+    if (!isLoggedIn) {
+      hasLoadedProfileRef.current = false;
     }
   }, [isLoggedIn, user?.email]);
   
@@ -855,6 +962,8 @@ export const useAuth = (
     setLoginType,
     showPassword,
     setShowPassword,
+    firstNameError,
+    setFirstNameError,
     emailError,
     setEmailError,
     passwordError,
@@ -891,6 +1000,10 @@ export const useAuth = (
     setForgotPasswordShowPassword,
     emailVerified,
     setEmailVerified,
+    showVerificationEmailModal,
+    setShowVerificationEmailModal,
+    verificationEmail,
+    setVerificationEmail,
     handleInputChange,
     handleInputBlur,
     handleSubmit,
