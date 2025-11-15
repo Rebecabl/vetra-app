@@ -74,6 +74,11 @@ export const ProfileViewPage: React.FC<ProfileViewPageProps> = ({
               <p className="text-xs sm:text-sm text-slate-600 dark:text-gray-400 mt-1 text-center break-all">
                 {user?.email || ""}
               </p>
+              {user?.email && !user?.emailVerified && (
+                <div className="mt-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-800 dark:text-amber-200 text-center max-w-sm">
+                  Seu e-mail ainda não foi verificado. Verifique sua caixa de entrada para confirmar.
+                </div>
+              )}
             </div>
           </div>
 

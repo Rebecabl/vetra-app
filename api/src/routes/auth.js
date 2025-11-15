@@ -190,6 +190,69 @@ router.post("/signup",
 
     sendWelcomeEmail(email.trim().toLowerCase(), name?.trim() || "Usuário").catch(() => {});
 
+    // Enviar e-mail de verificação
+    try {
+      const actionCodeSettings = {
+        url: `${process.env.FRONTEND_URL || "http://localhost:5173"}/?emailVerified=true`,
+        handleCodeInApp: false,
+      };
+      const verificationLink = await auth.generateEmailVerificationLink(
+        email.trim().toLowerCase(),
+        actionCodeSettings
+      );
+      
+      const transporter = getEmailTransporter();
+      if (transporter) {
+        await transporter.sendMail({
+          from: `"VETRA" <${process.env.SMTP_USER}>`,
+          to: email.trim().toLowerCase(),
+          subject: "Confirme seu e-mail para usar o VETRA com segurança",
+          html: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background: linear-gradient(90deg, #22D3EE, #8B5CF6, #A3E635); padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                .header h1 { color: white; margin: 0; font-size: 28px; }
+                .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+                .button { display: inline-block; padding: 12px 30px; background: linear-gradient(90deg, #22D3EE, #8B5CF6); color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
+                .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="header">
+                  <h1>VETRA</h1>
+                </div>
+                <div class="content">
+                  <p>Olá! 👋</p>
+                  <p>Você se cadastrou no VETRA, sua plataforma para organizar, descobrir e compartilhar filmes e séries.</p>
+                  <p>Para confirmar que este e-mail é seu, clique no botão abaixo:</p>
+                  <div style="text-align: center;">
+                    <a href="${verificationLink}" class="button">Confirmar meu e-mail</a>
+                  </div>
+                  <p>Se você não fez este cadastro, pode ignorar esta mensagem.</p>
+                </div>
+                <div class="footer">
+                  <p>VETRA - Organize seus filmes e séries</p>
+                </div>
+              </div>
+            </body>
+            </html>
+          `,
+        });
+        console.log("[signup] E-mail de verificação enviado para:", email.trim().toLowerCase());
+      } else {
+        console.warn("[signup] SMTP não configurado - e-mail de verificação não enviado");
+      }
+    } catch (verificationError) {
+      console.error("[signup] Erro ao enviar e-mail de verificação:", verificationError);
+      // Não falhar o signup se o e-mail de verificação falhar
+    }
+
     // Para signup, precisamos fazer login para obter idToken
     // (não podemos usar customToken porque o frontend precisa de idToken)
     let idToken, refreshToken, expiresIn;

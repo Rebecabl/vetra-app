@@ -60,8 +60,8 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
               } catch (e: any) {
                 console.error("[shareFavorites] Erro ao compartilhar:", e);
                 const errorMsg = e?.message?.includes("listId_obrigatorio") 
-                  ? "Erro ao gerar link. Tente novamente." 
-                  : (e?.message || t("share_fail") || "Erro ao compartilhar favoritos");
+                  ? "Não foi possível gerar o link de compartilhamento. Tente novamente." 
+                  : (e?.message || "Não foi possível gerar o link de compartilhamento. Tente novamente.");
                 pushToast({ message: errorMsg, tone: "err" }); 
               }
             }}

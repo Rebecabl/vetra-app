@@ -159,6 +159,7 @@ export type UserProfile = {
   status?: string;
   deletedAt?: string;
   deletionScheduledFor?: string;
+  emailVerified?: boolean;
 };
 
 
@@ -820,6 +821,44 @@ export async function authSignup(name: string, email: string, password: string):
   }
   // Fallback local quando backend não disponível
   return { ok: true, user: { name: normalizedName, email: normalizedEmail, uid: `local_${Date.now()}` } };
+}
+
+export async function resendVerificationEmail(email: string): Promise<{ ok: boolean; error?: string }> {
+  const normalizedEmail = email?.trim().toLowerCase() || "";
+  
+  if (!normalizedEmail) {
+    return { ok: false, error: "E-mail é obrigatório" };
+  }
+  
+  const API_BASE = (import.meta.env.VITE_API_BASE || "").trim() || "http://localhost:4001";
+  const backendHealthy = await ensureBackendHealth();
+  
+  if (!backendHealthy) {
+    return { ok: false, error: "Backend não disponível" };
+  }
+  
+  try {
+    const token = localStorage.getItem('vetra:idToken');
+    if (!token) {
+      return { ok: false, error: "Você precisa estar autenticado" };
+    }
+    
+    return await fetchJSON(
+      `${API_BASE}/api/auth/resend-verification-email`,
+      {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ email: normalizedEmail }),
+      },
+      15000
+    );
+  } catch (e: any) {
+    console.error("[resendVerificationEmail] Erro:", e);
+    return { ok: false, error: e?.message || "Erro ao reenviar e-mail de verificação" };
+  }
 }
 
 export async function authSignin(email: string, password: string): Promise<{ ok: boolean; user?: any; customToken?: string; idToken?: string; refreshToken?: string; error?: string }> {
@@ -1743,6 +1782,7 @@ const api = {
   authVerify,
   reactivateAccount,
   reEnableAccount,
+  resendVerificationEmail,
 
   getDetails,
   getTrending,

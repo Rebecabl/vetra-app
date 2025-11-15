@@ -35,6 +35,7 @@ export interface HeaderProps {
   setUser: (user: UserProfile | null) => void;
   setShowDeleteAccountModal: (show: boolean) => void;
   pushToast: (toast: { message: string; tone: "ok" | "err" | "info" }) => void;
+  pushBanner?: (banner: { message: string; tone: "success" | "error" | "warning" | "info" }) => void;
   lang: Lang;
   setLang: (lang: Lang) => void;
   darkEnabled: boolean;
@@ -67,6 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
   setUser,
   setShowDeleteAccountModal,
   pushToast,
+  pushBanner,
   lang,
   setLang,
   darkEnabled,
@@ -221,7 +223,11 @@ export const Header: React.FC<HeaderProps> = ({
                           localStorage.removeItem('vetra:activeTab');
                           localStorage.removeItem('vetra:activeCategory');
                           sessionStorage.setItem('vetra:justLoggedOut', 'true');
-                          pushToast({ message: "Logout realizado com sucesso", tone: "ok" });
+                          if (pushBanner) {
+                            pushBanner({ message: "Você saiu da sua conta. Até a próxima!", tone: "success" });
+                          } else {
+                            pushToast({ message: "Você saiu da sua conta. Até a próxima!", tone: "ok" });
+                          }
                           navigate("/");
                         }}
                         className="w-full px-4 py-2 text-left text-red-600 dark:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors"
@@ -540,7 +546,11 @@ export const Header: React.FC<HeaderProps> = ({
                   localStorage.removeItem('vetra:activeTab');
                   localStorage.removeItem('vetra:activeCategory');
                   sessionStorage.setItem('vetra:justLoggedOut', 'true');
-                  pushToast({ message: "Logout realizado com sucesso", tone: "ok" });
+                  if (pushBanner) {
+                    pushBanner({ message: "Você saiu da sua conta. Até a próxima!", tone: "success" });
+                  } else {
+                    pushToast({ message: "Você saiu da sua conta. Até a próxima!", tone: "ok" });
+                  }
                   navigate("/");
                 }}
                 className="w-full text-left px-4 py-3 rounded-lg transition-colors flex items-center gap-3 text-red-600 dark:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800"

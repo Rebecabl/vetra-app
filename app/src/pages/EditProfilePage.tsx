@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, Pencil, Lock, Eye, EyeOff } from "lucide-react";
-import { changePassword } from "../api";
+import { X, Pencil, Lock, Eye, EyeOff, Mail } from "lucide-react";
+import { changePassword, resendVerificationEmail } from "../api";
 import type { UserProfile } from "../api";
 import type { MovieT, UserList, UserStateMap, TabKey } from "../types/movies";
 
@@ -12,6 +12,7 @@ interface EditProfilePageProps {
   lists: UserList[];
   userStates: UserStateMap;
   pushToast: (toast: { message: string; tone: "ok" | "err" | "info" }) => void;
+  pushBanner?: (banner: { message: string; tone: "success" | "error" | "warning" | "info" }) => void;
   saveProfile: (data: { name: string; avatar_url: string | null }) => Promise<void>;
   setIsLoggedIn: React.Dispatch<React.SetStateAction<boolean>>;
   setUser: React.Dispatch<React.SetStateAction<UserProfile | null>>;
@@ -27,6 +28,7 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
   lists,
   userStates,
   pushToast,
+  pushBanner,
   saveProfile,
   setIsLoggedIn,
   setUser,
@@ -137,7 +139,11 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
     setSaving(true);
     try {
       await saveProfile({ name: fullName, avatar_url: editAvatar });
-      pushToast({ message: "Perfil atualizado com sucesso!", tone: "ok" });
+      if (pushBanner) {
+        pushBanner({ message: "Perfil atualizado com sucesso!", tone: "success" });
+      } else {
+        pushToast({ message: "Perfil atualizado com sucesso!", tone: "ok" });
+      }
       setEditProfileHasChanges(false);
       
       if (originalValuesRef.current) {
@@ -150,7 +156,11 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
       
       navigate("/profile"); // Volta para a página de perfil
     } catch (e: any) {
-      pushToast({ message: e?.message || "Erro ao salvar perfil", tone: "err" });
+      if (pushBanner) {
+        pushBanner({ message: "Não foi possível atualizar seu perfil. Tente novamente.", tone: "error" });
+      } else {
+        pushToast({ message: "Não foi possível atualizar seu perfil. Tente novamente.", tone: "err" });
+      }
     } finally {
       setSaving(false);
     }
@@ -180,7 +190,11 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
       
       const result = await changePassword(newPassword, idToken);
       if (result.ok) {
-        pushToast({ message: "Senha alterada com sucesso! Faça login novamente.", tone: "ok" });
+        if (pushBanner) {
+          pushBanner({ message: "Senha alterada com sucesso.", tone: "success" });
+        } else {
+          pushToast({ message: "Senha alterada com sucesso! Faça login novamente.", tone: "ok" });
+        }
         setShowPasswordSection(false);
         setCurrentPassword("");
         setNewPassword("");
@@ -194,15 +208,27 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
         localStorage.removeItem('vetra:activeCategory');
         navigate("/");
       } else {
-        const errorMsg = result.error || result.message || "Erro ao alterar senha";
+        const errorMsg = result.error || result.message || "Não foi possível alterar a senha. Confira os dados e tente novamente.";
         if (errorMsg.includes("Token") || errorMsg.includes("token") || errorMsg.includes("Reautentique")) {
-          pushToast({ message: "Sua sessão expirou. Faça login novamente para alterar a senha.", tone: "err" });
+          if (pushBanner) {
+            pushBanner({ message: "Sua sessão expirou. Faça login novamente para alterar a senha.", tone: "error" });
+          } else {
+            pushToast({ message: "Sua sessão expirou. Faça login novamente para alterar a senha.", tone: "err" });
+          }
         } else {
-          pushToast({ message: errorMsg, tone: "err" });
+          if (pushBanner) {
+            pushBanner({ message: errorMsg, tone: "error" });
+          } else {
+            pushToast({ message: errorMsg, tone: "err" });
+          }
         }
       }
     } catch (e: any) {
-      pushToast({ message: e?.message || e?.error || "Erro ao alterar senha.", tone: "err" });
+      if (pushBanner) {
+        pushBanner({ message: e?.message || e?.error || "Não foi possível alterar a senha. Confira os dados e tente novamente.", tone: "error" });
+      } else {
+        pushToast({ message: e?.message || e?.error || "Não foi possível alterar a senha. Confira os dados e tente novamente.", tone: "err" });
+      }
     } finally {
       setChangingPassword(false);
     }

@@ -46,6 +46,18 @@ router.get("/:email", async (req, res) => {
 
     const doc = snapshot.docs[0];
     const data = doc.data();
+    const uid = doc.id;
+
+    // Buscar status de verificação de e-mail do Firebase Auth
+    let emailVerified = false;
+    try {
+      const auth = getAuth();
+      const userRecord = await auth.getUser(uid);
+      emailVerified = userRecord.emailVerified || false;
+    } catch (authError) {
+      console.warn("[profile GET] Erro ao buscar emailVerified do Firebase Auth:", authError.message);
+      // Continua com emailVerified = false
+    }
 
     const { passwordHash, ...profile } = data;
 
@@ -56,6 +68,7 @@ router.get("/:email", async (req, res) => {
       status: data.status || null,
       deletedAt: data.deletedAt || null,
       deletionScheduledFor: data.deletionScheduledFor || null,
+      emailVerified,
     };
 
     console.log("[profile GET] Retornando perfil:", {
@@ -98,6 +111,17 @@ router.get("/uid/:uid", async (req, res) => {
       return res.status(404).json({ error: "usuario_nao_encontrado" });
     }
 
+    // Buscar status de verificação de e-mail do Firebase Auth
+    let emailVerified = false;
+    try {
+      const auth = getAuth();
+      const userRecord = await auth.getUser(uid);
+      emailVerified = userRecord.emailVerified || false;
+    } catch (authError) {
+      console.warn("[profile GET uid] Erro ao buscar emailVerified do Firebase Auth:", authError.message);
+      // Continua com emailVerified = false
+    }
+
     // Remove informações sensíveis
     const { passwordHash, ...safeProfile } = profile;
 
@@ -107,6 +131,7 @@ router.get("/uid/:uid", async (req, res) => {
       status: profile.status || null,
       deletedAt: profile.deletedAt || null,
       deletionScheduledFor: profile.deletionScheduledFor || null,
+      emailVerified,
     };
 
     console.log("[profile GET uid] Retornando perfil:", {

@@ -197,8 +197,8 @@ export const WatchlistPage: React.FC<WatchlistPageProps> = ({
                 } catch (e: any) {
                   console.error("[shareCollection] Erro ao compartilhar:", e);
                   const errorMsg = e?.message?.includes("listId_obrigatorio") 
-                    ? "Erro ao gerar link. Tente novamente." 
-                    : (e?.message || "Erro ao compartilhar coleção");
+                    ? "Não foi possível gerar o link de compartilhamento. Tente novamente." 
+                    : (e?.message || "Não foi possível gerar o link de compartilhamento. Tente novamente.");
                   pushToast({ message: errorMsg, tone: "err" });
                 }
               }}

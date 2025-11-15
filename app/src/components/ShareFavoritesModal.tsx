@@ -5,11 +5,13 @@ type Item = { id: number; title: string; image?: string; media_type: "movie" | "
 export default function ShareFavoritesModal({
   items,
   onClose,
-  sharedLink
+  sharedLink,
+  pushToast
 }: {
   items: Item[]
   onClose: () => void
   sharedLink?: string
+  pushToast?: (toast: { message: string; tone: "ok" | "err" | "info" }) => void
 }) {
   return (
     <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
@@ -29,7 +31,16 @@ export default function ShareFavoritesModal({
                 className="flex-1 bg-slate-800 text-white px-3 py-2 rounded-lg border border-slate-700"
               />
               <button
-                onClick={() => navigator.clipboard.writeText(sharedLink)}
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(sharedLink);
+                    if (pushToast) {
+                      pushToast({ message: "Link copiado para a área de transferência.", tone: "ok" });
+                    }
+                  } catch (e) {
+                    console.error("Erro ao copiar link:", e);
+                  }
+                }}
                 className="px-3 py-2 rounded-lg bg-sky-400 text-white font-semibold hover:bg-sky-500"
               >
                 Copiar

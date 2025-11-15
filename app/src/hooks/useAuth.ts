@@ -85,7 +85,10 @@ interface UseAuthReturn {
   setPendingRoute: (route: string | null) => void;
 }
 
-export const useAuth = (pushToast: (toast: { message: string; tone: "ok" | "err" | "info" | "warn" }) => void): UseAuthReturn => {
+export const useAuth = (
+  pushToast: (toast: { message: string; tone: "ok" | "err" | "info" | "warn" }) => void,
+  pushBanner?: (banner: { message: string; tone: "success" | "error" | "warning" | "info" }) => void
+): UseAuthReturn => {
   const navigate = useNavigate();
   
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -123,6 +126,8 @@ export const useAuth = (pushToast: (toast: { message: string; tone: "ok" | "err"
   const [forgotPasswordConfirmPassword, setForgotPasswordConfirmPassword] = useState("");
   const [forgotPasswordShowPassword, setForgotPasswordShowPassword] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
+  const [showVerificationEmailModal, setShowVerificationEmailModal] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState("");
   
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [pendingRoute, setPendingRoute] = useState<string | null>(null);
@@ -283,6 +288,11 @@ export const useAuth = (pushToast: (toast: { message: string; tone: "ok" | "err"
     setPasswordErrors(errors);
   }, []);
   
+  const validateEmailFormat = useCallback((email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  }, []);
+
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     const newValue = type === "checkbox" ? checked : value;
@@ -296,6 +306,11 @@ export const useAuth = (pushToast: (toast: { message: string; tone: "ok" | "err"
     if (name === "email") {
       if (emailErrorRef.current) setEmailError("");
       if (loginTypeRef.current === "signin" && loginErrorRef.current) setLoginError("");
+      
+      // Validação de formato de e-mail no cadastro
+      if (loginTypeRef.current === "signup" && value.trim() && !validateEmailFormat(value.trim())) {
+        setEmailError("Informe um e-mail válido, no formato nome@dominio.com.");
+      }
     }
     if (name === "password") {
       if (passwordErrorRef.current) setPasswordError("");
@@ -429,6 +444,13 @@ export const useAuth = (pushToast: (toast: { message: string; tone: "ok" | "err"
       setEmailError("");
       setPasswordError("");
       setLoginError("");
+    }
+
+    // Validação de formato de e-mail antes de submeter
+    if (loginType === "signup" && !validateEmailFormat(formData.email.trim())) {
+      setEmailError("Informe um e-mail válido, no formato nome@dominio.com.");
+      setAuthLoading(false);
+      return;
     }
 
     setAuthLoading(true);
@@ -634,10 +656,21 @@ export const useAuth = (pushToast: (toast: { message: string; tone: "ok" | "err"
           loadProfile(userEmail);
         }
         
-        pushToast({ 
-          message: loginType === "signup" ? "Conta criada com sucesso! Verifique seu email." : "Login efetuado com sucesso!", 
-          tone: "ok" 
-        });
+        if (pushBanner) {
+          const userName = result.user?.name || "Usuário";
+          const firstName = userName.split(' ')[0];
+          pushBanner({ 
+            message: loginType === "signup" 
+              ? "Conta criada com sucesso. Você já pode começar a usar o VETRA." 
+              : `Login realizado com sucesso. Bem-vinda de volta, ${firstName}!`, 
+            tone: "success" 
+          });
+        } else {
+          pushToast({ 
+            message: loginType === "signup" ? "Conta criada com sucesso. Você já pode começar a usar o VETRA." : "Login realizado com sucesso.", 
+            tone: "ok" 
+          });
+        }
       }
     } catch (error: any) {
       console.error("Erro na autenticação:", error);
@@ -681,10 +714,19 @@ export const useAuth = (pushToast: (toast: { message: string; tone: "ok" | "err"
                     loadProfile(userEmail);
                   }
                   
-                  pushToast({ 
-                    message: "Conta reabilitada! Login efetuado com sucesso!", 
-                    tone: "ok" 
-                  });
+                  if (pushBanner) {
+                    const userName = retryResult.user?.name || "Usuário";
+                    const firstName = userName.split(' ')[0];
+                    pushBanner({ 
+                      message: `Login realizado com sucesso. Bem-vinda de volta, ${firstName}!`, 
+                      tone: "success" 
+                    });
+                  } else {
+                    pushToast({ 
+                      message: "Login realizado com sucesso.", 
+                      tone: "ok" 
+                    });
+                  }
                   return;
                 }
               } catch (retryError: any) {

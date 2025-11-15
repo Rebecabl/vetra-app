@@ -73,7 +73,7 @@ export const ListsPage: React.FC<ListsPageProps> = ({
                 const defaultName = `Minha lista ${lists.length + 1}`;
                 const id = createList(defaultName);
                 setActiveListId(id);
-                pushToast({ message: t("created_list_ok", { name: defaultName }), tone: "ok" });
+                pushToast({ message: "Lista criada com sucesso.", tone: "ok" });
               }}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 active:scale-95 sm:hover:scale-105 min-h-[44px]"
             >
@@ -157,8 +157,8 @@ export const ListsPage: React.FC<ListsPageProps> = ({
                     } catch (e: any) { 
                       console.error("[shareList] Erro ao compartilhar:", e);
                       const errorMsg = e?.message?.includes("listId_obrigatorio") 
-                        ? "Erro ao gerar link. Tente novamente." 
-                        : (e?.message || t("share_fail") || "Erro ao compartilhar lista");
+                        ? "Não foi possível gerar o link de compartilhamento. Tente novamente." 
+                        : (e?.message || "Não foi possível gerar o link de compartilhamento. Tente novamente.");
                       pushToast({ message: errorMsg, tone: "err" }); 
                     }
                   };

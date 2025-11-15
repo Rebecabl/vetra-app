@@ -34,6 +34,7 @@ import type { UserProfile } from "./api";
 import { useLang, type Lang } from "./i18n";
 import { useDarkMode, ThemeButton } from "./theme";
 import { ToastHost, useToast } from "./ui/Toast";
+import { BannerHost, useBanner } from "./ui/Banner";
 
 import { KebabMenu } from "./ui/KebabMenu";
 import { LanguageMenu } from "./components/LanguageMenu";
@@ -65,6 +66,7 @@ import { ListsPage } from "./pages/ListsPage";
 import { WatchlistPage } from "./pages/WatchlistPage";
 import { LoginModal } from "./components/LoginModal";
 import type { LoginModalProps } from "./components/LoginModal";
+import { VerificationEmailModal } from "./components/VerificationEmailModal";
 import { MobileFooter } from "./components/MobileFooter";
 import { SiteFooter } from "./components/SiteFooter";
 import { Header } from "./components/layout/Header";
@@ -107,8 +109,16 @@ import { applyClientSort, hasNonDefaultFilters, filterByPoster } from "./utils/s
 import { getCountryCode, getCountryFlag } from "./utils/countryUtils";
 
 const AppShell = (): JSX.Element => {
+  // Desabilita a restauração automática de scroll do navegador
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+  }, []);
+  
   const { toasts, pushToast, removeToast } = useToast();
-  const auth = useAuth(pushToast);
+  const { banners, pushBanner, removeBanner } = useBanner();
+  const auth = useAuth(pushToast, pushBanner);
   
   const {
     isLoggedIn,
@@ -159,6 +169,10 @@ const AppShell = (): JSX.Element => {
     setForgotPasswordShowPassword,
     emailVerified,
     setEmailVerified,
+    showVerificationEmailModal,
+    setShowVerificationEmailModal,
+    verificationEmail,
+    setVerificationEmail,
     handleInputChange,
     handleInputBlur,
     handleSubmit,
@@ -531,15 +545,15 @@ const AppShell = (): JSX.Element => {
         } else if (response.status === 500) {
           setDeleteAccountError(errorMessage || "Erro interno do servidor. Tente novamente mais tarde.");
         } else {
-          setDeleteAccountError(errorMessage || `Erro ao excluir conta (${response.status}). Tente novamente.`);
+          setDeleteAccountError(errorMessage || "Não foi possível excluir sua conta agora. Tente novamente.");
         }
         setDeleteAccountLoading(false);
         return;
       }
 
-      pushToast({ 
-        message: data.message || "Sua conta foi marcada para exclusão e será removida permanentemente em 30 dias, a menos que você a reative.", 
-        tone: "ok" 
+      pushBanner({ 
+        message: "Sua conta foi excluída. Obrigado por usar o VETRA.", 
+        tone: "success" 
       });
 
       if (user?.email) {
@@ -559,9 +573,9 @@ const AppShell = (): JSX.Element => {
     } catch (e: any) {
       console.error("[handleDeleteAccount] Erro inesperado:", e);
       if (e.message?.includes("fetch") || e.message?.includes("network") || e.message?.includes("Failed to fetch")) {
-        setDeleteAccountError("Erro de conexão. Verifique sua internet e tente novamente.");
+        setDeleteAccountError("Não foi possível excluir sua conta agora. Verifique sua conexão e tente novamente.");
       } else {
-        setDeleteAccountError(e.message || "Erro inesperado. Tente novamente.");
+        setDeleteAccountError("Não foi possível excluir sua conta agora. Tente novamente.");
       }
     } finally {
       setDeleteAccountLoading(false);
@@ -885,6 +899,23 @@ const AppShell = (): JSX.Element => {
     }
   }, [isLoggedIn, setActiveTab, setActiveCategory]);
   
+  // Reseta scroll para o topo quando entrar na home ou recarregar
+  useEffect(() => {
+    if (location.pathname === "/") {
+      // Reseta imediatamente
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      
+      // Usa requestAnimationFrame para garantir que o scroll seja resetado após o conteúdo ser renderizado
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      });
+      
+      // Reseta novamente após um pequeno delay para garantir que funcione mesmo se o navegador tentar restaurar a posição
+      setTimeout(() => {
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      }, 0);
+    }
+  }, [location.pathname, location.search, activeTab, activeCategory]); // Reseta sempre que entrar na home
 
  
   const loadTrending = async (window: "day" | "week", page: number = 1) => {
@@ -2204,7 +2235,7 @@ const AppShell = (): JSX.Element => {
           setFavorites((prev) =>
             prev.filter((f) => !(f.id === movie.id && (f.media || "movie") === (movie.media || "movie")))
           );
-          pushToast({ message: t("removed_ok") || "Removido dos favoritos", tone: "ok" });
+          pushToast({ message: "Removido dos seus favoritos.", tone: "ok" });
           setConfirmModal({ show: false, message: "", onConfirm: () => {} });
         }
       });
@@ -2234,7 +2265,7 @@ const AppShell = (): JSX.Element => {
       });
     }
     
-    pushToast({ message: wasFav ? "Removido dos favoritos" : "Adicionado aos favoritos ✔", tone: "ok" });
+    pushToast({ message: wasFav ? "Removido dos seus favoritos." : "Adicionado aos seus favoritos.", tone: "ok" });
   };
   const isFavorite = (m: MovieT) => favorites.some((f) => f.id === m.id && (f.media || "movie") === (m.media || "movie"));
 
@@ -2442,7 +2473,7 @@ const AppShell = (): JSX.Element => {
     };
     
     setLists((prev) => [...prev, newList]);
-    pushToast({ message: t("created_list_ok", { name }), tone: "ok" });
+    pushToast({ message: "Lista criada com sucesso.", tone: "ok" });
     return id;
   };
 
@@ -2581,7 +2612,7 @@ const AppShell = (): JSX.Element => {
         // Se falhar, apenas atualiza localmente
       });
     }
-    pushToast({ message: t("added_list_ok"), tone: "ok" });
+    pushToast({ message: "Título adicionado à lista.", tone: "ok" });
   };
   const removeFromList = async (listId: string, movieId: number, media?: MediaT) => {
     const itemKey = mediaKey({ id: movieId, media: media || "movie" } as MovieT);
@@ -2650,7 +2681,7 @@ const AppShell = (): JSX.Element => {
       }
     }
     
-    pushToast({ message: t("removed_list_ok"), tone: "ok" });
+    pushToast({ message: "Título removido da lista.", tone: "ok" });
   };
   const renameList = (listId: string, newName: string) => {
     const oldList = lists.find(l => l.id === listId);
@@ -2664,11 +2695,11 @@ const AppShell = (): JSX.Element => {
       });
     }
     
-    pushToast({ message: t("renamed_list_ok", { name: newName }), tone: "ok" });
+    pushToast({ message: "Alterações salvas na sua lista.", tone: "ok" });
   };
   const clearList = (listId: string) => {
     setLists((prev) => prev.map((l) => (l.id === listId ? { ...l, items: [], cover: undefined, updatedAt: new Date().toISOString() } : l)));
-    pushToast({ message: t("cleared_list_ok"), tone: "ok" });
+    pushToast({ message: "Lista limpa com sucesso.", tone: "ok" });
   };
   const deleteList = (listId: string) => {
     const name = lists.find((l) => l.id === listId)?.name || "Lista";
@@ -2683,7 +2714,7 @@ const AppShell = (): JSX.Element => {
       });
     }
     
-    pushToast({ message: t("deleted_list_ok", { name }), tone: "ok" });
+    pushToast({ message: "Lista excluída com sucesso.", tone: "ok" });
   };
 
 
@@ -3002,9 +3033,9 @@ const AppShell = (): JSX.Element => {
             });
           }
           
-          pushToast({ message: "Comentário publicado", tone: "ok" });
+          pushToast({ message: "Comentário publicado.", tone: "ok" });
         } else {
-          const errorMsg = result.error || "Não foi possível publicar agora. Tente novamente.";
+          const errorMsg = result.error || "Não foi possível publicar seu comentário. Tente novamente.";
           if (errorMsg.includes("rápido") || errorMsg.includes("rate limit")) {
             setCommentError("Você comentou muito rápido. Tente novamente em alguns segundos.");
           } else {
@@ -3076,9 +3107,9 @@ const AppShell = (): JSX.Element => {
       const result = await deleteComment(commentId);
       if (result.ok) {
         setComments(comments.filter(c => c.id !== commentId));
-        pushToast({ message: "Comentário deletado", tone: "ok" });
+        pushToast({ message: "Comentário removido.", tone: "ok" });
       } else {
-        pushToast({ message: result.error || "Erro ao deletar comentário", tone: "err" });
+        pushToast({ message: result.error || "Não foi possível remover o comentário. Tente novamente.", tone: "err" });
       }
     };
 
@@ -4771,7 +4802,7 @@ const AppShell = (): JSX.Element => {
         
         const result = await changePassword(newPassword, idToken);
         if (result.ok) {
-          pushToast({ message: "Senha alterada com sucesso! Faça login novamente.", tone: "ok" });
+          pushBanner({ message: "Senha alterada com sucesso.", tone: "success" });
           setShowPasswordSection(false);
           setCurrentPassword("");
           setNewPassword("");
@@ -5692,6 +5723,7 @@ const AppShell = (): JSX.Element => {
           handleForgotPasswordCheckEmail={handleForgotPasswordCheckEmail}
           handleForgotPasswordReset={handleForgotPasswordReset}
         />}
+        <BannerHost banners={banners} onClose={removeBanner} />
         <ToastHost toasts={toasts} onClose={removeToast} />
       </>
     );
@@ -5725,6 +5757,7 @@ const AppShell = (): JSX.Element => {
         setUser={setUser}
         setShowDeleteAccountModal={setShowDeleteAccountModal}
         pushToast={pushToast}
+        pushBanner={pushBanner}
         lang={lang}
         setLang={setLang}
         darkEnabled={darkEnabled}
@@ -5754,7 +5787,7 @@ const AppShell = (): JSX.Element => {
                 try {
                   const result = await api.reactivateAccount();
                   if (result.ok) {
-                    pushToast({ message: result.message || "Conta reativada com sucesso!", tone: "ok" });
+                    pushBanner({ message: result.message || "Conta reativada com sucesso!", tone: "success" });
                     // Recarregar o perfil para atualizar o status
                     if (user?.email) {
                       await loadProfile(user.email);
@@ -5810,6 +5843,7 @@ const AppShell = (): JSX.Element => {
               lists={lists}
               userStates={userStates}
               pushToast={pushToast}
+              pushBanner={pushBanner}
               saveProfile={saveProfile}
               setIsLoggedIn={setIsLoggedIn}
               setUser={setUser}
@@ -6315,7 +6349,7 @@ const AppShell = (): JSX.Element => {
                       try {
                         const shareUrl = `${window.location.origin}${window.location.pathname}?share=${shareSlug}`;
                         await navigator.clipboard.writeText(shareUrl);
-                        pushToast({ message: t("toasts.copied"), tone: "ok" });
+                        pushToast({ message: "Link copiado para a área de transferência.", tone: "ok" });
                         // Não navegar para o link compartilhado se o usuário estiver logado
                         // O link compartilhado só deve ser acessado quando o usuário não está logado
                         if (!isLoggedIn) {
@@ -6489,6 +6523,7 @@ const AppShell = (): JSX.Element => {
         onConfirm={handleDeleteAccount}
       />
 
+      <BannerHost banners={banners} onClose={removeBanner} />
       <ToastHost toasts={toasts} onClose={removeToast} />
       {showLogin && <LoginModal
         formData={formData}

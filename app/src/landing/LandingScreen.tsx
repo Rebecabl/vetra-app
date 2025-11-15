@@ -135,7 +135,7 @@ const LandingScreen: React.FC<Props> = ({ onSignIn, onSignUp }) => {
             onClick={onSignUp}
             className="text-sm font-semibold text-white hover:text-white/80 transition-all duration-200"
           >
-            Fazer Login
+            LOGIN
           </button>
         </div>
         </div>
