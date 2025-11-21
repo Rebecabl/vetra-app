@@ -52,7 +52,7 @@ na prática, o uso de IA no desenvolvimento e evolução de sistemas web.
 
 ### Implementação
 
-- **Arquitetura**: Frontend React + Backend Express com separação clara de responsabilidades
+- **Arquitetura**: Frontend React + Backend Express 
 - **Autenticação**: Firebase Auth com tokens JWT e validação no backend
 - **Banco de Dados**: Firestore (NoSQL) para persistência escalável
 - **API Externa**: Integração com TMDB API para conteúdo de filmes e séries
