@@ -3,10 +3,10 @@
 ## Sobre o Projeto
 
 VETRA é uma aplicação web full-stack que permite aos usuários descobrir, organizar e 
-compartilhar seus filmes e séries favoritos. Além de atender a requisitos funcionais 
-e não funcionais típicos de um sistema em produção, este repositório também é usado 
-como experimento com foundation models aplicados ao 
-desenvolvimento e evolução de sistemas web.
+compartilhar seus filmes e séries favoritos. O projeto é desenvolvido em Node.js, 
+JavaScript/TypeScript e React, e vem sendo utilizado como um **laboratório pessoal de 
+estudo**, onde o código passa por melhorias contínuas, 
+correções, refatorações e experimentos de organização de frontend e backend.
 
 ![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6.2-3178C6?logo=typescript)
@@ -15,27 +15,21 @@ desenvolvimento e evolução de sistemas web.
 
 
 
-## Contexto de Estudo 
+## Contexto de Estudo e Uso de IA
 
-Este projeto faz parte de um estudo em andamento sobre o potencial de **foundation models** 
-(e, em especial, modelos de linguagem de grande escala) para apoiar atividades de 
-engenharia de software, como:
+Este repositório representa um código em evolução: ele começou com uma estrutura 
+mais monolítica, sem uma arquitetura bem definida e com diversos *code smells*. 
+Atualmente, está sendo usado como base para **estudos em andamento** sobre:
 
-- detecção e prevenção de **code smells**;
-- apoio à refatoração e melhoria contínua do código;
-- revisão de arquitetura e organização de módulos;
-- geração e revisão de documentação técnica.
+- identificação e redução de **code smells**;
+- introdução gradual de princípios de **clean code**;
+- melhoria da organização do código (camadas, módulos, responsabilidades);
+- impacto de ferramentas de IA no processo de desenvolvimento e refatoração.
 
-Ferramentas de IA generativa foram utilizadas ao longo do desenvolvimento principalmente para:
-
-- brainstorming de requisitos, cenários de uso e melhorias;
-- geração inicial de trechos de código e testes;
-- revisão de trechos de código já existentes;
-- apoio na escrita e organização deste README.
-
-Todo o código é **revisado, adaptado e testado manualmente** antes de ser integrado ao 
-repositório, e o VETRA é utilizado como um ambiente controlado para experimentar, na prática, 
-como esses modelos podem auxiliar na qualidade e evolução de software.
+Durante esse processo são utilizadas ferramentas de IA, que se apoiam em **modelos de linguagem de grande escala (LLMs)** 
+para sugerir trechos de código, apontar problemas e propor refatorações.  Todas as sugestões são **revisadas, adaptadas e validadas manualmente** antes de serem 
+incorporadas ao projeto, mantendo o VETRA como um ambiente controlado para experimentar, 
+na prática, o uso de IA no desenvolvimento e evolução de sistemas web.
 
 ##  Histórico por Data (deploys/atualizações/correções de bugs)
 
@@ -54,6 +48,8 @@ como esses modelos podem auxiliar na qualidade e evolução de software.
 | 2025-11-14 | 1.5.0  | Major     | Refatoração completa: novas páginas dedicadas, hooks customizados, sistema de histórico de atividades, componentes modulares, melhorias de arquitetura. |
 | 2025-11-15 | 1.6.0  | Major     | Verificação de email por código, isolamento de dados por usuário, revisão geral de comentários/logs e melhorias no fluxo de autenticação. |
 | 2025-11-15 | 1.7.0  | Minor     | Preparação para produção: remoção de código de teste.
+> ⚠️ O projeto continua em evolução: novas refatorações, ajustes de arquitetura e experimentos com uso de IA são incorporados de forma incremental, conforme os estudos avançam.
+
 ### Implementação
 
 - **Arquitetura**: Frontend React + Backend Express com separação clara de responsabilidades
