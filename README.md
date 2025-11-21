@@ -1,11 +1,41 @@
 # 🎬 VETRA
 
-Plataforma moderna para organização, descoberta e compartilhamento de filmes e séries, desenvolvida como solução full-stack integrada com a API do TMDB.
+## Sobre o Projeto
+
+VETRA é uma aplicação web full-stack que permite aos usuários descobrir, organizar e 
+compartilhar seus filmes e séries favoritos. Além de atender a requisitos funcionais 
+e não funcionais típicos de um sistema em produção, este repositório também é usado 
+como experimento com foundation models aplicados ao 
+desenvolvimento e evolução de sistemas web.
 
 ![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6.2-3178C6?logo=typescript)
 ![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js)
 ![Firebase](https://img.shields.io/badge/Firebase-FFCA28?logo=firebase)
+
+
+
+## Contexto de Estudo 
+
+Este projeto faz parte de um estudo em andamento sobre o potencial de **foundation models** 
+(e, em especial, modelos de linguagem de grande escala) para apoiar atividades de 
+engenharia de software, como:
+
+- detecção e prevenção de **code smells**;
+- apoio à refatoração e melhoria contínua do código;
+- revisão de arquitetura e organização de módulos;
+- geração e revisão de documentação técnica.
+
+Ferramentas de IA generativa foram utilizadas ao longo do desenvolvimento principalmente para:
+
+- brainstorming de requisitos, cenários de uso e melhorias;
+- geração inicial de trechos de código e testes;
+- revisão de trechos de código já existentes;
+- apoio na escrita e organização deste README.
+
+Todo o código é **revisado, adaptado e testado manualmente** antes de ser integrado ao 
+repositório, e o VETRA é utilizado como um ambiente controlado para experimentar, na prática, 
+como esses modelos podem auxiliar na qualidade e evolução de software.
 
 ## Sobre o Projeto
 
