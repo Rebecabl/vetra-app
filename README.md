@@ -15,7 +15,7 @@ correções, refatorações e experimentos de organização de frontend e backen
 
 
 
-## Contexto de Estudo e Uso de IA
+## Contexto de Estudo 
 
 Este repositório representa um código em evolução: ele começou com uma estrutura 
 mais monolítica, sem uma arquitetura bem definida e com diversos *code smells*. 
