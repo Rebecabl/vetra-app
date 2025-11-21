@@ -37,10 +37,6 @@ Todo o código é **revisado, adaptado e testado manualmente** antes de ser inte
 repositório, e o VETRA é utilizado como um ambiente controlado para experimentar, na prática, 
 como esses modelos podem auxiliar na qualidade e evolução de software.
 
-## Sobre o Projeto
-
-VETRA é uma aplicação web full-stack que permite aos usuários descobrir, organizar e compartilhar seus filmes e séries favoritos. O projeto implementa requisitos funcionais e não funcionais, além de funcionalidades extras.
-
 ##  Histórico por Data (deploys/atualizações/correções de bugs)
 
 | Data       | Versão | Tipo      | Descrição curta                                                                                               |
